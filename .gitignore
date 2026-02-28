@@ -35,6 +35,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Claude Code project memory
+.claude/
+
 # TTS model files (large binaries — fetch at deploy time)
 *.onnx
 *.onnx.json
