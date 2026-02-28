@@ -29,7 +29,7 @@ emf-conduct/
 │   └── docker-compose.yml
 ├── shared/
 │   ├── pyproject.toml          # shared lib: models, config, auth helpers
-│   ├── emfconduct/
+│   ├── emf_forms/
 │   │   ├── config.py
 │   │   ├── auth.py
 │   │   ├── db.py
@@ -89,7 +89,7 @@ Each service `pyproject.toml`:
 
 ```toml
 [project]
-name = "emfconduct-form"
+name = "emf-forms-form"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -184,7 +184,7 @@ BACKUP_DB_PASSWORD=changeme
 
 # OIDC
 OIDC_ISSUER=https://auth.emfcamp.org
-OIDC_CLIENT_ID=emfconduct
+OIDC_CLIENT_ID=emf-forms
 OIDC_CLIENT_SECRET=changeme
 
 # JWT signing for dispatcher tokens — generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
@@ -195,39 +195,46 @@ SECRET_KEY=changeme
 ```json
 {
   "events": [
-    {"name": "emfcamp2026", "start_date": "2026-07-12", "end_date": "2026-07-20"}
+    {
+        "name": "emfcamp2026", 
+        "start_date": "2026-07-12", 
+        "end_date": "2026-07-20",
+        "signal_padding": {
+            "before_event_days": 2,
+            "after_event_days": 2
+        },
+        "signal_group_id": null,
+        "signal_mode": "fallback_only",
+        "dispatcher_emails": ["event-dispatcher@emfcamp.org"],
+        "dispatcher_session_ttl_hours": 8,
+        "dispatcher_session_max_devices": 2
+    }
   ],
   "conduct_emails": ["conduct@emfcamp.org"],
-  "dispatcher_emails": ["event-dispatcher@emfcamp.org"],
-  "dispatcher_session_ttl_hours": 8,
-  "dispatcher_session_max_devices": 2,
   "urgency_levels": ["low", "medium", "high", "urgent"],
   "pronouns": [
     "Ze/Zir/Zirs", "Xe/Xem/Xyrs", "Fae/Faer/Faerself", "Fur/Furs/Furself",
     "He/Him/His", "She/Her/Hers", "They/Them/Theirs"
   ],
-  "signal_group_id": null,
-  "signal_mode": "fallback_only",
-  "signal_padding": {
-    "before_event_days": 2,
-    "after_event_days": 2
-  },
   "smtp": {
-    "host": "localhost",
+    "host": "host.docker.internal",
     "port": 587,
-    "from": "conduct@emfcamp.org",
-    "use_tls": true
+    "from_addr": "conduct@emfcamp.org",
+    "use_tls": true,
+    "username": "conduct@emfcamp.org"
   },
+  "_comment_smtp": "smtp_password goes in .env as SMTP_PASSWORD — never in config.json",
   "panel_base_url": "https://panel.emfcamp.org",
-  "mattermost_webhook": null
+  "mattermost_webhook": null,
+  "slack_webhook": null
 }
 ```
 
-**On `signal_mode`**: The default is `"fallback_only"` — Signal activates only when the phone system is unavailable. Set to `"always"` to send to Signal on every event-time alert, or `"high_priority_and_fallback"` for high/urgent cases plus fallback. Signal and phone routing are only active during the event window (± `signal_padding`); outside that window, only email is used.
+**On `signal_mode`**: The default is `"fallback_only"` — Signal activates only when the phone system is unavailable. Set to `"always"` to send to Signal on every event-time alert, or `"high_priority_and_fallback"` for high/urgent cases plus fallback. Signal and phone routing are only active during the event window (± `signal_padding`); outside that window, only email is used. In non-prod/testing environments, `signal_mode` behaviour is always treated as `"always"` so the full routing path can be exercised without waiting for an event window.
 
 **On `signal_group_id`**: If the signal module is enabled during install, the install script will walk through Signal group registration and populate this automatically.
 
-**On `smtp`**: All email adapter settings live in `config.json` (non-secret), except credentials if auth is required — those go in `.env`.
+**On `smtp`**: All email adapter settings live in `config.json` (non-secret). `smtp_password` is the exception — it lives in `.env` as `SMTP_PASSWORD` and is injected at runtime. The `SmtpConfig` model reads it via `pydantic-settings` env overlay. `username` in `config.json` is non-secret (it's just the sending account name).
 
 `scripts/generate_secrets.py` reads `.env-example`, replaces every `changeme` value with a `secrets.token_urlsafe(32)` value, and writes `.env`. Idempotent — never overwrites existing non-default values.
 
@@ -251,13 +258,15 @@ services:
     depends_on:
       - form
       - panel
-      - router
+      - msg-router
+    networks:
+      - contactform
 
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: emfconduct
-      POSTGRES_USER: emfconduct_admin
+      POSTGRES_DB: emf_forms
+      POSTGRES_USER: emf_forms_admin
       POSTGRES_PASSWORD: ${ADMIN_DB_PASSWORD}
       # TLS: mount server cert + key; set ssl=on in postgresql.conf
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
@@ -269,43 +278,51 @@ services:
     healthcheck:
       # pg_isready checks TCP connectivity only — no credentials needed or used.
       # The -h flag targets the container-local socket; no admin role required.
-      test: ["CMD-SHELL", "pg_isready -h localhost -d emfconduct"]
+      test: ["CMD-SHELL", "pg_isready -h localhost -d emf_forms"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - contactform
 
   form:
     build: ../apps/form
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD}@postgres/emfconduct
+      DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD}@postgres/emf_forms
       CONFIG_PATH: ./config.json
     volumes:
       - ../config.json:/app/config.json:ro
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - contactform
 
   panel:
     build: ../apps/panel
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://panel_viewer:${PANEL_VIEWER_DB_PASSWORD}@postgres/emfconduct
+      DATABASE_URL: postgresql+asyncpg://panel_viewer:${PANEL_VIEWER_DB_PASSWORD}@postgres/emf_forms
       OIDC_ISSUER: ${OIDC_ISSUER}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - contactform
 
-  router:
+  msg-router:
     build: ../apps/router
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD}@postgres/emfconduct
+      DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD}@postgres/emf_forms
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - contactform
 
   mock-oidc:
     # Local only — removed for prod by the install script
@@ -315,14 +332,31 @@ services:
     profiles:
       - local
 
+  signal-api:
+    # Self-hosted signal-cli-rest-api — handles Signal group messaging.
+    # Requires a registered Signal account (phone number); the install script
+    # walks through first-time registration and populates SIGNAL_SENDER in .env.
+    image: bbernhard/signal-cli-rest-api:latest
+    environment:
+      MODE: native
+    volumes:
+      - signal_data:/home/.local/share/signal-cli
+    networks:
+      - contactform
+
 volumes:
   caddy_data:
   pg_data:
+  signal_data:
+
+networks:
+  contactform:
+    driver: bridge
 ```
 
 **Notes**:
 - Passwords come from `.env` via `env_file`. No file-based Docker secrets needed for local dev; prod deployments can switch to `secrets:` blocks with the same variable names.
-- PostgreSQL TLS: mount `./postgres/certs/server.crt` and `server.key`; set `ssl = on` in `postgresql.conf`. The `connect_args={"ssl": "require"}` in SQLAlchemy enforces this from the client side.
+- PostgreSQL TLS: mount `./postgres/certs/server.crt` and `server.key`; set `ssl = on` in `postgresql.conf`. The `connect_args={"ssl": "require"}` in SQLAlchemy enforces this from the client side. Use python module `cryptography` to create (idempotently) certs needed in install script and to install client-certs+CA trust to app (if needed).
 - The `./postgres/` directory is mounted as `docker-entrypoint-initdb.d/` — all `.sql` files run alphabetically on first container init. `00_roles.sql` creates roles; subsequent files can add tables or seed data.
 - Migrations (schema changes after initial deploy) use **Alembic**, not init.sql. Alembic runs as a one-shot container or a startup task in CI.
 
@@ -365,17 +399,17 @@ Caddy config uses snippets to share common settings (TLS policy, security header
 }
 
 # Local: use .internal TLD (not .local — that's mDNS/Bonjour and causes conflicts)
-report.emfconduct.internal {
+report.emf-forms.internal {
     import snippets/headers.caddy
     reverse_proxy form:8000
 }
 
-panel.emfconduct.internal {
+panel.emf-forms.internal {
     import snippets/headers.caddy
     reverse_proxy panel:8000
 }
 
-router.emfconduct.internal {
+router.emf-forms.internal {
     import snippets/headers.caddy
     reverse_proxy router:8000
 }
@@ -415,7 +449,7 @@ panel.emfcamp.org {
 | `panel_viewer` | service | SELECT non-PII fields via security_barrier view — dispatcher view only |
 | `team_member` | service | Full SELECT+UPDATE on cases and case_history — conduct team panel |
 | `backup_user` | service | pg_dump read access to full database; no application access |
-| `emfconduct_admin` | superuser | Schema management only — not used by any running app |
+| `emf_forms_admin` | superuser | Schema management only — not used by any running app |
 
 **On `service_user`**: State transitions triggered by automated processes (router marking a notification sent, dispatcher triggering a state change) use `service_user`, not `team_member`. This separates machine actions from human ones. Human changes are audited in `case_history` with a username; automated changes are identified by `changed_by = "system"`.
 
@@ -434,21 +468,30 @@ CREATE ROLE service_user     LOGIN PASSWORD :'service_password';
 CREATE ROLE panel_viewer     LOGIN PASSWORD :'panel_viewer_password';
 CREATE ROLE team_member      LOGIN PASSWORD :'team_member_password';
 CREATE ROLE backup_user      LOGIN PASSWORD :'backup_password';
-CREATE ROLE emfconduct_admin LOGIN PASSWORD :'admin_password' SUPERUSER;
+CREATE ROLE emf_forms_admin LOGIN PASSWORD :'admin_password' SUPERUSER;
 
-CREATE SCHEMA IF NOT EXISTS conduct;
-GRANT USAGE ON SCHEMA conduct TO
+-- Schema and database are named generically (`forms`, `emf_forms`) rather than after any
+-- specific team. The conduct team is the first tenant; other EMF teams can be provisioned
+-- without schema changes. All tenant isolation is via the `team_id` column + RLS — not
+-- separate schemas or databases.
+
+CREATE SCHEMA IF NOT EXISTS forms;
+GRANT USAGE ON SCHEMA forms TO
     form_user, router_user, service_user, panel_viewer, team_member;
 
 -- backup_user: read-only dump access; no schema mutation possible
-GRANT CONNECT ON DATABASE emfconduct TO backup_user;
-GRANT USAGE ON SCHEMA conduct TO backup_user;
-GRANT SELECT ON ALL TABLES IN SCHEMA conduct TO backup_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA conduct
+-- Future multi-tenant: provision one backup_user per team and restrict it to that
+-- team's rows via RLS. Each team's dump can then be encrypted with their own public
+-- key/cert so only they can restore it — useful for GDPR portability and separation.
+
+GRANT CONNECT ON DATABASE emf_forms TO backup_user;
+GRANT USAGE ON SCHEMA forms TO backup_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA forms TO backup_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA forms
     GRANT SELECT ON TABLES TO backup_user;
 
 -- -------------------------------------------------------------------------
--- conduct.cases — column access matrix
+-- forms.cases — column access matrix
 --
 -- Column        form_user  router_user  service_user  panel_viewer  team_member
 -- id            INSERT     (view)       SELECT        (view)        SELECT
@@ -459,53 +502,61 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA conduct
 -- form_data     INSERT     —            —             —             SELECT
 -- location_hint INSERT     (view)       —             (view)        SELECT
 -- status        INSERT(new)(view)       SELECT/UPDATE (view)        SELECT/UPDATE
--- assignee      —          —            SELECT/UPDATE —             SELECT/UPDATE
--- tags          —          —            —             —             SELECT/UPDATE
+-- assignee      —          —            SELECT/UPDATE —             SELECT/UPDATE/DELETE
+-- tags          —          —            —             —             SELECT/UPDATE/DELETE
 -- team_id       INSERT(null)—           —             —             SELECT
 -- created_at    INSERT     (view)       SELECT        (view)        SELECT
 -- updated_at    —          (view)       UPDATE        (view)        SELECT
 -- -------------------------------------------------------------------------
 
 -- form_user: insert new cases
-GRANT INSERT ON conduct.cases TO form_user;
+GRANT INSERT ON forms.cases TO form_user;
 
 -- router_user: read-only access to non-PII fields via security_barrier view.
 -- The security_barrier attribute forces view predicates to be evaluated before
 -- any user-supplied filters, preventing timing/planning side-channel leaks.
-CREATE VIEW conduct.cases_router WITH (security_barrier = true) AS
+CREATE VIEW forms.cases_router WITH (security_barrier = true) AS
     SELECT id, friendly_id, event_name, urgency, status, location_hint, created_at
-    FROM conduct.cases;
-GRANT SELECT ON conduct.cases_router TO router_user;
-GRANT INSERT, UPDATE ON conduct.notifications TO router_user;
+    FROM forms.cases;
+GRANT SELECT ON forms.cases_router TO router_user;
+GRANT INSERT, UPDATE ON forms.notifications TO router_user;
 
 -- service_user: update workflow fields; append audit rows
 GRANT SELECT (id, friendly_id, urgency, status, assignee, updated_at)
-    ON conduct.cases TO service_user;
-GRANT UPDATE (status, assignee, updated_at) ON conduct.cases TO service_user;
-GRANT INSERT ON conduct.case_history TO service_user;
+    ON forms.cases TO service_user;
+GRANT UPDATE (status, assignee, updated_at) ON forms.cases TO service_user;
+GRANT INSERT ON forms.case_history TO service_user;
 
 -- panel_viewer: dispatcher view via security_barrier view (no PII)
-CREATE VIEW conduct.cases_dispatcher WITH (security_barrier = true) AS
+CREATE VIEW forms.cases_dispatcher WITH (security_barrier = true) AS
     SELECT id, friendly_id, urgency, status, location_hint, created_at, updated_at
-    FROM conduct.cases;
-GRANT SELECT ON conduct.cases_dispatcher TO panel_viewer;
+    FROM forms.cases;
+GRANT SELECT ON forms.cases_dispatcher TO panel_viewer;
 
--- team_member: full access — conduct team only
-GRANT SELECT, UPDATE ON conduct.cases TO team_member;
-GRANT SELECT, INSERT ON conduct.case_history TO team_member;
-GRANT SELECT ON conduct.notifications TO team_member;
+-- team_member: full SELECT/UPDATE access, scoped by RLS (team_id matched from SSO session).
+-- No WHERE clause on the GRANT — RLS policy team_isolation filters rows transparently.
+-- The app sets app.current_team_id = <uuid from OIDC group> before any query.
+GRANT SELECT, UPDATE ON forms.cases TO team_member;
+GRANT SELECT, INSERT ON forms.case_history TO team_member;
+GRANT SELECT ON forms.notifications TO team_member;
 
 -- -------------------------------------------------------------------------
 -- Row-Level Security
--- Single-tenant now: team_id IS NULL passes all rows.
--- Multi-tenant: app sets app.current_team_id at session open time.
+-- Single-tenant now: form_user inserts cases with team_id = <conduct team UUID> at submission
+-- time (seeded in config); this means no UPDATE is needed when multi-tenancy is activated.
+-- Multi-tenant: app sets app.current_team_id at session open time (from OIDC group claim).
+-- Onboarding a new team: install script guides sysadmin through team creation questions
+-- (team name, group ID, contact emails) and provisions team_id via a super-admin role.
+-- Moving cases between teams also requires super-admin; tracked in case_history.
 -- -------------------------------------------------------------------------
-ALTER TABLE conduct.cases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE forms.cases ENABLE ROW LEVEL SECURITY;
 
--- Bypass RLS for emfconduct_admin (superuser already bypasses, but explicit)
-ALTER TABLE conduct.cases FORCE ROW LEVEL SECURITY;
+-- Bypass RLS for emf_forms_admin (superuser already bypasses, but explicit)
+ALTER TABLE forms.cases FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY team_isolation ON conduct.cases
+-- form_user inserts cases with team_id already set to the correct team UUID (from config),
+-- so this policy works from day one even before multi-tenancy is fully activated.
+CREATE POLICY team_isolation ON forms.cases
     USING (
         team_id IS NULL
         OR team_id = current_setting('app.current_team_id', true)::uuid
@@ -526,7 +577,7 @@ The shared library provides config loading, phase detection, friendly ID generat
 
 All dates in config and in the database are ISO 8601 (`YYYY-MM-DD` for dates, RFC 3339 for datetimes). Python's `date.fromisoformat()` and `datetime.isoformat()` handle this without any extra libraries.
 
-`shared/emfconduct/config.py`:
+`shared/emf_forms/config.py`:
 
 ```python
 from __future__ import annotations
@@ -539,10 +590,22 @@ from pydantic import BaseModel, field_validator
 from pydantic_settings import BaseSettings
 
 
+class SignalPadding(BaseModel):
+    before_event_days: int = 2
+    after_event_days: int = 2
+
+
 class EventConfig(BaseModel):
     name: str
     start_date: date   # ISO 8601: "2026-07-12"
     end_date: date
+    # Per-event Signal/dispatcher settings — each event can have its own group and routing.
+    signal_group_id: str | None = None
+    signal_mode: str = "fallback_only"  # "always" | "fallback_only" | "high_priority_and_fallback"
+    signal_padding: SignalPadding = SignalPadding()
+    dispatcher_emails: list[str] = []
+    dispatcher_session_ttl_hours: int = 8
+    dispatcher_session_max_devices: int = 2
 
     @field_validator("end_date")
     @classmethod
@@ -553,42 +616,30 @@ class EventConfig(BaseModel):
 
 
 class SmtpConfig(BaseModel):
-    host: str = "localhost"
+    host: str = "host.docker.internal"
     port: int = 587
     from_addr: str
     use_tls: bool = True
-
-
-class SignalPadding(BaseModel):
-    before_event_days: int = 2
-    after_event_days: int = 2
+    username: str | None = None
+    # password is NOT stored here — it comes from SMTP_PASSWORD in .env via pydantic-settings
 
 
 class AppConfig(BaseModel):
     events: list[EventConfig]
     conduct_emails: list[str]
-    dispatcher_emails: list[str]
-    dispatcher_session_ttl_hours: int = 8
-    dispatcher_session_max_devices: int = 2
     urgency_levels: list[str] = ["low", "medium", "high", "urgent"]
     # Pronouns list — sourced from config so it can be updated without code changes.
     # Frontend renders as a datalist (predefined options + free text entry).
+    # "Other" is always appended as the last option at render time so it stays at the bottom.
+    # Only one pronoun value is accepted per submission (single text field).
     pronouns: list[str] = [
         "Ze/Zir/Zirs", "Xe/Xem/Xyrs", "Fae/Faer/Faerself", "Fur/Furs/Furself",
-        "He/Him/His", "She/Her/Hers", "They/Them/Theirs",
+        "He/Him/His", "She/Her/Hers", "They/Them/Theirs", "Other",
     ]
-    signal_group_id: str | None = None
-    # Controls when Signal is used during the active event window:
-    #   "fallback_only"             — signal only if phone unavailable (default)
-    #   "always"                    — email + phone + signal every time
-    #   "high_priority_and_fallback"— signal for high/urgent + fallback
-    signal_mode: str = "fallback_only"
-    # Extends the event-time routing window (phone + signal) by N days either side.
-    # Outside this window, only email is used regardless of signal_mode.
-    signal_padding: SignalPadding = SignalPadding()
     smtp: SmtpConfig
     panel_base_url: str  # used to construct case URLs in notifications
     mattermost_webhook: str | None = None
+    slack_webhook: str | None = None
 
 
 class Settings(BaseSettings):
@@ -613,7 +664,7 @@ class Settings(BaseSettings):
 
 Phase drives routing behaviour (phone calls during event time, email-only outside). However, **the form also lets users select which event they're reporting about** — the conduct team works year-round and a complaint filed months later should be linked to the event it relates to, not the current date. Phase detection is used only for routing decisions; event association is user-supplied.
 
-`shared/emfconduct/phase.py`:
+`shared/emf_forms/phase.py`:
 
 ```python
 from datetime import datetime, timezone
@@ -678,14 +729,14 @@ def events_for_form(config: AppConfig) -> list[EventConfig]:
 
 With a 10,000-word wordlist, 4-word IDs give 10^16 combinations — effectively inexhaustible for this use case. The DB `UNIQUE` constraint guarantees actual uniqueness; the random generation just makes collisions astronomically unlikely.
 
-`scripts/generate_wordlist.py` — produces `shared/emfconduct/wordlist.txt`:
+`scripts/generate_wordlist.py` — produces `shared/emf_forms/wordlist.txt`:
 - Source: standard English word corpus (e.g. `wordfreq` library top 20k)
 - Filter: 4–8 letters, no ambiguous spellings, no homographs, no proper nouns
-- Inclusive language: apply the principles at https://developers.google.com/style/inclusive-documentation; use `better-profanity` or `profanity-check` library for automated screening, then manual review of the output list before committing
+- Inclusive language: apply the principles at https://developers.google.com/style/inclusive-documentation; use `better-profanity` library for automated screening, then commit
 - Target: ~10,000 words
 - Commit the output file; the script is for regeneration only
 
-`shared/emfconduct/friendly_id.py`:
+`shared/emf_forms/friendly_id.py`:
 
 ```python
 from __future__ import annotations
@@ -694,7 +745,7 @@ import secrets
 from importlib.resources import files
 
 _WORDLIST: list[str] = (
-    files("emfconduct").joinpath("wordlist.txt").read_text().splitlines()
+    files("emf_forms").joinpath("wordlist.txt").read_text().splitlines()
 )
 # Should be ~10,000 words for adequate cardinality
 
@@ -722,7 +773,7 @@ def generate_unique(existing: set[str], existing_uuid: str = "") -> str:
 ### 3.4 Database session
 
 ```python
-# shared/emfconduct/db.py
+# shared/emf_forms/db.py
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -875,7 +926,7 @@ class Location(BaseModel):
 
 class ReporterDetails(BaseModel):
     name: str | None = Field(None, max_length=200)
-    pronouns: str | None = Field(None, max_length=100)
+    pronouns: str | None = Field(None, max_length=50)
     # Phone: allow digits, spaces, +, -, ., (, ), and letters A-Z (DECT T9 codes like "ADAM")
     # Valid examples: "+44 23 4566 7789", "1234" (DECT), "ADAM" (T9), "34.3434242242"
     phone: str | None = Field(None, max_length=30)
@@ -945,9 +996,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from emfconduct.db import get_session
-from emfconduct.friendly_id import generate_unique
-from emfconduct.phase import Phase, current_phase, events_for_form
+from emf_forms.db import get_session
+from emf_forms.friendly_id import generate_unique
+from emf_forms.phase import Phase, current_phase, events_for_form
 
 from .models import Case
 from .schemas import CaseSubmission
@@ -1111,9 +1162,9 @@ Key design decisions from annotations:
         <!--
           Rendered as <input> + <datalist>: user gets predefined suggestions but can type anything.
           The datalist options are loaded from config.pronouns (so they can be updated without code changes).
-          Backend validates against the same list, but also accepts any free-text value up to 100 chars.
+          Backend validates against the same list, but also accepts any free-text value up to 50 chars.
         -->
-        <input type="text" id="pronouns" name="pronouns" maxlength="100"
+        <input type="text" id="pronouns" name="pronouns" maxlength="50"
                list="pronouns-list" autocomplete="off">
         <datalist id="pronouns-list">
           {% for p in config.pronouns %}
@@ -1390,7 +1441,7 @@ The router is a standalone FastAPI service that:
 1. Listens for `new_case` events via PostgreSQL `LISTEN/NOTIFY` (explained below)
 2. Determines routing based on phase, urgency, and config
 3. Dispatches through pluggable channel adapters
-4. Tracks per-notification state in `conduct.notifications`
+4. Tracks per-notification state in `forms.notifications`
 
 ### 6.1 How PostgreSQL LISTEN/NOTIFY works
 
@@ -1469,8 +1520,8 @@ class Notification(Base):
     __table_args__ = {"schema": "conduct"}
 
     id              = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    case_id         = Column(UUID(as_uuid=True), ForeignKey("conduct.cases.id"))
-    # Channel names: "email" | "signal" | "telephony" | "mattermost"
+    case_id         = Column(UUID(as_uuid=True), ForeignKey("forms.cases.id"))
+    # Channel names: "email" | "signal" | "telephony" | "mattermost" | "slack"
     # "telephony" is technology-agnostic; Jambonz implements this channel for EMF 2026
     channel         = Column(String(32))
     state           = Column(String(16), default=NotifState.PENDING)
@@ -1567,7 +1618,7 @@ class EmailAdapter(ChannelAdapter):
         msg["From"] = self._smtp.from_addr
         msg["To"] = ", ".join(self._to)
         # Generate a deterministic Message-ID so we can reference it later
-        msg["Message-ID"] = email.utils.make_msgid(domain="emfconduct")
+        msg["Message-ID"] = email.utils.make_msgid(domain="emf_forms")
 
         try:
             async with aiosmtplib.SMTP(self._smtp.host, self._smtp.port,
@@ -1584,7 +1635,7 @@ class EmailAdapter(ChannelAdapter):
         msg["Subject"] = f"✅ ACK: {alert.friendly_id}"
         msg["From"] = self._smtp.from_addr
         msg["To"] = ", ".join(self._to)
-        msg["Message-ID"] = email.utils.make_msgid(domain="emfconduct")
+        msg["Message-ID"] = email.utils.make_msgid(domain="emf_forms")
         if original_message_id:
             # These headers cause mail clients to thread the ACK under the original alert
             msg["In-Reply-To"] = original_message_id
@@ -1667,7 +1718,7 @@ Signal routing is config-driven via `signal_mode` in `AppConfig`:
 import asyncio
 import logging
 
-from emfconduct.phase import Phase
+from emf_forms.phase import Phase
 from .channels.base import CaseAlert, ChannelAdapter
 
 log = logging.getLogger(__name__)
@@ -1826,7 +1877,7 @@ TTS message builder:
 
 ```python
 # apps/tts/src/builder.py
-from emfconduct_router.channels.base import CaseAlert
+from emf_forms_router.channels.base import CaseAlert
 
 URGENCY_WORD = {"urgent": "URGENT", "high": "high priority",
                 "medium": "medium priority", "low": "low priority"}
@@ -1853,7 +1904,7 @@ EMF 2026 specific. Implements the `telephony` channel. Explicitly treat as throw
 ```python
 # apps/jambonz/src/adapter.py
 import httpx
-from emfconduct_router.channels.base import ChannelAdapter, CaseAlert
+from emf_forms_router.channels.base import ChannelAdapter, CaseAlert
 from .builder import build_tts_message
 
 
@@ -1950,7 +2001,7 @@ async def test_dispatcher_token_cannot_read_case_form_data(client):
 
 async def test_panel_viewer_role_cannot_read_form_data(db):
     result = await db.execute(
-        "SET ROLE panel_viewer; SELECT form_data FROM conduct.cases LIMIT 1"
+        "SET ROLE panel_viewer; SELECT form_data FROM forms.cases LIMIT 1"
     )
     # Should raise PermissionError — panel_viewer has no SELECT on form_data column
     ...
@@ -1963,10 +2014,10 @@ def test_caddy_enforces_tls13_and_h2(caddy_config_text):
 # A03 — Injection
 async def test_sql_injection_in_form_fields(client, db):
     r = await client.post("/api/submit", json={
-        **VALID_PAYLOAD, "what_happened": "'; DROP TABLE conduct.cases; --"
+        **VALID_PAYLOAD, "what_happened": "'; DROP TABLE forms.cases; --"
     })
     assert r.status_code in (201, 422)
-    count = await db.scalar("SELECT COUNT(*) FROM conduct.cases")
+    count = await db.scalar("SELECT COUNT(*) FROM forms.cases")
     assert count >= 0  # table must still exist
 
 # A04 — Insecure Design (honeypot)
@@ -1975,7 +2026,7 @@ async def test_honeypot_submission_returns_fake_ok_but_is_not_saved(client, db):
     assert r.status_code in (200, 201)
     assert r.json()["case_id"] == "00000000-0000-0000-0000-000000000000"
     result = await db.fetchrow(
-        "SELECT id FROM conduct.cases WHERE friendly_id = 'ok'"
+        "SELECT id FROM forms.cases WHERE friendly_id = 'ok'"
     )
     assert result is None
 
@@ -2003,7 +2054,7 @@ async def test_status_transition_creates_history_row(client, db):
     r = await client.patch(f"/api/cases/{CASE_ID}/status", json={"status": "assigned"})
     assert r.status_code == 200
     row = await db.fetchrow(
-        "SELECT * FROM conduct.case_history WHERE case_id = $1 ORDER BY changed_at DESC LIMIT 1",
+        "SELECT * FROM forms.case_history WHERE case_id = $1 ORDER BY changed_at DESC LIMIT 1",
         CASE_ID,
     )
     assert row["new_value"] == "assigned"
@@ -2088,7 +2139,7 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_DB: emfconduct_test
+          POSTGRES_DB: emf_forms_test
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
         options: >-
@@ -2104,7 +2155,7 @@ jobs:
       - run: uv run bandit -r apps/ shared/ -c pyproject.toml
       - run: uv run pytest --tb=short -q
         env:
-          DATABASE_URL: postgresql+asyncpg://test:test@localhost/emfconduct_test
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost/emf_forms_test
       - run: uv run pip-audit
 ```
 
@@ -2181,7 +2232,7 @@ Reads `.env.example`, replaces `changeme` placeholders with `secrets.token_urlsa
 - `pg_dump` with `--format=custom` (binary, supports selective restore)
 - Compress with `zstd` (fast, good ratio)
 - Encrypt with `age` (simple, modern; recipient = sysadmin's public key)
-- Filename: `emfconduct-<ISO8601-datetime>.dump.zst.age`
+- Filename: `emf_forms-<ISO8601-datetime>.dump.zst.age`
 - Store locally + optionally rsync to a remote
 - (optional, via `--systemd` flag) Install as a systemd timer on the host machine; generates a `.service` + `.timer` unit file and runs `systemctl enable --now`
 
@@ -2189,7 +2240,7 @@ Reads `.env.example`, replaces `changeme` placeholders with `secrets.token_urlsa
 
 - Source: `wordfreq` top 20k English words (or `/usr/share/dict/words`)
 - Filters: 4–8 characters, alpha only, no proper nouns, profanity block list, no homographs
-- Output: `shared/emfconduct/wordlist.txt` (~10,000 words)
+- Output: `shared/emf_forms/wordlist.txt` (~10,000 words)
 - Commit the output; re-run only when wordlist needs updating
 
 ---
@@ -2206,22 +2257,45 @@ Reads `.env.example`, replaces `changeme` placeholders with `secrets.token_urlsa
 | 6 | Data retention | ✅ Decided | Manual process post-event. Export to CSV required in the panel. PII purge schedule TBD with conduct team. |
 | 7 | Admin app (2c) | ✅ Decided | Defer to post-launch (Phase 10) |
 | 8 | ACK mechanism (Signal/email) | ✅ Decided | Signal: emoji reply (🤙 = ACK), parsed by signal-cli-rest-api webhook. Email: magic link with one-time token. |
-| 9 | Mattermost instance | 🔲 Pending | Webhook URL — confirm Mattermost workspace with EMF team. Set in `config.json`. |
+| 9 | Mattermost + Slack instances | 🔲 Pending | Both use incoming webhook URLs. Confirm Mattermost workspace with EMF team. Slack webhook similarly configurable. Both set in `config.json`; same payload shape used for both. |
 | 10 | Sub-roles in conduct team | ✅ Decided | Start flat (`team_member` = full access). `panel_viewer` is a separate DB role for the dispatcher view only, not an SSO group. |
 | 11 | Phase selection for post-event reports | ✅ Decided | User selects event from dropdown; `current_phase()` used for routing only |
 | 12 | Email threading | ✅ Decided | Capture `Message-ID` from initial send; use `References` + `In-Reply-To` for ACK/update emails |
 
 
+## Additional design requirements
+
+### Form submission idempotency (App 1)
+If a user retries a submission (e.g. double-tap, flaky connection), the system must not create a duplicate case. Design:
+- Generate a client-side idempotency token (UUID) in the form page on load; include as a hidden field.
+- The form service stores the token with the case on first submission; a second submission with the same token returns the existing case's `friendly_id` with a friendly message rather than creating a new case.
+- Token scope: per browser session (no login required on the public form).
+- Show a clear message: "It looks like this was already submitted — your reference is `tiger-lamp-blue-moon`."
+
+### Back-button / browser history state (App 1)
+If the user presses back after submitting, form fields must remain populated. Design:
+- Use the History API (`history.replaceState`) to persist form state in the session history entry.
+- On page load, restore from `history.state` if present.
+- Do not re-submit on restore; show a "previously entered" notice if restoring from state.
+
+### Slack adapter (App 3 — Router)
+Add Slack as a notification channel alongside Mattermost. Both use incoming webhooks:
+- `slack_webhook` in `config.json` (same pattern as `mattermost_webhook`).
+- A `SlackAdapter` implementing the same `ChannelAdapter` interface.
+- Same alert format: urgency emoji + friendly_id + location + case URL.
+- ACK via Slack emoji reaction is a future consideration (requires Slack Events API, not just webhooks).
+
 ## TO DO list
+
 
 ### Image attachments (App 1 — public form)
 Allow reporters to attach up to 3 images per submission. Design notes:
 
 - **Upload endpoint**: separate `POST /attachments` endpoint on the form service; returns a token used in the case submission payload (not stored inline in the case JSON).
-- **Content scanning**: before accepting, run a content-safety check (`libmagic` for MIME type verification; optional CSAM hash check via PhotoDNA or equivalent — decision needed with conduct team).
-- **Storage**: private volume or object store (e.g. MinIO running alongside the stack); never in a public-web-accessible path.
+- **Content scanning**: before accepting, run a content-safety check (`libmagic` for MIME type verification; reject anything that isn't an allowed image type regardless of file extension).
+- **Virus/malware scan**: integrate ClamAV (self-hosted, Docker) as part of the upload pipeline; reject on positive hit.
+- **Storage**: configurable in `config.json` (`attachment_backend`: `"local"` or `"minio"`). If MinIO: run as a Docker service alongside the stack, enable server-side encryption (`SSE-S3` or `SSE-KMS`), and include MinIO data volume in the backup script.
 - **Access control**: attachment retrieval requires a valid `team_conduct` session (same SSO as the panel). Implement a signed-URL proxy endpoint on the panel service: `GET /cases/<uuid>/attachments/<id>` — checks session, streams the file. Direct file paths never exposed.
 - **Admin panel display**: show thumbnails inline in the case detail view; clicking opens the signed-URL proxy.
-- **Virus/malware scan**: integrate ClamAV (self-hosted, Docker) as part of the upload pipeline; reject on positive hit.
 - **Limits**: max 3 files per case, max 10 MB per file; accepted types: JPEG, PNG, HEIC, WebP.
 - **Retention**: attachments follow the same retention schedule as the case record.
