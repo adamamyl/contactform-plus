@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ case.friendly_id }} — EMF Conduct Panel{% endblock %}
+{% block content %}
+<a href="/" class="back-link">← All cases</a>
+<h1>Case: <code>{{ case.friendly_id }}</code></h1>
+
+<div class="case-meta">
+  <span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span>
+  <span class="chip">{{ case.status | replace('_',' ') }}</span>
+  <span class="meta-item">Submitted {{ case.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+  {% if case.location_hint %}<span class="meta-item">📍 {{ case.location_hint }}</span>{% endif %}
+</div>
+
+<section class="case-section">
+  <h2>Report details</h2>
+  {% set d = case.form_data %}
+  {% if d.what_happened %}<p><strong>What happened:</strong> {{ d.what_happened }}</p>{% endif %}
+  {% if d.incident_date %}<p><strong>When:</strong> {{ d.incident_date }} {{ d.incident_time or '' }}</p>{% endif %}
+  {% if d.reporter %}
+    {% set r = d.reporter %}
+    <p><strong>Reporter:</strong>
+      {{ r.name or 'anonymous' }}
+      {% if r.pronouns %}({{ r.pronouns }}){% endif %}
+      {% if r.email %}· {{ r.email }}{% endif %}
+      {% if r.phone %}· {{ r.phone }}{% endif %}
+    </p>
+  {% endif %}
+  {% if d.others_involved %}<p><strong>Others involved:</strong> {{ d.others_involved }}</p>{% endif %}
+  {% if d.why_it_happened %}<p><strong>Why:</strong> {{ d.why_it_happened }}</p>{% endif %}
+  {% if d.additional_info %}<p><strong>Additional info:</strong> {{ d.additional_info }}</p>{% endif %}
+  {% if d.support_needed %}<p><strong>Support needed:</strong> {{ d.support_needed }}</p>{% endif %}
+  {% if d.anything_else %}<p><strong>Anything else:</strong> {{ d.anything_else }}</p>{% endif %}
+</section>
+
+<section class="case-section">
+  <h2>Actions</h2>
+  <form class="inline-form" method="post" action="/api/cases/{{ case.id }}/assignee" id="assignee-form">
+    <label for="assignee">Assignee</label>
+    <input type="text" id="assignee" name="assignee" value="{{ case.assignee or '' }}" placeholder="Username">
+    <button type="submit" class="btn btn--small">Save</button>
+  </form>
+
+  <form class="inline-form" method="post" action="/api/cases/{{ case.id }}/tags" id="tags-form">
+    <label for="tags">Tags (comma-separated)</label>
+    <input type="text" id="tags" name="tags" value="{{ case.tags | join(', ') }}"
+           list="existing-tags" placeholder="tag1, tag2">
+    <button type="submit" class="btn btn--small">Save</button>
+  </form>
+
+  <div class="status-transitions">
+    <p><strong>Transition status:</strong></p>
+    {% for next_status in valid_next_statuses %}
+    <form method="post" action="/api/cases/{{ case.id }}/status" style="display:inline">
+      <input type="hidden" name="status" value="{{ next_status }}">
+      <button type="submit" class="btn btn--small">→ {{ next_status | replace('_',' ') }}</button>
+    </form>
+    {% else %}
+    <p class="hint">No further transitions available (case is {{ case.status }}).</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="case-section">
+  <h2>History</h2>
+  <ol class="history-timeline">
+    {% for h in history %}
+    <li>
+      <time>{{ h.changed_at.strftime('%Y-%m-%d %H:%M UTC') }}</time>
+      <strong>{{ h.changed_by }}</strong> changed <em>{{ h.field }}</em>:
+      {{ h.old_value or '—' }} → {{ h.new_value or '—' }}
+    </li>
+    {% else %}
+    <li>No history yet.</li>
+    {% endfor %}
+  </ol>
+</section>
+{% endblock %}

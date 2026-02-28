@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dispatcher — EMF Conduct</title>
+  <link rel="stylesheet" href="/static/panel.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="top-nav">
+      <span class="home-link">EMF Conduct — Dispatcher</span>
+    </nav>
+  </header>
+  <main class="main-content">
+    <h1>Active cases</h1>
+    <p class="hint">Showing unassigned cases by default. <a href="?token={{ token }}&all=true">Show all</a></p>
+
+    <table class="cases-table">
+      <thead>
+        <tr>
+          <th>Urgency</th>
+          <th>Case ID</th>
+          <th>Status</th>
+          <th>Location</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for case in cases %}
+        <tr>
+          <td><span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span></td>
+          <td><code>{{ case.friendly_id }}</code></td>
+          <td><span class="chip">{{ case.status | replace('_',' ') }}</span></td>
+          <td>{{ case.location_hint or '—' }}</td>
+          <td>
+            <button class="btn btn--small btn--ack"
+                    onclick="ack('{{ case.id }}', this)">ACK</button>
+            <button class="btn btn--small btn--trigger"
+                    onclick="trigger('{{ case.id }}', this)">Trigger call</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty">No unassigned cases.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </main>
+  {% include "footer.html" %}
+  <script>
+    const TOKEN = {{ token | tojson }};
+    async function ack(caseId, btn) {
+      btn.disabled = true;
+      await fetch(`/api/dispatcher/ack/${caseId}?token=${TOKEN}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{"acked_by":"dispatcher"}'});
+      btn.textContent = '✅';
+    }
+    async function trigger(caseId, btn) {
+      btn.disabled = true;
+      await fetch(`/api/dispatcher/trigger/${caseId}?token=${TOKEN}`, {method:'POST'});
+      btn.textContent = '📞 Sent';
+    }
+  </script>
+</body>
+</html>

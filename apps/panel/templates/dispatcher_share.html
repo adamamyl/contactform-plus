@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Dispatcher URL — EMF Conduct Panel{% endblock %}
+{% block content %}
+<h1>Generate dispatcher URL</h1>
+<p>Create a time-limited session URL for a dispatcher. Valid for up to 2 devices simultaneously.</p>
+
+<form id="session-form">
+  <label for="send_to">Email to (optional)</label>
+  <input type="email" id="send_to" name="send_to" placeholder="dispatcher@emfcamp.org" autocomplete="email" inputmode="email">
+  <button type="button" class="btn btn--primary" onclick="generateSession()">Generate URL</button>
+</form>
+
+<div id="result" class="result-box" hidden>
+  <label for="session-url">Session URL (share securely)</label>
+  <input type="text" id="session-url" readonly onclick="this.select()">
+  <button type="button" onclick="copyUrl()">Copy</button>
+  <p class="hint" id="expiry-note"></p>
+</div>
+
+<script>
+async function generateSession() {
+  const sendTo = document.getElementById('send_to').value;
+  const res = await fetch('/api/dispatcher-session', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({send_to: sendTo || null}),
+  });
+  if (!res.ok) return alert('Failed to generate session');
+  const data = await res.json();
+  document.getElementById('session-url').value = data.url;
+  document.getElementById('expiry-note').textContent = `Expires in ${data.expires_in_hours} hours.`;
+  document.getElementById('result').hidden = false;
+}
+function copyUrl() {
+  const el = document.getElementById('session-url');
+  el.select();
+  navigator.clipboard.writeText(el.value);
+}
+</script>
+{% endblock %}

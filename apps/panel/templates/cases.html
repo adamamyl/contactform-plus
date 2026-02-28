@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Cases — EMF Conduct Panel{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Cases</h1>
+  <a href="/dispatcher-share" class="btn btn--secondary">Generate dispatcher URL</a>
+</div>
+
+<form class="filter-form" method="get" action="/">
+  <select name="status" aria-label="Filter by status">
+    <option value="">All statuses</option>
+    {% for s in ["new","assigned","in_progress","action_needed","decision_needed","closed"] %}
+    <option value="{{ s }}" {% if request.query_params.get('status') == s %}selected{% endif %}>{{ s | replace('_',' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="urgency" aria-label="Filter by urgency">
+    <option value="">All urgencies</option>
+    {% for u in ["urgent","high","medium","low"] %}
+    <option value="{{ u }}" {% if request.query_params.get('urgency') == u %}selected{% endif %}>{{ u | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn--small">Filter</button>
+  <a href="/" class="btn btn--small btn--outline">Clear</a>
+</form>
+
+<table class="cases-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Urgency</th>
+      <th>Status</th>
+      <th>Assignee</th>
+      <th>Location</th>
+      <th>Submitted</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for case in cases %}
+    <tr>
+      <td><a href="/cases/{{ case.id }}">{{ case.friendly_id }}</a></td>
+      <td><span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span></td>
+      <td><span class="chip">{{ case.status | replace('_',' ') }}</span></td>
+      <td>{{ case.assignee or '—' }}</td>
+      <td>{{ case.location_hint or '—' }}</td>
+      <td>{{ case.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty">No cases found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
