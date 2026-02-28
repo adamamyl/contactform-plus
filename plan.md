@@ -2381,9 +2381,10 @@ Tick items off as they are completed. Phases can overlap where dependencies allo
 
 #### Frontend assets
 - [ ] Download Material Design 3 CSS + fonts locally to `apps/form/static/` (no external CDN references)
+- [ ] Write `apps/form/templates/footer.html` — minimal shared partial; links to existing emfcamp.org pages for privacy policy, code of conduct, about, and map (no locally-hosted copies)
 - [ ] Write `apps/form/templates/base.html`:
   - [ ] `<HOME>` nav link top-left
-  - [ ] Footer nav: privacy policy | code of conduct | about | map
+  - [ ] Include `footer.html` partial via Jinja2 `{% include %}`
   - [ ] Responsive meta viewport, accessible font sizes (WCAG AA minimum)
 - [ ] Write `apps/form/templates/form.html`:
   - [ ] Phase-aware DECT alert banner (amber background, not red/green; large accessible text)
@@ -2448,11 +2449,11 @@ Tick items off as they are completed. Phases can overlap where dependencies allo
 
 #### Templates
 - [ ] Download Material Design 3 CSS + fonts locally to `apps/panel/static/`
-- [ ] Write `apps/panel/templates/base.html` (nav, SSO username display, logout link, responsive)
+- [ ] Copy or symlink `footer.html` partial from `apps/form/templates/` (or move to `shared/templates/` and reference from both apps)
+- [ ] Write `apps/panel/templates/base.html` (nav, SSO username display, logout link, responsive, include `footer.html` partial)
 - [ ] Write `apps/panel/templates/cases.html` (sortable/filterable case list; urgency badge colours; status chip)
 - [ ] Write `apps/panel/templates/case_detail.html` (full case view; history timeline; inline tag editor with autocomplete; assignee picker; status transition buttons showing only valid next states)
 - [ ] Write `apps/panel/templates/dispatcher_share.html` (generate dispatcher URL, optional "email to" field, active sessions count, revoke button)
-- [ ] Add privacy policy, code of conduct, about, map footer pages (static templates)
 
 #### Tests
 - [ ] Test unauthenticated `GET /` → 303 to `/login`
@@ -2477,11 +2478,12 @@ Tick items off as they are completed. Phases can overlap where dependencies allo
   - [ ] `create_dispatcher_token()` — JWT with `jti`, `exp`, `iat`, `scope="dispatcher"`
   - [ ] `validate_dispatcher_token()` — decode, check revocation set, check scope, enforce max-2-device limit
   - [ ] In-memory revocation set + device map (Redis-backed for restart resilience — add redis to docker-compose)
-- [ ] `POST /api/dispatcher-session` route (conduct team only): create token, build URL, optional send-to-email, return `{url, expires_in_hours}`
+- [ ] `POST /api/dispatcher-session` route (conduct team only): create token, build URL, display URL, optional send-to-email, return `{url, expires_in_hours}`
 - [ ] `POST /api/dispatcher-session/{jti}/revoke` route (conduct team only): add jti to revocation set
 
 #### Dispatcher routes & view
 - [ ] `GET /dispatcher` — authenticate via `?token=` query param; set device_id cookie; render stripped view
+- [ ] `GET /cases` → case list without sensitive data (filter by urgency, status, location; sort by created_at / updated_at / urgency; by default, **only show unassigned cases**)
 - [ ] `POST /api/dispatcher/ack/{case_id}` — mark notification acked; trigger ACK confirmation on all channels
 - [ ] `POST /api/dispatcher/trigger/{case_id}` — manually re-trigger routing for a case
 - [ ] Write `apps/panel/templates/dispatcher.html`: urgency badge, friendly_id, status, ACK button, trigger-call button — no reporter PII visible
@@ -2707,9 +2709,6 @@ Tick items off as they are completed. Phases can overlap where dependencies allo
 - [ ] Write `apps/jambonz/README.md`: Jambonz API prerequisites, escalation config
 - [ ] Write root `CLAUDE.md`: project conventions, key file paths, dev commands, test commands, deploy commands
 - [ ] Write per-app `CLAUDE.md` files (app-specific conventions and entry points)
-- [ ] Write privacy policy page content (`apps/form/templates/privacy.html`)
-- [ ] Write code of conduct page content (`apps/form/templates/conduct.html`)
-- [ ] Write about page content (`apps/form/templates/about.html`)
 
 ---
 
