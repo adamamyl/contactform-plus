@@ -1,0 +1,43 @@
+{
+  "events": [
+    {
+      "name": "emfcamp2026",
+      "start_date": "2026-07-12",
+      "end_date": "2026-07-20",
+      "signal_padding": {
+        "before_event_days": 2,
+        "after_event_days": 2
+      },
+      "signal_group_id": null,
+      "signal_mode": "fallback_only",
+      "dispatcher_emails": ["event-dispatcher@emfcamp.org"],
+      "dispatcher_session_ttl_hours": 8,
+      "dispatcher_session_max_devices": 2
+    }
+  ],
+  "conduct_emails": ["conduct@emfcamp.org"],
+  "urgency_levels": ["low", "medium", "high", "urgent"],
+  "pronouns": [
+    "Ze/Zir/Zirs",
+    "Xe/Xem/Xyrs",
+    "Fae/Faer/Faerself",
+    "Fur/Furs/Furself",
+    "He/Him/His",
+    "She/Her/Hers",
+    "They/Them/Theirs"
+  ],
+  "smtp": {
+    "host": "host.docker.internal",
+    "port": 587,
+    "from_addr": "conduct@emfcamp.org",
+    "use_tls": true,
+    "username": "conduct@emfcamp.org"
+  },
+  "_comment_smtp": "smtp_password goes in .env as SMTP_PASSWORD — never in config.json",
+  "panel_base_url": "https://panel.emfcamp.org",
+  "mattermost_webhook": null,
+  "slack_webhook": null,
+  "attachment_backend": "local",
+  "rate_limit_per_minute": 5,
+  "rate_limit_per_hour": 20
+}

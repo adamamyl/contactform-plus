@@ -44,3 +44,14 @@ Thumbs.db
 
 # Docker build artefacts
 *.tar
+
+# PostgreSQL TLS certs (generated at install time)
+infra/postgres/certs/
+
+# Audio temp files (TTS service)
+apps/tts/audio/
+
+# Backup artefacts
+*.dump
+*.dump.zst
+*.dump.zst.age

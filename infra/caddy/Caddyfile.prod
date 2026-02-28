@@ -1,0 +1,14 @@
+{
+	import snippets/tls.caddy
+	email sysadmin@emfcamp.org
+}
+
+report.emfcamp.org {
+	import snippets/headers.caddy
+	reverse_proxy {$PROJECT_NAME}-form:8000
+}
+
+panel.emfcamp.org {
+	import snippets/headers.caddy
+	reverse_proxy {$PROJECT_NAME}-panel:8000
+}

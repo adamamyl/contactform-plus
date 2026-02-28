@@ -1,0 +1,24 @@
+{
+	import snippets/tls.caddy
+	local_certs
+}
+
+report.emf-forms.internal {
+	import snippets/headers.caddy
+	reverse_proxy form:8000
+}
+
+panel.emf-forms.internal {
+	import snippets/headers.caddy
+	reverse_proxy panel:8000
+}
+
+router.emf-forms.internal {
+	import snippets/headers.caddy
+	reverse_proxy msg-router:8000
+}
+
+tts.emf-forms.internal {
+	import snippets/headers.caddy
+	reverse_proxy tts:8000
+}

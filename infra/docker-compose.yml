@@ -1,0 +1,168 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - caddy_data:/data
+    depends_on:
+      - form
+      - panel
+      - msg-router
+    networks:
+      - contactform
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: emf_forms
+      POSTGRES_USER: emf_forms_admin
+      POSTGRES_PASSWORD: ${ADMIN_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    env_file: ../.env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres:/docker-entrypoint-initdb.d:ro
+      - ./postgres/certs:/var/lib/postgresql/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -d emf_forms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contactform
+
+  form:
+    build:
+      context: ../apps/form
+      dockerfile: Dockerfile
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD}@postgres/emf_forms
+      CONFIG_PATH: /app/config.json
+    volumes:
+      - ../config.json:/app/config.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - contactform
+
+  panel:
+    build:
+      context: ../apps/panel
+      dockerfile: Dockerfile
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://team_member:${TEAM_MEMBER_DB_PASSWORD}@postgres/emf_forms
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      CONFIG_PATH: /app/config.json
+    volumes:
+      - ../config.json:/app/config.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - contactform
+
+  msg-router:
+    build:
+      context: ../apps/router
+      dockerfile: Dockerfile
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD}@postgres/emf_forms
+      CONFIG_PATH: /app/config.json
+    volumes:
+      - ../config.json:/app/config.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - contactform
+
+  tts:
+    build:
+      context: ../apps/tts
+      dockerfile: Dockerfile
+    networks:
+      - contactform
+
+  jambonz-adapter:
+    build:
+      context: ../apps/jambonz
+      dockerfile: Dockerfile
+    env_file: ../.env
+    environment:
+      CONFIG_PATH: /app/config.json
+    volumes:
+      - ../config.json:/app/config.json:ro
+    depends_on:
+      - msg-router
+      - tts
+    networks:
+      - contactform
+
+  mock-oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    environment:
+      JSON_CONFIG: '{"interactiveLogin":true,"httpServer":"NettyWrapper"}'
+    profiles:
+      - local
+    networks:
+      - contactform
+
+  signal-api:
+    image: bbernhard/signal-cli-rest-api:latest
+    environment:
+      MODE: native
+    volumes:
+      - signal_data:/home/.local/share/signal-cli
+    networks:
+      - contactform
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contactform
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    profiles:
+      - monitoring
+    networks:
+      - contactform
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    profiles:
+      - monitoring
+    networks:
+      - contactform
+
+volumes:
+  caddy_data:
+  pg_data:
+  signal_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  contactform:
+    driver: bridge

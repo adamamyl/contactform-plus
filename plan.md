@@ -2312,46 +2312,46 @@ Tick items off as they are completed. Phases can overlap where dependencies allo
 ### Phase 0 — Repository & Infrastructure Scaffold
 
 #### Repository setup
-- [ ] Create monorepo directory skeleton: `.github/workflows/`, `infra/caddy/snippets/`, `infra/postgres/migrations/`, `infra/grafana/dashboards/`, `shared/emf_forms/`, `apps/form/`, `apps/panel/`, `apps/router/`, `apps/tts/`, `apps/jambonz/`, `scripts/`
-- [ ] Commit `.gitignore` (`.env`, `config.json`, `__pycache__/`, `.venv/`, `*.pyc`, `*.pyo`, `uv.lock` per-service, `*.egg-info/`)
-- [ ] Commit `.gitleaks.toml` with EMF-specific API key pattern rule
-- [ ] Commit `.pre-commit-config.yaml` (ruff, ruff-format, bandit, gitleaks, mypy hooks)
+- [x] Create monorepo directory skeleton: `.github/workflows/`, `infra/caddy/snippets/`, `infra/postgres/migrations/`, `infra/grafana/dashboards/`, `shared/emf_forms/`, `apps/form/`, `apps/panel/`, `apps/router/`, `apps/tts/`, `apps/jambonz/`, `scripts/`
+- [x] Commit `.gitignore` (`.env`, `config.json`, `__pycache__/`, `.venv/`, `*.pyc`, `*.pyo`, `uv.lock` per-service, `*.egg-info/`)
+- [x] Commit `.gitleaks.toml` with EMF-specific API key pattern rule
+- [x] Commit `.pre-commit-config.yaml` (ruff, ruff-format, bandit, gitleaks, mypy hooks)
 - [ ] Run `pre-commit install` locally; verify all hooks execute cleanly on an empty commit
-- [ ] Commit `.env-example` with all secret placeholders (`changeme`)
-- [ ] Commit `config.json-example` with full example config (events, SMTP, urgency levels, pronouns, signal settings)
+- [x] Commit `.env-example` with all secret placeholders (`changeme`)
+- [x] Commit `config.json-example` with full example config (events, SMTP, urgency levels, pronouns, signal settings)
 
 #### Shared library (`shared/`)
-- [ ] `uv init shared/` and configure `pyproject.toml` (ruff, mypy strict, bandit, pytest-asyncio)
-- [ ] Implement `shared/emf_forms/config.py` (`SignalPadding`, `EventConfig`, `SmtpConfig`, `AppConfig`, `Settings`)
-- [ ] Implement `shared/emf_forms/phase.py` (`Phase` enum, `current_phase()`, `is_active_routing_window()`, `events_for_form()`)
-- [ ] Implement `shared/emf_forms/db.py` (`init_db()`, `get_session()` async generator, TLS-required connection args)
-- [ ] Write `scripts/generate_wordlist.py` (wordfreq source, 4–8 char filter, profanity screen, inclusive-language pass, ~10k output)
-- [ ] Run wordlist generator; commit `shared/emf_forms/wordlist.txt`
-- [ ] Implement `shared/emf_forms/friendly_id.py` (`generate()`, `generate_unique()` with UUID fallback)
-- [ ] Write unit tests for shared lib:
-  - [ ] `test_phase.py`: pre-event, event-time, post-event, active routing window with padding, multi-event config
-  - [ ] `test_config.py`: end_date < start_date raises, missing required fields raise, example file validates cleanly
-  - [ ] `test_friendly_id.py`: output is four hyphen-separated words, collision avoidance, UUID fallback after 10 attempts
+- [x] `uv init shared/` and configure `pyproject.toml` (ruff, mypy strict, bandit, pytest-asyncio)
+- [x] Implement `shared/emf_forms/config.py` (`SignalPadding`, `EventConfig`, `SmtpConfig`, `AppConfig`, `Settings`)
+- [x] Implement `shared/emf_forms/phase.py` (`Phase` enum, `current_phase()`, `is_active_routing_window()`, `events_for_form()`)
+- [x] Implement `shared/emf_forms/db.py` (`init_db()`, `get_session()` async generator, TLS-required connection args)
+- [x] Write `scripts/generate_wordlist.py` (wordfreq source, 4–8 char filter, profanity screen, inclusive-language pass, ~10k output)
+- [x] Run wordlist generator; commit `shared/emf_forms/wordlist.txt`
+- [x] Implement `shared/emf_forms/friendly_id.py` (`generate()`, `generate_unique()` with UUID fallback)
+- [x] Write unit tests for shared lib:
+  - [x] `test_phase.py`: pre-event, event-time, post-event, active routing window with padding, multi-event config
+  - [x] `test_config.py`: end_date < start_date raises, missing required fields raise, example file validates cleanly
+  - [x] `test_friendly_id.py`: output is four hyphen-separated words, collision avoidance, UUID fallback after 10 attempts
 
 #### PostgreSQL
-- [ ] Write `infra/postgres/00_roles.sql`: all roles (`form_user`, `router_user`, `service_user`, `panel_viewer`, `team_member`, `backup_user`, `emf_forms_admin`), schema creation, all GRANT statements, `security_barrier` views, RLS policy
+- [x] Write `infra/postgres/00_roles.sql`: all roles (`form_user`, `router_user`, `service_user`, `panel_viewer`, `team_member`, `backup_user`, `emf_forms_admin`), schema creation, all GRANT statements, `security_barrier` views, RLS policy
 - [ ] Generate self-signed TLS cert + key for PostgreSQL; add to `infra/postgres/certs/` (gitignored); add cert generation to install script
 - [ ] Document `postgresql.conf` TLS settings needed (ssl=on, cert paths)
 
 #### Caddy
-- [ ] Write `infra/caddy/snippets/tls.caddy` (TLS 1.3 min, HTTP/2 only)
-- [ ] Write `infra/caddy/snippets/headers.caddy` (HSTS, X-Content-Type-Options, X-Frame-Options, CSP, Referrer-Policy, Permissions-Policy, strip Server header)
-- [ ] Write `infra/caddy/Caddyfile.local` (`.internal` TLD, imports snippets, reverse proxies for form/panel/router)
-- [ ] Write `infra/caddy/Caddyfile.prod` (real domains, ACME email, `${PROJECT_NAME}` prefix on service names)
+- [x] Write `infra/caddy/snippets/tls.caddy` (TLS 1.3 min, HTTP/2 only)
+- [x] Write `infra/caddy/snippets/headers.caddy` (HSTS, X-Content-Type-Options, X-Frame-Options, CSP, Referrer-Policy, Permissions-Policy, strip Server header)
+- [x] Write `infra/caddy/Caddyfile.local` (`.internal` TLD, imports snippets, reverse proxies for form/panel/router)
+- [x] Write `infra/caddy/Caddyfile.prod` (real domains, ACME email, `${PROJECT_NAME}` prefix on service names)
 
 #### Docker Compose
-- [ ] Write `infra/docker-compose.yml` base (caddy, postgres with TLS + healthcheck, form, panel, msg-router; `mock-oidc` under `local` profile; `signal-api`)
+- [x] Write `infra/docker-compose.yml` base (caddy, postgres with TLS + healthcheck, form, panel, msg-router; `mock-oidc` under `local` profile; `signal-api`)
 - [ ] Verify `docker compose --profile local up` starts all services and postgres healthcheck passes
 - [ ] Verify Caddy serves HTTPS on `.internal` hostnames with local certs
 - [ ] Verify inter-service TLS (PostgreSQL `ssl=require` enforced from app side)
 
 #### Secret generation script
-- [ ] Write `scripts/generate_secrets.py` (reads `.env-example`, replaces `changeme` with `secrets.token_urlsafe(32)`, idempotent — skips existing non-default values, writes `.env` with `chmod 600`)
+- [x] Write `scripts/generate_secrets.py` (reads `.env-example`, replaces `changeme` with `secrets.token_urlsafe(32)`, idempotent — skips existing non-default values, writes `.env` with `chmod 600`)
 
 ---
 
