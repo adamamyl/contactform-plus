@@ -1,0 +1,43 @@
+# Secrets and local config — never commit these
+.env
+config.json
+infra/secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+.uv/
+*.egg-info/
+dist/
+build/
+
+# uv
+uv.lock          # committed per-service; ignored at root
+.python-version
+
+# Test / coverage artefacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# TTS model files (large binaries — fetch at deploy time)
+*.onnx
+*.onnx.json
+
+# Docker build artefacts
+*.tar
