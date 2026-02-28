@@ -45,10 +45,10 @@ emf-conduct/
 ├── scripts/
 │   ├── install.py              # guided installation script (python + rich)
 │   ├── generate_wordlist.py    # curates the friendly-ID wordlist
-│   ├── generate_secrets.py     # populates .env from .env.example template
+│   ├── generate_secrets.py     # populates .env from .env-example template
 │   └── backup.py               # compressed, encrypted database backup
-├── .env.example                # committed; never .env itself
-├── config.json.example         # committed; never config.json itself
+├── .env-example                # committed; never .env itself
+├── config.json-example         # committed; never config.json itself
 ├── .gitleaks.toml
 ├── .pre-commit-config.yaml
 ├── spec.md
@@ -166,19 +166,21 @@ regex = '''(?i)(jambonz|emf)[_\-]?(api[_\-]?key|secret|token)\s*=\s*['"]?[A-Za-z
 
 **Approach**: Two-tier.
 
-1. **Non-sensitive config** — `config.json` (`.gitignore`'d; committed as `config.json.example`). Contains event dates, email addresses, urgency levels, Signal group ID, etc.
-2. **Sensitive secrets** — `.env` file (`.gitignore`'d; committed as `.env.example`). Contains DB passwords, OIDC client secret, `secret_key` for JWT signing. File permissions: `chmod 600 .env`.
+1. **Non-sensitive config** — `config.json` (`.gitignore`'d; committed as `config.json-example`). Contains event dates, email addresses, urgency levels, Signal group ID, etc.
+2. **Sensitive secrets** — `.env` file (`.gitignore`'d; committed as `.env-example`). Contains DB passwords, OIDC client secret, `secret_key` for JWT signing. File permissions: `chmod 600 .env`.
 
 Docker file-based secrets (`/run/secrets/<name>`) work without Docker Swarm — they mount as read-only files. Use them for production deployments where secrets should not appear in environment variable listings. For local dev, `.env` with strict permissions is sufficient.
 
-`.env.example`:
+`.env-example`:
 ```dotenv
 # Database passwords (one per service role)
 FORM_DB_PASSWORD=changeme
 PANEL_VIEWER_DB_PASSWORD=changeme
 TEAM_MEMBER_DB_PASSWORD=changeme
+SERVICE_DB_PASSWORD=changeme
 ROUTER_DB_PASSWORD=changeme
 ADMIN_DB_PASSWORD=changeme
+BACKUP_DB_PASSWORD=changeme
 
 # OIDC
 OIDC_ISSUER=https://auth.emfcamp.org
@@ -189,7 +191,7 @@ OIDC_CLIENT_SECRET=changeme
 SECRET_KEY=changeme
 ```
 
-`config.json.example`:
+`config.json-example`:
 ```json
 {
   "events": [
@@ -200,13 +202,34 @@ SECRET_KEY=changeme
   "dispatcher_session_ttl_hours": 8,
   "dispatcher_session_max_devices": 2,
   "urgency_levels": ["low", "medium", "high", "urgent"],
+  "pronouns": [
+    "Ze/Zir/Zirs", "Xe/Xem/Xyrs", "Fae/Faer/Faerself", "Fur/Furs/Furself",
+    "He/Him/His", "She/Her/Hers", "They/Them/Theirs"
+  ],
   "signal_group_id": null,
-  "signal_mode": "always",
+  "signal_mode": "fallback_only",
+  "signal_padding": {
+    "before_event_days": 2,
+    "after_event_days": 2
+  },
+  "smtp": {
+    "host": "localhost",
+    "port": 587,
+    "from": "conduct@emfcamp.org",
+    "use_tls": true
+  },
+  "panel_base_url": "https://panel.emfcamp.org",
   "mattermost_webhook": null
 }
 ```
 
-`scripts/generate_secrets.py` reads `.env.example`, replaces every `changeme` value with a `secrets.token_urlsafe(32)` value, and writes `.env`. Never overwrites existing non-default values.
+**On `signal_mode`**: The default is `"fallback_only"` — Signal activates only when the phone system is unavailable. Set to `"always"` to send to Signal on every event-time alert, or `"high_priority_and_fallback"` for high/urgent cases plus fallback. Signal and phone routing are only active during the event window (± `signal_padding`); outside that window, only email is used.
+
+**On `signal_group_id`**: If the signal module is enabled during install, the install script will walk through Signal group registration and populate this automatically.
+
+**On `smtp`**: All email adapter settings live in `config.json` (non-secret), except credentials if auth is required — those go in `.env`.
+
+`scripts/generate_secrets.py` reads `.env-example`, replaces every `changeme` value with a `secrets.token_urlsafe(32)` value, and writes `.env`. Idempotent — never overwrites existing non-default values.
 
 ### 2.4 Docker Compose (local)
 
@@ -244,7 +267,9 @@ services:
       - ./postgres:/docker-entrypoint-initdb.d:ro   # all .sql files run on first init
       - ./postgres/certs:/var/lib/postgresql/certs:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U emfconduct_admin -d emfconduct"]
+      # pg_isready checks TCP connectivity only — no credentials needed or used.
+      # The -h flag targets the container-local socket; no admin role required.
+      test: ["CMD-SHELL", "pg_isready -h localhost -d emfconduct"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -363,67 +388,133 @@ router.emfconduct.internal {
     email sysadmin@emfcamp.org
 }
 
-# Production public names — set these in config / install script
+# Production public names — set these in config / install script.
+# Service names are prefixed with the Docker Compose project name so multiple
+# instances can coexist on the same host. The install script substitutes
+# PROJECT_NAME when generating this file.
 report.emfcamp.org {
     import snippets/headers.caddy
-    reverse_proxy form:8000
+    reverse_proxy ${PROJECT_NAME}-form:8000
 }
 
 panel.emfcamp.org {
     import snippets/headers.caddy
-    reverse_proxy panel:8000
+    reverse_proxy ${PROJECT_NAME}-panel:8000
 }
 ```
 
-### 2.6 PostgreSQL roles and RLS scaffolding
+### 2.6 PostgreSQL roles, schema, and PoLP design
 
-Two distinct panel roles handle the anonymised-vs-full access split:
-- `panel_viewer` — dispatcher view; sees only `id`, `friendly_id`, `urgency`, `status`, `created_at`
-- `team_member` — conduct team; sees all columns including `form_data` (which contains PII)
-- `router_user` — notification router; reads cases to build alerts; does **not** update case state (state transitions happen in the panel)
+#### Roles
 
-`infra/postgres/00_roles.sql`:
+| Role | Type | Purpose |
+|---|---|---|
+| `form_user` | service | INSERT cases only |
+| `router_user` | service | SELECT minimal non-PII case fields via view; INSERT+UPDATE notifications |
+| `service_user` | service | UPDATE case status/assignee; INSERT case_history — automated workflows |
+| `panel_viewer` | service | SELECT non-PII fields via security_barrier view — dispatcher view only |
+| `team_member` | service | Full SELECT+UPDATE on cases and case_history — conduct team panel |
+| `backup_user` | service | pg_dump read access to full database; no application access |
+| `emfconduct_admin` | superuser | Schema management only — not used by any running app |
+
+**On `service_user`**: State transitions triggered by automated processes (router marking a notification sent, dispatcher triggering a state change) use `service_user`, not `team_member`. This separates machine actions from human ones. Human changes are audited in `case_history` with a username; automated changes are identified by `changed_by = "system"`.
+
+**On multi-tenancy and `created_by`**: `team_id` on each case is sufficient for RLS row isolation. A separate `created_by` column is not needed — submitter identity (if provided) lives in `form_data.reporter`, and team-level change audit lives in `case_history.changed_by`.
+
+**On `location_hint`**: A new non-PII `TEXT` column on `cases`, populated by the form service at submission time with the plain-text portion of the location. This lets `router_user` and `panel_viewer` show location context without needing access to `form_data`. The full structured location (text + coordinates) remains in `form_data`, accessible only to `team_member`.
+
+#### Schema with per-column PoLP
 
 ```sql
--- Service roles
+-- infra/postgres/00_roles.sql
+
 CREATE ROLE form_user        LOGIN PASSWORD :'form_password';
+CREATE ROLE router_user      LOGIN PASSWORD :'router_password';
+CREATE ROLE service_user     LOGIN PASSWORD :'service_password';
 CREATE ROLE panel_viewer     LOGIN PASSWORD :'panel_viewer_password';
 CREATE ROLE team_member      LOGIN PASSWORD :'team_member_password';
-CREATE ROLE router_user      LOGIN PASSWORD :'router_password';
+CREATE ROLE backup_user      LOGIN PASSWORD :'backup_password';
 CREATE ROLE emfconduct_admin LOGIN PASSWORD :'admin_password' SUPERUSER;
 
 CREATE SCHEMA IF NOT EXISTS conduct;
+GRANT USAGE ON SCHEMA conduct TO
+    form_user, router_user, service_user, panel_viewer, team_member;
 
--- form_user: insert only
-GRANT USAGE ON SCHEMA conduct TO form_user;
+-- backup_user: read-only dump access; no schema mutation possible
+GRANT CONNECT ON DATABASE emfconduct TO backup_user;
+GRANT USAGE ON SCHEMA conduct TO backup_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA conduct TO backup_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA conduct
+    GRANT SELECT ON TABLES TO backup_user;
+
+-- -------------------------------------------------------------------------
+-- conduct.cases — column access matrix
+--
+-- Column        form_user  router_user  service_user  panel_viewer  team_member
+-- id            INSERT     (view)       SELECT        (view)        SELECT
+-- friendly_id   INSERT     (view)       SELECT        (view)        SELECT
+-- event_name    INSERT     (view)       —             —             SELECT
+-- urgency       INSERT     (view)       SELECT/UPDATE (view)        SELECT/UPDATE
+-- phase         INSERT     —            —             —             SELECT
+-- form_data     INSERT     —            —             —             SELECT
+-- location_hint INSERT     (view)       —             (view)        SELECT
+-- status        INSERT(new)(view)       SELECT/UPDATE (view)        SELECT/UPDATE
+-- assignee      —          —            SELECT/UPDATE —             SELECT/UPDATE
+-- tags          —          —            —             —             SELECT/UPDATE
+-- team_id       INSERT(null)—           —             —             SELECT
+-- created_at    INSERT     (view)       SELECT        (view)        SELECT
+-- updated_at    —          (view)       UPDATE        (view)        SELECT
+-- -------------------------------------------------------------------------
+
+-- form_user: insert new cases
 GRANT INSERT ON conduct.cases TO form_user;
-GRANT INSERT ON conduct.notifications TO router_user;
 
--- router_user: read cases, write notification state
-GRANT USAGE ON SCHEMA conduct TO router_user;
-GRANT SELECT ON conduct.cases TO router_user;
+-- router_user: read-only access to non-PII fields via security_barrier view.
+-- The security_barrier attribute forces view predicates to be evaluated before
+-- any user-supplied filters, preventing timing/planning side-channel leaks.
+CREATE VIEW conduct.cases_router WITH (security_barrier = true) AS
+    SELECT id, friendly_id, event_name, urgency, status, location_hint, created_at
+    FROM conduct.cases;
+GRANT SELECT ON conduct.cases_router TO router_user;
 GRANT INSERT, UPDATE ON conduct.notifications TO router_user;
 
--- panel_viewer: restricted column list (no form_data, no PII)
-GRANT USAGE ON SCHEMA conduct TO panel_viewer;
-GRANT SELECT (id, friendly_id, urgency, status, created_at, updated_at)
-    ON conduct.cases TO panel_viewer;
+-- service_user: update workflow fields; append audit rows
+GRANT SELECT (id, friendly_id, urgency, status, assignee, updated_at)
+    ON conduct.cases TO service_user;
+GRANT UPDATE (status, assignee, updated_at) ON conduct.cases TO service_user;
+GRANT INSERT ON conduct.case_history TO service_user;
 
--- team_member: full access to cases + workflow
-GRANT USAGE ON SCHEMA conduct TO team_member;
+-- panel_viewer: dispatcher view via security_barrier view (no PII)
+CREATE VIEW conduct.cases_dispatcher WITH (security_barrier = true) AS
+    SELECT id, friendly_id, urgency, status, location_hint, created_at, updated_at
+    FROM conduct.cases;
+GRANT SELECT ON conduct.cases_dispatcher TO panel_viewer;
+
+-- team_member: full access — conduct team only
 GRANT SELECT, UPDATE ON conduct.cases TO team_member;
-GRANT INSERT ON conduct.case_history TO team_member;
+GRANT SELECT, INSERT ON conduct.case_history TO team_member;
+GRANT SELECT ON conduct.notifications TO team_member;
 
--- Enable RLS on cases for future multi-tenancy
+-- -------------------------------------------------------------------------
+-- Row-Level Security
+-- Single-tenant now: team_id IS NULL passes all rows.
+-- Multi-tenant: app sets app.current_team_id at session open time.
+-- -------------------------------------------------------------------------
 ALTER TABLE conduct.cases ENABLE ROW LEVEL SECURITY;
 
--- Placeholder single-tenant policy; extend when multi-tenant needed
+-- Bypass RLS for emfconduct_admin (superuser already bypasses, but explicit)
+ALTER TABLE conduct.cases FORCE ROW LEVEL SECURITY;
+
 CREATE POLICY team_isolation ON conduct.cases
     USING (
         team_id IS NULL
         OR team_id = current_setting('app.current_team_id', true)::uuid
     );
+
+-- RLS applies to security_barrier views too — the view's WHERE clause is
+-- evaluated before user predicates, and RLS policies stack on top.
 ```
+
 
 ---
 
@@ -461,6 +552,18 @@ class EventConfig(BaseModel):
         return v
 
 
+class SmtpConfig(BaseModel):
+    host: str = "localhost"
+    port: int = 587
+    from_addr: str
+    use_tls: bool = True
+
+
+class SignalPadding(BaseModel):
+    before_event_days: int = 2
+    after_event_days: int = 2
+
+
 class AppConfig(BaseModel):
     events: list[EventConfig]
     conduct_emails: list[str]
@@ -468,12 +571,23 @@ class AppConfig(BaseModel):
     dispatcher_session_ttl_hours: int = 8
     dispatcher_session_max_devices: int = 2
     urgency_levels: list[str] = ["low", "medium", "high", "urgent"]
+    # Pronouns list — sourced from config so it can be updated without code changes.
+    # Frontend renders as a datalist (predefined options + free text entry).
+    pronouns: list[str] = [
+        "Ze/Zir/Zirs", "Xe/Xem/Xyrs", "Fae/Faer/Faerself", "Fur/Furs/Furself",
+        "He/Him/His", "She/Her/Hers", "They/Them/Theirs",
+    ]
     signal_group_id: str | None = None
-    # Controls when Signal is used during event time:
-    #   "always"                    — email + phone + signal
-    #   "fallback_only"             — signal only if phone unavailable
+    # Controls when Signal is used during the active event window:
+    #   "fallback_only"             — signal only if phone unavailable (default)
+    #   "always"                    — email + phone + signal every time
     #   "high_priority_and_fallback"— signal for high/urgent + fallback
-    signal_mode: str = "always"
+    signal_mode: str = "fallback_only"
+    # Extends the event-time routing window (phone + signal) by N days either side.
+    # Outside this window, only email is used regardless of signal_mode.
+    signal_padding: SignalPadding = SignalPadding()
+    smtp: SmtpConfig
+    panel_base_url: str  # used to construct case URLs in notifications
     mattermost_webhook: str | None = None
 
 
@@ -517,7 +631,7 @@ class Phase(StrEnum):
 def current_phase(config: AppConfig, at: datetime | None = None) -> Phase:
     """
     Return the operational phase based on the current date.
-    Used for routing decisions (e.g. whether to call DECT phones).
+    Used for routing decisions (e.g. whether to call DECT phones or Signal).
     NOT used to determine which event a case relates to — that is user-supplied.
     """
     now = (at or datetime.now(tz=timezone.utc)).date()
@@ -531,6 +645,24 @@ def current_phase(config: AppConfig, at: datetime | None = None) -> Phase:
             return Phase.POST_EVENT
 
     return Phase.PRE_EVENT
+
+
+def is_active_routing_window(config: AppConfig, at: datetime | None = None) -> bool:
+    """
+    Returns True if phone/Signal routing should be active.
+    This extends the EVENT_TIME phase by signal_padding days either side,
+    so the team is reachable in the run-up to and wind-down after the event.
+    """
+    from datetime import timedelta
+    now = (at or datetime.now(tz=timezone.utc)).date()
+    padding = config.signal_padding
+
+    for event in config.events:
+        window_start = event.start_date - timedelta(days=padding.before_event_days)
+        window_end   = event.end_date   + timedelta(days=padding.after_event_days)
+        if window_start <= now <= window_end:
+            return True
+    return False
 
 
 def events_for_form(config: AppConfig) -> list[EventConfig]:
@@ -548,7 +680,8 @@ With a 10,000-word wordlist, 4-word IDs give 10^16 combinations — effectively 
 
 `scripts/generate_wordlist.py` — produces `shared/emfconduct/wordlist.txt`:
 - Source: standard English word corpus (e.g. `wordfreq` library top 20k)
-- Filter: 4–8 letters, no profanity (block list applied), no ambiguous spellings, no homographs, no proper nouns
+- Filter: 4–8 letters, no ambiguous spellings, no homographs, no proper nouns
+- Inclusive language: apply the principles at https://developers.google.com/style/inclusive-documentation; use `better-profanity` or `profanity-check` library for automated screening, then manual review of the output list before committing
 - Target: ~10,000 words
 - Commit the output file; the script is for regeneration only
 
@@ -570,12 +703,20 @@ def generate() -> str:
     return "-".join(secrets.choice(_WORDLIST) for _ in range(4))
 
 
-def generate_unique(existing: set[str]) -> str:
+def generate_unique(existing: set[str], existing_uuid: str = "") -> str:
     for _ in range(10):
         candidate = generate()
         if candidate not in existing:
             return candidate
-    raise RuntimeError("Could not generate a unique friendly ID after 10 attempts")
+    # Soft-fail: log a warning and return a UUID-derived fallback.
+    # The UUID is the authoritative identifier; friendly_id is human convenience.
+    # If we somehow exhaust 10 attempts (astronomically unlikely with 10k words),
+    # we fall back rather than raising so the submission is never lost.
+    import logging
+    logging.getLogger(__name__).warning(
+        "Could not generate unique friendly ID in 10 attempts; using UUID fallback"
+    )
+    return existing_uuid[:8] if existing_uuid else generate()
 ```
 
 ### 3.4 Database session
@@ -688,6 +829,13 @@ class CaseHistory(Base):
 
 **All text fields have explicit max_length** — we do not trust any input, so server-side length limits are applied uniformly at the Pydantic layer regardless of what the HTML `maxlength` attribute says.
 
+**Inline real-time validation**: Validate as the user types or leaves a field — not only on submit. Use JS to mirror the same rules as the backend. Errors are specific and helpful, not generic:
+- Over-length: `"⚠️ I can only accept 5,000 characters here — you've got 7,000. Can you shorten it a little?"`
+- Phone format: `"⚠️ I don't recognise '@' in a phone number. I accept: +, ., spaces, numbers, and A–Z letters (for DECT codes like ADAM)."`
+- The backend is always authoritative; JS validation is a UX improvement, not a security control.
+
+**Phone normalisation**: The backend strips and normalises phone numbers (trim whitespace, collapse multiple spaces). The team panel renders stored numbers with spaces for readability. Phone allowed characters: digits, `+`, `-`, `.`, `(`, `)`, spaces, and letters A–Z (for T9/DECT codes).
+
 `apps/form/src/schemas.py`:
 
 ```python
@@ -728,7 +876,8 @@ class Location(BaseModel):
 class ReporterDetails(BaseModel):
     name: str | None = Field(None, max_length=200)
     pronouns: str | None = Field(None, max_length=100)
-    # Phone: allow digits, spaces, +, -, (, ), and letters (DECT T9 codes like "ADAM")
+    # Phone: allow digits, spaces, +, -, ., (, ), and letters A-Z (DECT T9 codes like "ADAM")
+    # Valid examples: "+44 23 4566 7789", "1234" (DECT), "ADAM" (T9), "34.3434242242"
     phone: str | None = Field(None, max_length=30)
     email: EmailStr | None = None
     camping_with: str | None = Field(None, max_length=200)
@@ -738,13 +887,13 @@ class ReporterDetails(BaseModel):
     def sanitise_phone(cls, v: str | None) -> str | None:
         if v is None:
             return None
-        cleaned = re.sub(r"[^\w\s\+\-\(\)]", "", v)[:30]
-        return cleaned or None
+        cleaned = re.sub(r"[^\w\s\+\-\.\(\)]", "", v)[:30]
+        return " ".join(cleaned.split()) or None
 
 
 class CaseSubmission(BaseModel):
     # Which event this relates to (user-selected, not inferred from date)
-    event_name: str = Field(..., max_length=64)
+    event_name: str = Field(..., max_length=64) # default to the current event during event time in the UI
 
     # Section 1 — reporter details (all optional for anonymity)
     reporter: ReporterDetails = Field(default_factory=ReporterDetails)
@@ -762,7 +911,7 @@ class CaseSubmission(BaseModel):
     others_involved: str | None = Field(None, max_length=2_000)
     why_it_happened: str | None = Field(None, max_length=2_000)
     can_contact: bool | None = None
-    anything_else: str | None = Field(None, max_length=2_000)
+    anything_else: str | None = Field(None, max_length=5_000)
 
     # Bot protection — must be empty for real submissions
     website: str | None = Field(None, max_length=200)  # honeypot
@@ -900,6 +1049,7 @@ Key design decisions from annotations:
 - **Map pin**: embedded map iframe with a JS click handler that writes lat/lon into hidden inputs. Progressive enhancement — form works without JS, user can type location text instead.
 - **Urgency**: `<select>` dropdown, never a free-text field
 - **Honeypot**: CSS-hidden `<div>`, not `type="hidden"` (bots fill visible-but-hidden fields)
+- **Validate input**: Validate all user submitted inputs in frontend as well as backend
 
 `apps/form/templates/form.html` — illustrative structure:
 
@@ -909,12 +1059,12 @@ Key design decisions from annotations:
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>EMF Accessibility &amp; Conduct Report</title>
+    <title>EMF Conduct Report</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <main class="form-container">
-    <h1>Accessibility &amp; Conduct Report</h1>
+    <h1>Conduct Report</h1>
 
     {% if phase == "event_time" %}
     <div class="alert alert--event" role="alert">
@@ -931,11 +1081,19 @@ Key design decisions from annotations:
       </div>
 
       <!-- Event selection -->
+      <!--
+        During the active routing window (is_active_routing_window == true), the current event
+        is pre-selected in the UI. Outside the window (pre/post-event), the user picks manually.
+        event_name is user-supplied and validated server-side against config.events[].name.
+      -->
       <fieldset>
         <legend>Which event does this relate to?</legend>
         <select name="event_name" required>
           {% for event in events %}
-          <option value="{{ event.name }}">{{ event.name }} ({{ event.start_date }})</option>
+          <option value="{{ event.name }}"
+            {% if event.name == current_event_name %}selected{% endif %}>
+            {{ event.name }} ({{ event.start_date }})
+          </option>
           {% endfor %}
         </select>
       </fieldset>
@@ -944,22 +1102,39 @@ Key design decisions from annotations:
       <fieldset>
         <legend>Section 1 of 2 — About you <span class="hint">(all optional)</span></legend>
 
-        <label for="name">Name or persona</label>
+        <label for="name">Name / fur/persona</label>
+        <!-- Describes what to call them at EMF — persona, fur name, preferred name all valid -->
+        <p class="hint">What should we call you? Use whatever people call you at EMF.</p>
         <input type="text" id="name" name="name" maxlength="200" autocomplete="nickname">
 
         <label for="pronouns">Pronouns</label>
-        <input type="text" id="pronouns" name="pronouns" maxlength="100">
+        <!--
+          Rendered as <input> + <datalist>: user gets predefined suggestions but can type anything.
+          The datalist options are loaded from config.pronouns (so they can be updated without code changes).
+          Backend validates against the same list, but also accepts any free-text value up to 100 chars.
+        -->
+        <input type="text" id="pronouns" name="pronouns" maxlength="100"
+               list="pronouns-list" autocomplete="off">
+        <datalist id="pronouns-list">
+          {% for p in config.pronouns %}
+          <option value="{{ p }}">
+          {% endfor %}
+        </datalist>
 
         <label for="email">Email address</label>
         <!-- inputmode="email" ensures the @ key is visible on mobile keyboards -->
         <input type="email" id="email" name="email" autocomplete="email" inputmode="email">
 
-        <label for="phone">Phone <span class="hint">(mobile, DECT, or T9 code)</span></label>
+        {% if is_active_routing_window %}
+        <!-- Phone and camping location are only useful when the team can act on them in real time -->
+        <label for="phone">Phone number <span class="hint">(mobile, DECT, or T9 code)</span></label>
         <!-- type="tel" brings up the numpad on mobile -->
         <input type="tel" id="phone" name="phone" autocomplete="tel">
 
         <label for="camping_with">Camping with…</label>
+        <p class="hint">This helps us find you — your camping group, village name, or area.</p>
         <input type="text" id="camping_with" name="camping_with" maxlength="200">
+        {% endif %}
       </fieldset>
 
       <!-- Section 2 of 2 — What happened -->
@@ -982,15 +1157,20 @@ Key design decisions from annotations:
         <label for="location_text">Where did it happen?</label>
         <input type="text" id="location_text" name="location[text]" maxlength="500"
                placeholder="Near the bar, Stage 2, Camping field B…">
+        <!-- map.emfcamp.org (no /embed — use the real map, not a stripped iframe version) -->
+        <p class="hint">Not sure exactly where? <a href="https://map.emfcamp.org" target="_blank"
+           rel="noopener noreferrer">map.emfcamp.org</a> may help.</p>
         <!-- Progressive enhancement: map pin drop if JS available -->
         <div id="map-container" class="map-hidden">
-          <iframe src="https://map.emfcamp.org/embed" id="location-map"></iframe>
+          <div id="location-map"></div>
           <p class="hint">Click on the map to drop a pin</p>
         </div>
         <!-- Hidden inputs populated by JS map click handler -->
         <input type="hidden" id="location_lat" name="location[lat]">
         <input type="hidden" id="location_lon" name="location[lon]">
 
+        {% if is_active_routing_window %}
+        <!-- Urgency is only actionable during the event window (including signal_padding days) -->
         <label for="urgency">How urgent is this?</label>
         <select id="urgency" name="urgency">
           {% for level in config.urgency_levels %}
@@ -999,6 +1179,7 @@ Key design decisions from annotations:
           </option>
           {% endfor %}
         </select>
+        {% endif %}
 
         <label for="additional_info">Any more information?</label>
         <textarea id="additional_info" name="additional_info" rows="4" maxlength="5000">
@@ -1319,6 +1500,7 @@ class CaseAlert:
     urgency: str
     location: dict | None    # {"text": ..., "lat": ..., "lon": ...}
     is_urgent: bool
+    case_url: str      # full URL to the case in the conduct panel, e.g. https://panel.example.org/cases/<uuid>
 
 
 class ChannelAdapter(ABC):
@@ -1353,19 +1535,17 @@ from .base import ChannelAdapter, CaseAlert
 
 URGENCY_EMOJI = {"urgent": "🚨", "high": "⚠️", "medium": "📋", "low": "ℹ️"}
 
-
+# EmailAdapter reads SMTP settings from AppConfig.smtp (not constructor args).
+# to_addrs comes from AppConfig.notification_emails (a list for multi-recipient send).
 class EmailAdapter(ChannelAdapter):
-    def __init__(self, smtp_host, smtp_port, from_addr, to_addrs, use_tls=True):
-        self._smtp_host = smtp_host
-        self._smtp_port = smtp_port
-        self._from = from_addr
+    def __init__(self, smtp: "SmtpConfig", to_addrs: list[str]):
+        self._smtp = smtp
         self._to = to_addrs
-        self._use_tls = use_tls
 
     async def is_available(self) -> bool:
         try:
-            async with aiosmtplib.SMTP(self._smtp_host, self._smtp_port,
-                                        use_tls=self._use_tls) as smtp:
+            async with aiosmtplib.SMTP(self._smtp.host, self._smtp.port,
+                                        use_tls=self._smtp.use_tls) as smtp:
                 await smtp.noop()
             return True
         except Exception:
@@ -1379,18 +1559,19 @@ class EmailAdapter(ChannelAdapter):
             f"New {alert.urgency} conduct case.\n\n"
             f"Case: {alert.friendly_id}\n"
             f"Urgency: {alert.urgency}\n"
-            f"Location: {location_text}\n\n"
+            f"Location: {location_text}\n"
+            f"Case URL: {alert.case_url}\n\n"
             f"— EMF Conduct System"
         )
         msg["Subject"] = f"{emoji} [{alert.urgency.upper()}] Conduct case {alert.friendly_id}"
-        msg["From"] = self._from
+        msg["From"] = self._smtp.from_addr
         msg["To"] = ", ".join(self._to)
         # Generate a deterministic Message-ID so we can reference it later
         msg["Message-ID"] = email.utils.make_msgid(domain="emfconduct")
 
         try:
-            async with aiosmtplib.SMTP(self._smtp_host, self._smtp_port,
-                                        use_tls=self._use_tls) as smtp:
+            async with aiosmtplib.SMTP(self._smtp.host, self._smtp.port,
+                                        use_tls=self._smtp.use_tls) as smtp:
                 await smtp.send_message(msg)
             return msg["Message-ID"]   # caller stores this for threading
         except Exception:
@@ -1401,7 +1582,7 @@ class EmailAdapter(ChannelAdapter):
     ) -> None:
         msg = MIMEText(f"✅ Case {alert.friendly_id} acknowledged by {acked_by}")
         msg["Subject"] = f"✅ ACK: {alert.friendly_id}"
-        msg["From"] = self._from
+        msg["From"] = self._smtp.from_addr
         msg["To"] = ", ".join(self._to)
         msg["Message-ID"] = email.utils.make_msgid(domain="emfconduct")
         if original_message_id:
@@ -1409,8 +1590,8 @@ class EmailAdapter(ChannelAdapter):
             msg["In-Reply-To"] = original_message_id
             msg["References"] = original_message_id
 
-        async with aiosmtplib.SMTP(self._smtp_host, self._smtp_port,
-                                    use_tls=self._use_tls) as smtp:
+        async with aiosmtplib.SMTP(self._smtp.host, self._smtp.port,
+                                    use_tls=self._smtp.use_tls) as smtp:
             await smtp.send_message(msg)
 ```
 
@@ -1445,7 +1626,8 @@ class SignalAdapter(ChannelAdapter):
         location_text = (alert.location or {}).get("text") or "unknown"
         message = (
             f"{emoji} *New {alert.urgency} case: {alert.friendly_id}*\n"
-            f"Location: {location_text}"
+            f"Location: {location_text}\n"
+            f"Case: {alert.case_url}"
         )
         try:
             async with httpx.AsyncClient(verify=True) as client:
@@ -1952,6 +2134,8 @@ jobs:
 
 Python + [Rich](https://github.com/Textualize/rich) for interactive TUI. Generates `docker-compose.yml` based on selected components.
 
+Use alive-progress for progress bars, especially on docker pulls and such (multi-stage/nested tasks) -- don't leave the user/sysadmin wondering what's happening.
+
 Capabilities:
 - **Component selection**: which apps to install (form, panel, router, TTS, Jambonz)
 - **Proxy choice**: Caddy (default), nginx, Traefik
@@ -1963,10 +2147,13 @@ Capabilities:
   - `-d` / `--debug` — debug output (implies verbose)
   - `-h` / `--help` — show help
   - `--dry-run` — print what would be done, make no changes
+- **Validation** -  validates all files are good, e.g. docker-compose is valid; we have things populated that we need in .env etc; we don't do https on nginx until after certbot's run etc.
 
 ```python
 # scripts/install.py — structural sketch
+# Dependencies: rich, alive-progress (both added to scripts/pyproject.toml)
 import argparse
+from alive_progress import alive_bar  # for docker pull / multi-stage progress bars
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
@@ -1996,6 +2183,7 @@ Reads `.env.example`, replaces `changeme` placeholders with `secrets.token_urlsa
 - Encrypt with `age` (simple, modern; recipient = sysadmin's public key)
 - Filename: `emfconduct-<ISO8601-datetime>.dump.zst.age`
 - Store locally + optionally rsync to a remote
+- (optional, via `--systemd` flag) Install as a systemd timer on the host machine; generates a `.service` + `.timer` unit file and runs `systemctl enable --now`
 
 ### 13.4 Wordlist generation (`scripts/generate_wordlist.py`)
 
@@ -2022,3 +2210,18 @@ Reads `.env.example`, replaces `changeme` placeholders with `secrets.token_urlsa
 | 10 | Sub-roles in conduct team | ✅ Decided | Start flat (`team_member` = full access). `panel_viewer` is a separate DB role for the dispatcher view only, not an SSO group. |
 | 11 | Phase selection for post-event reports | ✅ Decided | User selects event from dropdown; `current_phase()` used for routing only |
 | 12 | Email threading | ✅ Decided | Capture `Message-ID` from initial send; use `References` + `In-Reply-To` for ACK/update emails |
+
+
+## TO DO list
+
+### Image attachments (App 1 — public form)
+Allow reporters to attach up to 3 images per submission. Design notes:
+
+- **Upload endpoint**: separate `POST /attachments` endpoint on the form service; returns a token used in the case submission payload (not stored inline in the case JSON).
+- **Content scanning**: before accepting, run a content-safety check (`libmagic` for MIME type verification; optional CSAM hash check via PhotoDNA or equivalent — decision needed with conduct team).
+- **Storage**: private volume or object store (e.g. MinIO running alongside the stack); never in a public-web-accessible path.
+- **Access control**: attachment retrieval requires a valid `team_conduct` session (same SSO as the panel). Implement a signed-URL proxy endpoint on the panel service: `GET /cases/<uuid>/attachments/<id>` — checks session, streams the file. Direct file paths never exposed.
+- **Admin panel display**: show thumbnails inline in the case detail view; clicking opens the signed-URL proxy.
+- **Virus/malware scan**: integrate ClamAV (self-hosted, Docker) as part of the upload pipeline; reject on positive hit.
+- **Limits**: max 3 files per case, max 10 MB per file; accepted types: JPEG, PNG, HEIC, WebP.
+- **Retention**: attachments follow the same retention schedule as the case record.
