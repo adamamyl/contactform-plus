@@ -2299,3 +2299,441 @@ Allow reporters to attach up to 3 images per submission. Design notes:
 - **Admin panel display**: show thumbnails inline in the case detail view; clicking opens the signed-URL proxy.
 - **Limits**: max 3 files per case, max 10 MB per file; accepted types: JPEG, PNG, HEIC, WebP.
 - **Retention**: attachments follow the same retention schedule as the case record.
+
+---
+
+## 15. Detailed Implementation TODO
+
+Granular task checklist, organised by phase. Each phase maps to the sequence in Section 12.
+Tick items off as they are completed. Phases can overlap where dependencies allow.
+
+---
+
+### Phase 0 — Repository & Infrastructure Scaffold
+
+#### Repository setup
+- [ ] Create monorepo directory skeleton: `.github/workflows/`, `infra/caddy/snippets/`, `infra/postgres/migrations/`, `infra/grafana/dashboards/`, `shared/emf_forms/`, `apps/form/`, `apps/panel/`, `apps/router/`, `apps/tts/`, `apps/jambonz/`, `scripts/`
+- [ ] Commit `.gitignore` (`.env`, `config.json`, `__pycache__/`, `.venv/`, `*.pyc`, `*.pyo`, `uv.lock` per-service, `*.egg-info/`)
+- [ ] Commit `.gitleaks.toml` with EMF-specific API key pattern rule
+- [ ] Commit `.pre-commit-config.yaml` (ruff, ruff-format, bandit, gitleaks, mypy hooks)
+- [ ] Run `pre-commit install` locally; verify all hooks execute cleanly on an empty commit
+- [ ] Commit `.env-example` with all secret placeholders (`changeme`)
+- [ ] Commit `config.json-example` with full example config (events, SMTP, urgency levels, pronouns, signal settings)
+
+#### Shared library (`shared/`)
+- [ ] `uv init shared/` and configure `pyproject.toml` (ruff, mypy strict, bandit, pytest-asyncio)
+- [ ] Implement `shared/emf_forms/config.py` (`SignalPadding`, `EventConfig`, `SmtpConfig`, `AppConfig`, `Settings`)
+- [ ] Implement `shared/emf_forms/phase.py` (`Phase` enum, `current_phase()`, `is_active_routing_window()`, `events_for_form()`)
+- [ ] Implement `shared/emf_forms/db.py` (`init_db()`, `get_session()` async generator, TLS-required connection args)
+- [ ] Write `scripts/generate_wordlist.py` (wordfreq source, 4–8 char filter, profanity screen, inclusive-language pass, ~10k output)
+- [ ] Run wordlist generator; commit `shared/emf_forms/wordlist.txt`
+- [ ] Implement `shared/emf_forms/friendly_id.py` (`generate()`, `generate_unique()` with UUID fallback)
+- [ ] Write unit tests for shared lib:
+  - [ ] `test_phase.py`: pre-event, event-time, post-event, active routing window with padding, multi-event config
+  - [ ] `test_config.py`: end_date < start_date raises, missing required fields raise, example file validates cleanly
+  - [ ] `test_friendly_id.py`: output is four hyphen-separated words, collision avoidance, UUID fallback after 10 attempts
+
+#### PostgreSQL
+- [ ] Write `infra/postgres/00_roles.sql`: all roles (`form_user`, `router_user`, `service_user`, `panel_viewer`, `team_member`, `backup_user`, `emf_forms_admin`), schema creation, all GRANT statements, `security_barrier` views, RLS policy
+- [ ] Generate self-signed TLS cert + key for PostgreSQL; add to `infra/postgres/certs/` (gitignored); add cert generation to install script
+- [ ] Document `postgresql.conf` TLS settings needed (ssl=on, cert paths)
+
+#### Caddy
+- [ ] Write `infra/caddy/snippets/tls.caddy` (TLS 1.3 min, HTTP/2 only)
+- [ ] Write `infra/caddy/snippets/headers.caddy` (HSTS, X-Content-Type-Options, X-Frame-Options, CSP, Referrer-Policy, Permissions-Policy, strip Server header)
+- [ ] Write `infra/caddy/Caddyfile.local` (`.internal` TLD, imports snippets, reverse proxies for form/panel/router)
+- [ ] Write `infra/caddy/Caddyfile.prod` (real domains, ACME email, `${PROJECT_NAME}` prefix on service names)
+
+#### Docker Compose
+- [ ] Write `infra/docker-compose.yml` base (caddy, postgres with TLS + healthcheck, form, panel, msg-router; `mock-oidc` under `local` profile; `signal-api`)
+- [ ] Verify `docker compose --profile local up` starts all services and postgres healthcheck passes
+- [ ] Verify Caddy serves HTTPS on `.internal` hostnames with local certs
+- [ ] Verify inter-service TLS (PostgreSQL `ssl=require` enforced from app side)
+
+#### Secret generation script
+- [ ] Write `scripts/generate_secrets.py` (reads `.env-example`, replaces `changeme` with `secrets.token_urlsafe(32)`, idempotent — skips existing non-default values, writes `.env` with `chmod 600`)
+
+---
+
+### Phase 1 — App 1: Public Report Form
+
+#### Project setup
+- [ ] `uv init apps/form`; configure `pyproject.toml` (fastapi, uvicorn[standard], sqlalchemy[asyncio], asyncpg, pydantic, pydantic-settings, slowapi, jinja2, aiosmtplib)
+- [ ] Add dev deps: pytest, pytest-asyncio, httpx, ruff, bandit, mypy, pre-commit, pip-audit
+
+#### Data model & migrations
+- [ ] Write `apps/form/src/models.py` (`Case` and `CaseHistory` SQLAlchemy models, schema `forms`)
+- [ ] Initialise Alembic in `apps/form/`; write initial migration creating `forms.cases` and `forms.case_history`
+- [ ] Verify migration runs cleanly against a fresh Postgres container
+
+#### Validation schemas
+- [ ] Write `apps/form/src/schemas.py`:
+  - [ ] `Location` model (optional text + lat/lon, at-least-one validator, lat/lon range validators)
+  - [ ] `ReporterDetails` model (name, pronouns, phone with T9/DECT/international allowance and normalisation, email, camping_with)
+  - [ ] `CaseSubmission` model (all Section 1 + Section 2 fields, urgency validator against config, honeypot field, strip_whitespace validator on all long-text fields)
+
+#### Route handlers
+- [ ] Write `apps/form/src/routes.py`:
+  - [ ] `GET /` — render form with phase context, events list, `is_active_routing_window` flag
+  - [ ] `POST /api/submit` — honeypot check, urgency/event validation, friendly_id generation, Case insert, `pg_notify('new_case', ...)`, idempotency token check
+  - [ ] `GET /health` — DB ping, return structured JSON
+- [ ] Write `apps/form/src/main.py` — FastAPI app, slowapi rate limiter middleware, router include
+
+#### Frontend assets
+- [ ] Download Material Design 3 CSS + fonts locally to `apps/form/static/` (no external CDN references)
+- [ ] Write `apps/form/templates/base.html`:
+  - [ ] `<HOME>` nav link top-left
+  - [ ] Footer nav: privacy policy | code of conduct | about | map
+  - [ ] Responsive meta viewport, accessible font sizes (WCAG AA minimum)
+- [ ] Write `apps/form/templates/form.html`:
+  - [ ] Phase-aware DECT alert banner (amber background, not red/green; large accessible text)
+  - [ ] CSS-hidden honeypot field (`tabindex="-1"`, `autocomplete="off"`, `aria-hidden="true"`)
+  - [ ] Event selection `<select>` (pre-selects current event during active routing window)
+  - [ ] Section 1 of 2 — reporter details: name, pronouns (`<input>` + `<datalist>` from config), email (`inputmode="email"`), phone (`type="tel"`) and camping_with (both conditional on `is_active_routing_window`)
+  - [ ] Section 2 of 2 — incident: `what_happened` (required, `minlength="10"`), date picker, time (`type="time"`, defaults to now via JS), location text + progressive-enhancement map pin
+  - [ ] Urgency `<select>` (conditional on `is_active_routing_window`)
+  - [ ] Additional context fieldset (optional, labelled "can be filled later")
+  - [ ] `<button type="submit">` with accessible loading state
+- [ ] Write `apps/form/templates/success.html` (friendly_id display, idempotency "already submitted" variant)
+- [ ] Write `apps/form/static/form.js`:
+  - [ ] Client-side field validation mirroring backend rules (length, phone charset, email format, required fields)
+  - [ ] Specific, helpful error messages (over-length message with current/max counts; phone invalid-char message naming the bad character)
+  - [ ] Datetime defaults: populate time field with current HH:MM on page load; populate date with today
+  - [ ] Map pin-drop (Leaflet.js — downloaded locally): show map on JS available; click writes lat/lon into hidden fields; hide map if JS unavailable
+  - [ ] Back-button state persistence: `history.replaceState` on field changes; restore from `history.state` on load; "previously entered" notice when restoring
+
+#### Tests
+- [ ] Test valid submission → 201, Case row in DB, correct fields
+- [ ] Test honeypot filled → fake 200, no Case row in DB
+- [ ] Test rate limit: 6th request in 1 minute → 429
+- [ ] Test idempotency: same token twice → 200 with existing friendly_id, single DB row
+- [ ] Test invalid urgency → 422
+- [ ] Test unknown event_name → 422
+- [ ] Test `what_happened` below 10 chars → 422
+- [ ] Test `what_happened` above 10,000 chars → 422
+- [ ] Test SQL injection string in all text fields → 201 or 422, table still exists
+- [ ] Test Location with neither text nor coords → 422
+- [ ] Test DECT extension (`1234`), T9 code (`ADAM`), international (`+44 7700 900000`) all accepted as phone
+- [ ] Test `@` in phone number → 422
+- [ ] Test `pg_notify` fired after successful insert (mock listener)
+- [ ] Test `/health` returns `{"status": "ok"}` when DB up, `{"status": "degraded"}` when DB down
+
+#### Docker
+- [ ] Write `apps/form/Dockerfile` (multi-stage: build with uv, run as non-root user)
+- [ ] Add form service to `docker-compose.yml` with correct env, volumes, depends_on
+
+---
+
+### Phase 2 — App 2: Conduct Team Panel
+
+#### Project setup
+- [ ] `uv init apps/panel`; configure `pyproject.toml` (fastapi, uvicorn, sqlalchemy, asyncpg, pydantic, authlib, itsdangerous, jinja2)
+
+#### Authentication
+- [ ] Write `apps/panel/src/auth.py`:
+  - [ ] `configure_oauth()` — register UFFD OIDC provider via `authlib`
+  - [ ] `require_conduct_team()` — dependency: check session, check `team_conduct` in groups claim, 303 to `/login` if unauthenticated, 403 if unauthorised
+- [ ] Write login (`GET /login`), callback (`GET /auth/callback`), and logout (`GET /logout`) routes
+- [ ] Verify mock-oauth2-server works end-to-end locally (login → callback → session → protected route)
+
+#### Case management routes
+- [ ] Write `apps/panel/src/routes.py`:
+  - [ ] `GET /` → case list (filter by status, urgency, assignee, tag; sort by created_at / urgency)
+  - [ ] `GET /cases/{id}` → case detail (full form_data, history timeline)
+  - [ ] `PATCH /api/cases/{id}/status` → transition with `VALID_TRANSITIONS` enforcement + `CaseHistory` row
+  - [ ] `PATCH /api/cases/{id}/assignee` → update assignee + history row
+  - [ ] `PATCH /api/cases/{id}/tags` → update tags (merge / replace) + history row
+  - [ ] `GET /api/tags` → return list of all distinct existing tags (for autocomplete)
+  - [ ] `GET /health` → DB ping + structured JSON
+
+#### Templates
+- [ ] Download Material Design 3 CSS + fonts locally to `apps/panel/static/`
+- [ ] Write `apps/panel/templates/base.html` (nav, SSO username display, logout link, responsive)
+- [ ] Write `apps/panel/templates/cases.html` (sortable/filterable case list; urgency badge colours; status chip)
+- [ ] Write `apps/panel/templates/case_detail.html` (full case view; history timeline; inline tag editor with autocomplete; assignee picker; status transition buttons showing only valid next states)
+- [ ] Write `apps/panel/templates/dispatcher_share.html` (generate dispatcher URL, optional "email to" field, active sessions count, revoke button)
+- [ ] Add privacy policy, code of conduct, about, map footer pages (static templates)
+
+#### Tests
+- [ ] Test unauthenticated `GET /` → 303 to `/login`
+- [ ] Test user not in `team_conduct` → 403
+- [ ] Test `team_conduct` member can list cases
+- [ ] Test valid status transition → 200, DB updated, `CaseHistory` row added with correct `changed_by`
+- [ ] Test `closed` → any transition rejected → 422
+- [ ] Test `new` → `in_progress` (skipping `assigned`) rejected → 422
+- [ ] Test tag autocomplete returns existing tags
+- [ ] Test case detail does not expose `form_data` to `panel_viewer` DB role
+
+#### Docker
+- [ ] Write `apps/panel/Dockerfile`
+- [ ] Add panel service to `docker-compose.yml`
+
+---
+
+### Phase 3 — App 2b: Dispatcher View
+
+#### Token management
+- [ ] Write `apps/panel/src/dispatcher.py`:
+  - [ ] `create_dispatcher_token()` — JWT with `jti`, `exp`, `iat`, `scope="dispatcher"`
+  - [ ] `validate_dispatcher_token()` — decode, check revocation set, check scope, enforce max-2-device limit
+  - [ ] In-memory revocation set + device map (Redis-backed for restart resilience — add redis to docker-compose)
+- [ ] `POST /api/dispatcher-session` route (conduct team only): create token, build URL, optional send-to-email, return `{url, expires_in_hours}`
+- [ ] `POST /api/dispatcher-session/{jti}/revoke` route (conduct team only): add jti to revocation set
+
+#### Dispatcher routes & view
+- [ ] `GET /dispatcher` — authenticate via `?token=` query param; set device_id cookie; render stripped view
+- [ ] `POST /api/dispatcher/ack/{case_id}` — mark notification acked; trigger ACK confirmation on all channels
+- [ ] `POST /api/dispatcher/trigger/{case_id}` — manually re-trigger routing for a case
+- [ ] Write `apps/panel/templates/dispatcher.html`: urgency badge, friendly_id, status, ACK button, trigger-call button — no reporter PII visible
+
+#### Tests
+- [ ] Test valid token → 200, dispatcher view rendered
+- [ ] Test expired token (`exp` in past) → 401
+- [ ] Test token with wrong `scope` → 403
+- [ ] Test revoked token → 401
+- [ ] Test first device → allowed; second device → allowed; third device → 403
+- [ ] Test dispatcher `GET /api/cases/{id}` → 403 (no access to full case data)
+- [ ] Test ACK updates notification state and fires ACK confirmation on channels
+- [ ] Test `send_to` email sends dispatcher URL to specified address
+
+---
+
+### Phase 4 — App 3: Router / Notification System
+
+#### Project setup
+- [ ] `uv init apps/router`; configure `pyproject.toml` (fastapi, uvicorn, sqlalchemy, asyncpg, aiosmtplib, httpx, pydantic)
+
+#### Data model & migrations
+- [ ] Write `apps/router/src/models.py` (`Notification` model, `NotifState` StrEnum)
+- [ ] Write Alembic migration creating `forms.notifications`
+
+#### Channel adapters
+- [ ] Write `apps/router/src/channels/base.py` (`CaseAlert` dataclass, `ChannelAdapter` ABC with `is_available()`, `send()`, `send_ack_confirmation()`)
+- [ ] Write `apps/router/src/channels/email.py` (`EmailAdapter`: SMTP via aiosmtplib, urgency emoji subject prefix, Message-ID capture, In-Reply-To/References on ACK)
+- [ ] Write `apps/router/src/channels/signal.py` (`SignalAdapter`: signal-cli-rest-api v2/send, group recipient, ACK confirmation message)
+- [ ] Write `apps/router/src/channels/mattermost.py` (`MattermostAdapter`: incoming webhook POST, same alert format)
+- [ ] Write `apps/router/src/channels/slack.py` (`SlackAdapter`: incoming webhook POST, same alert format)
+
+#### Routing logic
+- [ ] Write `apps/router/src/router.py` (`AlertRouter`: phase-aware routing, `signal_mode` logic, `_send_with_retry` with [0, 5, 10, 15] min delays, notification state persistence per attempt)
+- [ ] Write `apps/router/src/listener.py` (long-lived asyncpg connection, `LISTEN new_case`, dispatch to `AlertRouter.route()` via `asyncio.create_task`)
+- [ ] Write `apps/router/src/main.py` (FastAPI app, startup event launches listener, `GET /health` with checks for email/signal/telephony availability)
+
+#### ACK handling
+- [ ] Write Signal webhook handler: receive emoji reactions from signal-cli-rest-api; 🤙 emoji → mark notification acked, fire ACK confirmations
+- [ ] Write email ACK handler: one-time magic link endpoint (`GET /ack/{token}`) → mark acked, fire ACK confirmations, invalidate token
+
+#### Tests
+- [ ] Test `EmailAdapter.send()` sends correct headers, returns Message-ID
+- [ ] Test `EmailAdapter.send_ack_confirmation()` sets `In-Reply-To` and `References`
+- [ ] Test `EmailAdapter.is_available()` returns False when SMTP unreachable
+- [ ] Test `SignalAdapter.send()` posts to correct group endpoint
+- [ ] Test `AlertRouter` event-time: email + phone always sent; Signal per `signal_mode`
+- [ ] Test `signal_mode="always"` → Signal sent even when phone available
+- [ ] Test `signal_mode="fallback_only"` → Signal only when phone unavailable
+- [ ] Test `signal_mode="high_priority_and_fallback"` → Signal for urgent + fallback
+- [ ] Test `_route_off_event()` → only email sent
+- [ ] Test retry: `send()` returns None → retried 3× at correct intervals
+- [ ] Test notification state updated in DB: `pending` → `sent` on success, `failed` after all retries exhausted
+- [ ] Test LISTEN/NOTIFY: mock `pg_notify`, verify `AlertRouter.route()` called
+- [ ] Test Signal emoji ACK → notification marked `acked`, ACK confirmation sent
+- [ ] Test email magic link ACK → notification marked `acked`, token invalidated, second use rejected
+
+#### Docker
+- [ ] Write `apps/router/Dockerfile`
+- [ ] Add `msg-router` service to `docker-compose.yml`
+
+---
+
+### Phase 5 — App 4: TTS Service
+
+#### Project setup
+- [ ] `uv init apps/tts`; configure `pyproject.toml` (fastapi, uvicorn, pydantic)
+
+#### Service implementation
+- [ ] Write `apps/tts/src/main.py`:
+  - [ ] `POST /synthesise` — sanitise input, run Piper subprocess, return `StreamingResponse(audio/wav)`
+  - [ ] `POST /synthesise/file` — sanitise, run Piper to temp file, store token→path map, return `{audio_url}`
+  - [ ] `GET /audio/{token}` — serve temp file, 404 on unknown/expired token
+  - [ ] `GET /health` — check Piper model file exists; return `{status: "ok"|"degraded", model: ...}`
+- [ ] Write `apps/tts/src/builder.py` (`build_tts_message()`: urgency word map, spoken friendly_id with hyphens-to-spaces, location fallback, DTMF prompts)
+- [ ] Add temp file cleanup: purge `_audio_files` entries older than N minutes (configurable)
+
+#### Tests
+- [ ] Test `build_tts_message()` output for all urgency levels (correct urgency word)
+- [ ] Test friendly_id hyphens replaced with spaces in spoken output
+- [ ] Test `_sanitise()` strips disallowed characters
+- [ ] Test `_sanitise()` truncates at `MAX_TEXT_LEN`
+- [ ] Test `POST /synthesise` returns `audio/wav` content-type (mock Piper subprocess)
+- [ ] Test `POST /synthesise/file` returns JSON with `audio_url`
+- [ ] Test `GET /audio/{token}` serves file; unknown token → 404
+- [ ] Test `GET /health` returns `degraded` when model path absent
+
+#### Docker
+- [ ] Write `apps/tts/Dockerfile` (download Piper binary + `en_GB-alan-medium.onnx` model at build time; run as non-root)
+- [ ] Add TTS service to `docker-compose.yml`
+
+---
+
+### Phase 6 — App 5: Jambonz Adapter
+
+#### Project setup
+- [ ] `uv init apps/jambonz`; configure `pyproject.toml` (httpx, fastapi, pydantic)
+
+#### Adapter implementation
+- [ ] Write `apps/jambonz/src/adapter.py` (`JambonzAdapter`: `is_available()` against Accounts endpoint; `send()` — get TTS file URL, POST to Jambonz Calls API with `tag` payload; `send_ack_confirmation()` — no-op, delegated to Signal)
+- [ ] Write `apps/jambonz/src/escalation.py` (`ESCALATION_SEQUENCE` with delays, `escalating_call()`, `wait_for_ack()` polling notification state)
+- [ ] Write Jambonz webhook handler (`POST /webhook/jambonz`): receive DTMF input from Jambonz application; digit `1` → ACK; digit `2` → pass to next in escalation sequence
+- [ ] Integrate escalation with `AlertRouter`'s `_send_with_retry` (replace generic retry with `escalating_call` for telephony channel)
+
+#### Tests (all against mocked Jambonz API)
+- [ ] Test `is_available()` → True on 200, False on non-200 / exception
+- [ ] Test `send()` → calls TTS `/synthesise/file`, then Jambonz Calls API; returns call SID on 201
+- [ ] Test `send()` → returns None when TTS fails
+- [ ] Test DTMF digit `1` webhook → marks notification `acked`
+- [ ] Test DTMF digit `2` webhook → triggers next escalation target
+- [ ] Test escalation sequence: call_group → (5 min) shift_leader → (10 min) escalation number
+- [ ] Test no ACK after full sequence → logs error with `🚨`
+
+#### Docker
+- [ ] Write `apps/jambonz/Dockerfile`
+- [ ] Add Jambonz service to `docker-compose.yml`
+
+---
+
+### Phase 7 — Observability
+
+#### Prometheus instrumentation (all services)
+- [ ] Add `prometheus-fastapi-instrumentator` to all service dependencies
+- [ ] Add `Instrumentator().instrument(app).expose(app, endpoint="/metrics")` to all `main.py` files
+- [ ] Add `emf_cases_submitted_total` counter (labels: urgency, phase, event_name) to form service
+- [ ] Add `emf_form_submission_attempts_total` counter (labels: result = success/honeypot/rate_limited/validation_error) to form service
+- [ ] Add `emf_notification_dispatch_seconds` histogram (label: channel) to router service
+- [ ] Add `emf_notification_state_total` gauge (label: state) to router service
+- [ ] Verify no raw IP addresses in any metric labels (hash if needed)
+
+#### Health endpoints (all services)
+- [ ] Extend `/health` on form service: `{status, checks: {database}, version}`
+- [ ] Extend `/health` on panel service: `{status, checks: {database, oidc_reachable}, version}`
+- [ ] Extend `/health` on router service: `{status, checks: {database, email, signal, telephony}, version}`
+- [ ] Extend `/health` on TTS service: `{status, checks: {piper_model}, version}`
+- [ ] Extend `/health` on Jambonz adapter: `{status, checks: {jambonz_api}, version}`
+
+#### Grafana dashboards
+- [ ] Write `infra/grafana/dashboards/form.json` (panels: cases submitted per phase bar, urgency breakdown pie, submission rate anomaly time-series, p50/p99 request latency)
+- [ ] Write `infra/grafana/dashboards/router.json` (panels: notification state stacked bar, dispatch latency histogram, channel health stat panels, retry/escalation counters)
+- [ ] Write `infra/grafana/dashboards/panel.json` (panels: case status distribution, SSO login events, active dispatcher sessions)
+- [ ] Write `infra/grafana/dashboards/tts.json` (panels: synthesis request rate, synthesis latency, health status)
+- [ ] Add Prometheus + Grafana services to `docker-compose.yml` under `monitoring` profile
+- [ ] Verify dashboards import cleanly and all panels resolve their metrics
+
+---
+
+### Phase 8 — Security Hardening
+
+#### OWASP Top 10 (2025) test suite
+- [ ] Write `tests/security/test_owasp.py` covering all 10 categories (reference Section 9.1):
+  - [ ] A01 Broken Access Control: dispatcher token cannot read `form_data`; `panel_viewer` DB role cannot SELECT `form_data` column; `form_user` cannot UPDATE
+  - [ ] A02 Cryptographic Failures: Caddy config enforces TLS 1.3 + HTTP/2; no secrets in `config.json`; `.env` permissions check
+  - [ ] A03 Injection: SQL injection strings in all form fields; XSS payloads in text fields stored as-is, not executed
+  - [ ] A04 Insecure Design: honeypot returns fake-OK, no DB row; idempotency token prevents duplicate case
+  - [ ] A05 Security Misconfiguration: no debug mode in prod; server header stripped; no stack traces in API errors
+  - [ ] A06 Vulnerable Components: `pip-audit` clean run in CI
+  - [ ] A07 Identification & Auth Failures: non-`team_conduct` user → 403; expired dispatcher token → 401; brute-force on dispatcher token → rate limited
+  - [ ] A08 Software and Data Integrity: `uv.lock` committed and pinned; gitleaks pre-commit hook fires on test cred
+  - [ ] A09 Security Logging & Monitoring: status transitions create `CaseHistory` rows; failed auth attempts logged
+  - [ ] A10 SSRF: URL in `additional_info` stored, not fetched; no outbound HTTP triggered by user input
+
+#### Database permission tests
+- [ ] Test `panel_viewer` role cannot SELECT `form_data` from `forms.cases`
+- [ ] Test `form_user` role cannot UPDATE any row
+- [ ] Test `router_user` can only SELECT from `cases_router` view, not base table
+- [ ] Test RLS `team_isolation`: team A rows not visible when `app.current_team_id` set to team B UUID
+- [ ] Test `backup_user` can SELECT all tables, cannot INSERT/UPDATE/DELETE
+
+#### General hardening checks
+- [ ] Verify Caddy rejects TLS 1.2 connections (`curl --tlsv1.2 --tls-max 1.2 https://...` → connection refused)
+- [ ] Verify all required security headers present on all Caddy-proxied responses
+- [ ] Verify CSP does not include `unsafe-eval`
+- [ ] Verify `bandit -r apps/ shared/` reports zero findings (or all suppressed with justification)
+- [ ] Verify `mypy --strict` passes on all services and shared lib
+- [ ] Verify gitleaks hook fires on a test commit containing a fake credential pattern
+- [ ] Review and document all data minimisation decisions (what is collected, legal basis, retention period placeholder)
+- [ ] Write abuse detection test: simulate >20 submissions in 1 hour from same hashed source → `emf_form_submission_attempts_total{result="rate_limited"}` counter increments
+
+---
+
+### Phase 9 — Supporting Scripts
+
+#### `scripts/install.py`
+- [ ] Implement CLI arg parsing (`-q`, `-v`, `-d`, `--dry-run`, `--help`; mutually exclusive verbosity flags; conflicting flags print help and exit)
+- [ ] Implement component selection prompts (form, panel, router, TTS, Jambonz)
+- [ ] Implement proxy selection (Caddy default; nginx/Traefik with certbot warning re: 47-day ACME expiry)
+- [ ] Implement TLS cert method selection (HTTP challenge, DNS challenge, manual)
+- [ ] Docker Compose template generation from selections (enable/disable service blocks)
+- [ ] Caddyfile generation (substitute `${PROJECT_NAME}`, select local vs prod template)
+- [ ] PostgreSQL TLS cert generation (idempotent, using `cryptography` library)
+- [ ] Signal group registration walkthrough (if Signal component selected): register phone number, list groups, populate `signal_group_id` in config
+- [ ] Validation pass: `docker compose config` check; `.env` completeness (no remaining `changeme`); required config keys present; TLS certs exist
+- [ ] Progress bars with `alive-progress` for docker pull / image build stages
+- [ ] `--dry-run` mode prints all actions without executing
+
+#### `scripts/backup.py`
+- [ ] `pg_dump --format=custom` via subprocess
+- [ ] `zstd` compression (piped)
+- [ ] `age` encryption (recipient = sysadmin public key from config/arg)
+- [ ] Filename: `emf_forms-<ISO8601>.dump.zst.age`
+- [ ] Optional rsync to remote path (from config)
+- [ ] `--systemd` flag: generate `.service` + `.timer` unit files, run `systemctl enable --now`
+
+---
+
+### Phase 10 — CI / CD
+
+- [ ] Write `.github/workflows/ci.yml`: checkout, setup-uv, `uv sync --all-extras`, ruff check, ruff format check, mypy, bandit, pytest (with Postgres service container), pip-audit
+- [ ] Write `.github/workflows/security.yml`: scheduled (weekly) gitleaks scan across full git history
+- [ ] Verify CI pipeline passes on a clean clone
+- [ ] Add branch protection rules: `main` and `develop` require CI pass + 1 review before merge
+
+---
+
+### Phase 11 — Documentation
+
+- [ ] Write root `README.md`: project overview, prerequisites, quick-start (`docker compose up`), architecture diagram, link to each app README
+- [ ] Write `apps/form/README.md`: purpose, config options, form field reference
+- [ ] Write `apps/panel/README.md`: SSO setup, user roles, dispatcher session usage
+- [ ] Write `apps/router/README.md`: channel adapters, `signal_mode` values, ACK mechanisms
+- [ ] Write `apps/tts/README.md`: Piper model selection, endpoint reference
+- [ ] Write `apps/jambonz/README.md`: Jambonz API prerequisites, escalation config
+- [ ] Write root `CLAUDE.md`: project conventions, key file paths, dev commands, test commands, deploy commands
+- [ ] Write per-app `CLAUDE.md` files (app-specific conventions and entry points)
+- [ ] Write privacy policy page content (`apps/form/templates/privacy.html`)
+- [ ] Write code of conduct page content (`apps/form/templates/conduct.html`)
+- [ ] Write about page content (`apps/form/templates/about.html`)
+
+---
+
+### Phase 12 — Image Attachments (App 1 add-on)
+
+_Depends on Phase 1 complete. Can be delivered post-launch._
+
+- [ ] Add `POST /attachments` endpoint to form service (returns opaque token)
+- [ ] Integrate `libmagic` MIME verification (reject non-image regardless of extension)
+- [ ] Add ClamAV container to `docker-compose.yml`; integrate scan into upload pipeline
+- [ ] Implement configurable attachment backend (`attachment_backend: "local" | "minio"`)
+- [ ] If MinIO: add MinIO service to Docker Compose, enable SSE, add MinIO volume to backup script
+- [ ] Add `GET /cases/{uuid}/attachments/{id}` signed-URL proxy to panel service (team_conduct session required)
+- [ ] Show thumbnails in case detail view; link to proxy endpoint
+- [ ] Write attachment tests: MIME check rejects non-image; ClamAV positive → 400; max 3 files enforced; max 10 MB enforced; unauthenticated access → 403
+
+---
+
+### Phase 13 — App 2c: Admin App (deferred, post-launch)
+
+_Low priority. Scope to be confirmed with EMF team._
+
+- [ ] Define scope with EMF team (team provisioning, SSO group management, form config)
+- [ ] Implement team provisioning UI (guided sysadmin flow from install script model)
+- [ ] Implement SSO group → team mapping management
+- [ ] Implement form/config management (does not expose case data)
+- [ ] Write admin app tests
