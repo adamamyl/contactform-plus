@@ -45,6 +45,11 @@ uv run scripts/install.py
 
 ## Running locally
 
+The form service has `LOCAL_DEV=true` set in `docker-compose.yml`. This overrides
+the event-phase check so all form fields are visible (phone, DECT, camping group,
+urgency selector) regardless of whether the event window is active. Remove or set to
+`false` when deploying to production.
+
 ```bash
 # Core stack (form, panel, router, tts, jambonz, postgres, caddy, signal-api, redis)
 docker compose -f infra/docker-compose.yml up -d
