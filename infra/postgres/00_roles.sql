@@ -1,20 +1,6 @@
 -- infra/postgres/00_roles.sql
 -- Run once on first container init (docker-entrypoint-initdb.d/).
--- Passwords are injected via psql -v at runtime by the install script,
--- or via POSTGRES_* env vars in docker-compose for local dev.
-
--- ---------------------------------------------------------------------------
--- Roles
--- ---------------------------------------------------------------------------
-CREATE ROLE form_user        LOGIN PASSWORD :'form_password';
-CREATE ROLE router_user      LOGIN PASSWORD :'router_password';
-CREATE ROLE service_user     LOGIN PASSWORD :'service_password';
-CREATE ROLE panel_viewer     LOGIN PASSWORD :'panel_viewer_password';
-CREATE ROLE team_member      LOGIN PASSWORD :'team_member_password';
-CREATE ROLE backup_user      LOGIN PASSWORD :'backup_password';
-
--- emf_forms_admin is the superuser created by POSTGRES_USER in docker-compose.
--- We don't create it here; it exists before this script runs.
+-- Roles are created by 00_init.sh (which runs first, alphabetically).
 
 -- ---------------------------------------------------------------------------
 -- Schema

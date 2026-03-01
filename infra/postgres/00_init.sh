@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+
+psql -v ON_ERROR_STOP=1 \
+     --username "${POSTGRES_USER}" \
+     --dbname "${POSTGRES_DB}" <<-EOSQL
+CREATE ROLE form_user       LOGIN PASSWORD '${FORM_DB_PASSWORD}';
+CREATE ROLE router_user     LOGIN PASSWORD '${ROUTER_DB_PASSWORD}';
+CREATE ROLE service_user    LOGIN PASSWORD '${SERVICE_DB_PASSWORD}';
+CREATE ROLE panel_viewer    LOGIN PASSWORD '${PANEL_VIEWER_DB_PASSWORD}';
+CREATE ROLE team_member     LOGIN PASSWORD '${TEAM_MEMBER_DB_PASSWORD}';
+CREATE ROLE backup_user     LOGIN PASSWORD '${BACKUP_DB_PASSWORD}';
+EOSQL

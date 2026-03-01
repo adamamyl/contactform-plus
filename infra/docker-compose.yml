@@ -1,6 +1,7 @@
 services:
   caddy:
     image: caddy:2-alpine
+    command: caddy run --config /etc/caddy/Caddyfile.local --adapter caddyfile
     ports:
       - "443:443"
       - "80:80"

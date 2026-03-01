@@ -4,14 +4,16 @@ WORKDIR /workspace
 COPY apps/jambonz/pyproject.toml apps/jambonz/uv.lock apps/jambonz/
 COPY shared/ shared/
 WORKDIR /workspace/apps/jambonz
-RUN uv sync --frozen --no-dev
+RUN UV_PROJECT_ENVIRONMENT=/app/.venv uv sync --frozen --no-dev --no-install-project
 
 FROM python:3.12-slim
 RUN useradd -m -u 1001 appuser
 WORKDIR /app
-COPY --from=builder /workspace/apps/jambonz/.venv /app/.venv
+COPY --from=builder /app/.venv /app/.venv
 COPY apps/jambonz/src/ ./src/
+COPY shared/src/ ./src/
 ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH=/app/src
 USER appuser
 EXPOSE 8004
 CMD ["uvicorn", "jambonz.main:app", "--host", "0.0.0.0", "--port", "8004"]
