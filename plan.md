@@ -2736,3 +2736,63 @@ _Low priority. Scope to be confirmed with EMF team._
 - [ ] Implement SSO group → team mapping management
 - [ ] Implement form/config management (does not expose case data)
 - [ ] Write admin app tests
+---
+
+### Phase 15 — End-to-End Tests (Playwright + API + Schemathesis) ✅
+
+#### E2E test project
+- [x] Create `tests/e2e/` as a standalone `uv` project with `pyproject.toml` (schemathesis 4.x, pytest-playwright, pytest-asyncio, httpx, hypothesis, ruff, mypy)
+- [x] `conftest.py` — session-scoped `form_base_url` / `panel_base_url` fixtures that auto-skip when env vars absent; `form_client` / `panel_client` httpx fixtures
+- [x] `helpers.py` — `make_valid_payload(**overrides)` helper (importable without conftest path issues)
+- [x] `test_form_schema.py` — schemathesis `openapi.from_url` schema-driven conformance tests (`max_examples=200`, suppress health checks)
+- [x] `test_form_api.py` — targeted httpx tests: honeypot silent-drop, idempotency token reuse, rate-limit burst (429)
+- [x] `test_form_ui.py` — Playwright/Chromium tests: page loads, valid form submit → success message, XSS in textarea not executed, keyboard navigation smoke test
+- [x] `test_panel_api.py` — panel tests: unauthenticated → OIDC redirect (302/307), dispatcher token 401
+
+#### E2E test stack isolation
+- [x] `infra/postgres/e2e/00_roles.sql` — trust-auth init SQL (no psql variable syntax; `POSTGRES_HOST_AUTH_METHOD=trust` handles auth)
+- [x] `infra/docker-compose.e2e.yml` — Compose override: `POSTGRES_HOST_AUTH_METHOD=trust`, fresh `pg_e2e_data` volume, port bindings (8000, 8001), `mock-oidc` profile cleared
+- [x] `scripts/run_e2e.sh` — lifecycle wrapper: bring stack up, wait for postgres healthy, run pytest, tear down with `-v`
+
+---
+
+### Phase 16 — Bad Strings Manual Script ✅
+
+- [x] `scripts/bad_strings_test.py` — PEP 723 inline script (`# /// script` header); runnable via `uv run` with no separate venv
+- [x] Uses `blns` PyPI package (`blns.all()`) for ~500 naughty strings; no runtime network call needed
+- [x] Stratified sampling: one string per named category first, then random fill; `--sample N` (default 50), `--seed SEED` / `--all` (mutually exclusive via `argparse`)
+- [x] asyncio semaphore (`--concurrency 3` default) — N strings in flight; each posts all three target fields in one request
+- [x] Rich progress: overall `BarColumn` + `MofNCompleteColumn` + `TimeElapsedColumn`; per-slot `SpinnerColumn` + truncated string preview; `--silent` suppresses all rich output
+- [x] JSON output (`--output bad_strings_results.json`): url, sample_size, seed, per-string results, summary counts
+- [x] Exit code 0 if no 5xx; exit code 1 otherwise
+
+---
+
+### Phase 17 — Swagger UI Docker Image ✅
+
+- [x] `infra/swagger/pyproject.toml` — deps: fastapi, httpx, uvicorn\[standard\] (no `[build-system]`; app.py is a script not a package)
+- [x] `infra/swagger/app.py` — FastAPI aggregator: startup retry-fetch of each service's `/openapi.json`; `GET /` index page; `GET /all` multi-API swagger-ui; `GET /{path}` per-audience pages; `GET /api/specs/{service}` cached spec proxy
+- [x] `infra/swagger/Dockerfile` — downloads swagger-ui dist tarball at build time (pinned version, no CDN at runtime); serves JS/CSS via `StaticFiles`
+- [x] Add `swagger` service to `infra/docker-compose.yml`: port 8080, `profiles: [local, swagger]`, `http://` internal URLs
+
+---
+
+### Phase 18 — Accented Characters / Diacritical Marks ✅
+
+- [x] Add accented character tests to `apps/form/tests/test_routes.py`: `test_accented_name_accepted` (Héloïse Müller, sie/ihr, São Paulo crew), `test_accented_text_fields_accepted` (naïve résumé, café, crêperie, façade, José, Ångström), `test_accented_location_text_accepted` (Près du château — zone forêt)
+- [x] Verify `channels/email.py` creates `MIMEText(..., 'plain', 'utf-8')` — confirmed UTF-8 charset set correctly
+- [x] Verify form HTML template has `<meta charset="UTF-8">` in `<head>` — confirmed present
+- [x] Add TTS pronunciation note to `apps/tts/README.md`: `en_GB-alan-medium` is English-only; accented chars passed through but pronunciation may vary
+
+---
+
+### Phase 19 — OWASP ZAP Integration ✅
+
+- [x] `infra/zap/form-scan.yaml` — ZAP Automation Framework: spider, ajaxSpider, activeScan with inline `policyDefinition` (buffer overflow / format string / Node.js rules disabled; SQLi, XSS, SSRF, path traversal enabled at Medium strength), dual HTML + JSON report jobs
+- [x] `infra/zap/panel-scan.yaml` — same structure for panel; cookie-based auth placeholder (`${SESSION_COOKIE}`)
+- [x] `infra/zap/scan-policy-api.policy` — XML policy file for ZAP GUI import (same rules as inline policyDefinition; documents disabled/enabled scanners)
+- [x] `reports/zap/.gitkeep` — placeholder keeping the gitignored report output directory tracked
+- [x] `scripts/run_zap.py` — PEP 723 script: `docker info` daemon check, `docker compose run --rm zap`, parse `form-report.json` for risk-level counts, rich summary table, interactive prompt to open HTML report (macOS: `open`, Linux: `xdg-open`), exit 1 on HIGH alerts
+- [x] Add `zap` service to `infra/docker-compose.yml`: `ghcr.io/zaproxy/zaproxy:stable`, `profiles: [zap]`, volumes `./zap:/zap/wrk:ro` and `../reports/zap:/zap/reports`
+- [x] Add `zap` job to `.github/workflows/security.yml`: `workflow_dispatch` only (never scheduled), starts stack, waits for `/health`, runs `uv run scripts/run_zap.py`, uploads report artifact
+- [x] Add `reports/zap/*.html` and `reports/zap/*.json` to `.gitignore`

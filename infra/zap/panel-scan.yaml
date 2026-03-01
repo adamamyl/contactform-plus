@@ -1,0 +1,72 @@
+---
+# Panel scan — authenticated via OIDC session cookie.
+# Obtain a session token from the mock-oidc provider first:
+#
+#   POST http://mock-oidc:8080/default/token
+#     grant_type=client_credentials&client_id=panel&client_secret=<secret>
+#
+# Then set SESSION_COOKIE in the environment, or replace the placeholder below.
+env:
+  contexts:
+    - name: panel-context
+      urls:
+        - "http://panel:8001"
+      excludePaths:
+        - "http://panel:8001/static/.*"
+        - "http://panel:8001/auth/.*"
+      authentication:
+        method: "cookie"
+        parameters:
+          cookieName: "session"
+          cookieValue: "${SESSION_COOKIE}"
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  - type: spider
+    name: spider
+    parameters:
+      context: panel-context
+      maxDuration: 5
+
+  - type: activeScan
+    name: active-scan
+    parameters:
+      context: panel-context
+    policyDefinition:
+      defaultStrength: medium
+      defaultThreshold: medium
+      rules:
+        - id: 30001
+          name: Buffer Overflow
+          threshold: off
+        - id: 30002
+          name: Format String Error
+          threshold: off
+        - id: 30003
+          name: Integer Overflow Error
+          threshold: off
+        - id: 40038
+          name: "Node.js Code Injection"
+          threshold: off
+        - id: 90029
+          name: SOAP XML Injection
+          threshold: off
+
+  - type: report
+    name: report-html
+    parameters:
+      template: traditional-html
+      reportDir: /zap/reports
+      reportFile: panel-report.html
+      reportTitle: "EMF Panel Service — ZAP Scan"
+
+  - type: report
+    name: report-json
+    parameters:
+      template: traditional-json
+      reportDir: /zap/reports
+      reportFile: panel-report.json
+      reportTitle: "EMF Panel Service — ZAP Scan"

@@ -51,6 +51,10 @@ infra/postgres/certs/
 # Audio temp files (TTS service)
 apps/tts/audio/
 
+# ZAP scan reports (generated; tracked via reports/zap/.gitkeep)
+reports/zap/*.html
+reports/zap/*.json
+
 # Backup artefacts
 *.dump
 *.dump.zst

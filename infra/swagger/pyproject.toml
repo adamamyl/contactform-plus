@@ -1,0 +1,26 @@
+[project]
+name = "emf-swagger"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.134.0",
+    "httpx>=0.28.1",
+    "uvicorn[standard]>=0.41.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "ruff>=0.15.0",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP"]

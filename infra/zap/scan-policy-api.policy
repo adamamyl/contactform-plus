@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- ZAP scan policy for Python/FastAPI API services.
+     Import via ZAP GUI: Analyse → Scan Policy Manager → Import.
+     For headless automation, the equivalent rules are embedded inline
+     in the policyDefinition blocks in form-scan.yaml / panel-scan.yaml. -->
+<configuration>
+  <policy>
+    <name>api-safe</name>
+    <scanner>
+      <attackStrength>MEDIUM</attackStrength>
+      <alertThreshold>MEDIUM</alertThreshold>
+    </scanner>
+    <scanners>
+      <!-- Buffer overflow / memory corruption: not applicable to Python -->
+      <scanner>
+        <id>30001</id>
+        <name>Buffer Overflow</name>
+        <enabled>false</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>OFF</alertThreshold>
+      </scanner>
+      <scanner>
+        <id>30002</id>
+        <name>Format String Error</name>
+        <enabled>false</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>OFF</alertThreshold>
+      </scanner>
+      <scanner>
+        <id>30003</id>
+        <name>Integer Overflow Error</name>
+        <enabled>false</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>OFF</alertThreshold>
+      </scanner>
+      <!-- Node.js injection: not applicable -->
+      <scanner>
+        <id>40038</id>
+        <name>Node.js Code Injection</name>
+        <enabled>false</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>OFF</alertThreshold>
+      </scanner>
+      <!-- SOAP / WSDL: not in scope -->
+      <scanner>
+        <id>90029</id>
+        <name>SOAP XML Injection</name>
+        <enabled>false</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>OFF</alertThreshold>
+      </scanner>
+      <scanner>
+        <id>90030</id>
+        <name>WSDL File Detection</name>
+        <enabled>false</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>OFF</alertThreshold>
+      </scanner>
+      <!-- Keep enabled: SQL injection, XSS, path traversal, SSRF, header injection -->
+      <scanner>
+        <id>40018</id>
+        <name>SQL Injection</name>
+        <enabled>true</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>MEDIUM</alertThreshold>
+      </scanner>
+      <scanner>
+        <id>40012</id>
+        <name>Cross Site Scripting (Reflected)</name>
+        <enabled>true</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>MEDIUM</alertThreshold>
+      </scanner>
+      <scanner>
+        <id>40014</id>
+        <name>Cross Site Scripting (Persistent)</name>
+        <enabled>true</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>MEDIUM</alertThreshold>
+      </scanner>
+      <scanner>
+        <id>6</id>
+        <name>Path Traversal</name>
+        <enabled>true</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>MEDIUM</alertThreshold>
+      </scanner>
+      <scanner>
+        <id>40046</id>
+        <name>Server Side Request Forgery</name>
+        <enabled>true</enabled>
+        <attackStrength>MEDIUM</attackStrength>
+        <alertThreshold>MEDIUM</alertThreshold>
+      </scanner>
+    </scanners>
+  </policy>
+</configuration>

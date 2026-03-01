@@ -168,3 +168,38 @@ async def test_international_phone_accepted(client: AsyncClient) -> None:
     )
     response = await client.post("/api/submit", json=payload)
     assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_accented_name_accepted(client: AsyncClient) -> None:
+    payload = make_valid_payload(
+        reporter={
+            "name": "Héloïse Müller",
+            "pronouns": "sie/ihr",
+            "email": None,
+            "phone": None,
+            "camping_with": "São Paulo crew",
+        }
+    )
+    response = await client.post("/api/submit", json=payload)
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_accented_text_fields_accepted(client: AsyncClient) -> None:
+    payload = make_valid_payload(
+        what_happened="naïve résumé — something happened at café de la paix.",
+        additional_info="Location: near the crêperie, behind the façade.",
+        others_involved="José and Ångström were nearby.",
+    )
+    response = await client.post("/api/submit", json=payload)
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_accented_location_text_accepted(client: AsyncClient) -> None:
+    payload = make_valid_payload(
+        location={"text": "Près du château — zone forêt"},
+    )
+    response = await client.post("/api/submit", json=payload)
+    assert response.status_code == 201

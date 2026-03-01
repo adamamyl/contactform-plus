@@ -1,0 +1,72 @@
+---
+env:
+  contexts:
+    - name: form-context
+      urls:
+        - "http://form:8000"
+      excludePaths:
+        - "http://form:8000/metrics"
+        - "http://form:8000/static/.*"
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  - type: spider
+    name: spider
+    parameters:
+      context: form-context
+      maxDuration: 5
+
+  - type: ajaxSpider
+    name: ajax-spider
+    parameters:
+      context: form-context
+      maxDuration: 5
+
+  - type: activeScan
+    name: active-scan
+    parameters:
+      context: form-context
+    policyDefinition:
+      defaultStrength: medium
+      defaultThreshold: medium
+      rules:
+        # Buffer overflow / memory corruption — not relevant to Python/FastAPI
+        - id: 30001
+          name: Buffer Overflow
+          threshold: off
+        - id: 30002
+          name: Format String Error
+          threshold: off
+        - id: 30003
+          name: Integer Overflow Error
+          threshold: off
+        # Node.js injection — not relevant
+        - id: 40038
+          name: "Node.js Code Injection"
+          threshold: off
+        # SOAP / XML injection — not in scope
+        - id: 90029
+          name: SOAP XML Injection
+          threshold: off
+        - id: 90030
+          name: WSDL File Detection
+          threshold: off
+
+  - type: report
+    name: report-html
+    parameters:
+      template: traditional-html
+      reportDir: /zap/reports
+      reportFile: form-report.html
+      reportTitle: "EMF Form Service — ZAP Scan"
+
+  - type: report
+    name: report-json
+    parameters:
+      template: traditional-json
+      reportDir: /zap/reports
+      reportFile: form-report.json
+      reportTitle: "EMF Form Service — ZAP Scan"
