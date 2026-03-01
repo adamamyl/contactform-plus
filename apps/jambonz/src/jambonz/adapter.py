@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+
+import httpx
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class CaseAlert:
+    case_id: str
+    friendly_id: str
+    urgency: str
+    location_hint: str | None
+
+
+class JambonzAdapter:
+    def __init__(
+        self,
+        api_url: str,
+        api_key: str,
+        account_sid: str,
+        application_sid: str,
+        tts_service_url: str,
+        from_number: str,
+    ) -> None:
+        self._api_url = api_url.rstrip("/")
+        self._api_key = api_key
+        self._account_sid = account_sid
+        self._application_sid = application_sid
+        self._tts_url = tts_service_url.rstrip("/")
+        self._from_number = from_number
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._api_key}"}
+
+    async def is_available(self) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(
+                    f"{self._api_url}/v1/Accounts/{self._account_sid}",
+                    headers=self._headers(),
+                )
+                return resp.status_code == 200
+        except Exception:
+            return False
+
+    async def _get_tts_url(self, alert: CaseAlert) -> str | None:
+        payload = {
+            "friendly_id": alert.friendly_id,
+            "urgency": alert.urgency,
+            "location_hint": alert.location_hint,
+            "include_dtmf": True,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(f"{self._tts_url}/synthesise/file", json=payload)
+            if resp.status_code == 200:
+                rel_url: str = resp.json()["audio_url"]
+                return f"{self._tts_url}{rel_url}"
+            log.warning("TTS /synthesise/file returned %s", resp.status_code)
+            return None
+        except Exception:
+            log.exception("Failed to get TTS file URL for case %s", alert.case_id)
+            return None
+
+    async def call(self, to_number: str, alert: CaseAlert) -> str | None:
+        audio_url = await self._get_tts_url(alert)
+        if audio_url is None:
+            return None
+
+        payload = {
+            "application_sid": self._application_sid,
+            "to": {"type": "phone", "number": to_number},
+            "from": self._from_number,
+            "tag": {
+                "case_id": alert.case_id,
+                "audio_url": audio_url,
+            },
+        }
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    f"{self._api_url}/v1/Accounts/{self._account_sid}/Calls",
+                    json=payload,
+                    headers=self._headers(),
+                )
+            if resp.status_code == 201:
+                return str(resp.json().get("sid", ""))
+            log.warning(
+                "Jambonz Calls API returned %s for case %s", resp.status_code, alert.case_id
+            )
+            return None
+        except Exception:
+            log.exception("JambonzAdapter.call failed for case %s", alert.case_id)
+            return None

@@ -355,8 +355,8 @@ async def dispatcher_ack(
     now = datetime.now(tz=UTC)
     await session.execute(
         update(Notification)
-        .where(Notification.case_id == case_id, Notification.acked.is_(False))
-        .values(acked=True, acked_at=now, acked_by=body.acked_by)
+        .where(Notification.case_id == case_id, Notification.state != "acked")
+        .values(state="acked", acked_at=now, acked_by=body.acked_by)
     )
     await session.commit()
     return {"ok": True}
