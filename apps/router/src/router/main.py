@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
+from prometheus_client import Counter, Histogram
+from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import HTMLResponse
 from jose import JWTError
 from pydantic import BaseModel
@@ -25,6 +27,17 @@ from router.models import Notification, NotifState
 from router.settings import Settings
 
 log = logging.getLogger(__name__)
+
+notification_dispatch_seconds = Histogram(
+    "emf_notification_dispatch_seconds",
+    "Time to dispatch a notification",
+    ["channel"],
+)
+notification_state_total = Counter(
+    "emf_notification_state_total",
+    "Notification state transitions",
+    ["state"],
+)
 
 _router_instance: AlertRouter | None = None
 _settings_instance: Settings | None = None
@@ -220,3 +233,4 @@ async def health(
 
 
 app.include_router(api)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")

@@ -1,0 +1,18 @@
+[project]
+name = "emf-security-tests"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "emf-form",
+    "emf-panel",
+    "httpx>=0.28.1",
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.3.0",
+]
+
+[tool.uv.sources]
+emf-form = { path = "../apps/form", editable = true }
+emf-panel = { path = "../apps/panel", editable = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

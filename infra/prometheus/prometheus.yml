@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: emf-form
+    static_configs:
+      - targets: ["form:8000"]
+    metrics_path: /metrics
+
+  - job_name: emf-panel
+    static_configs:
+      - targets: ["panel:8001"]
+    metrics_path: /metrics
+
+  - job_name: emf-router
+    static_configs:
+      - targets: ["msg-router:8002"]
+    metrics_path: /metrics
+
+  - job_name: emf-tts
+    static_configs:
+      - targets: ["tts:8003"]
+    metrics_path: /metrics
+
+  - job_name: emf-jambonz
+    static_configs:
+      - targets: ["jambonz-adapter:8004"]
+    metrics_path: /metrics

@@ -5,6 +5,7 @@ import os
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 from jambonz.adapter import CaseAlert, JambonzAdapter
@@ -34,6 +35,7 @@ def get_adapter() -> JambonzAdapter:
 
 app = FastAPI(title="EMF Jambonz Adapter")
 api = APIRouter()
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 
 # ---------------------------------------------------------------------------

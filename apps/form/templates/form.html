@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Report an Incident — EMF Conduct{% endblock %}
+{% block content %}
+<div class="container">
+  {% if phase == "event_time" %}
+  <div class="alert alert--event" role="alert">
+    <strong>EMF is happening now.</strong>
+    If you need immediate help, please find a ranger or go to the welfare tent.
+  </div>
+  {% endif %}
+
+  <h1>Report an Incident</h1>
+  <p class="lead">
+    Use this form to report a conduct concern to the EMF conduct team.
+    Your report is confidential.
+  </p>
+
+  <form id="conduct-form" method="post" novalidate>
+    <div class="visually-hidden" aria-hidden="true" tabindex="-1">
+      <label for="website">Leave this blank</label>
+      <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label for="event_name" class="form-label">Event <span class="required" aria-hidden="true">*</span></label>
+      <select id="event_name" name="event_name" class="form-control" required aria-required="true">
+        {% for event in events %}
+        <option value="{{ event.name }}"{% if event.name == current_event_name %} selected{% endif %}>{{ event.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="field-error" id="event_name-error" role="alert" aria-live="polite"></div>
+    </div>
+
+    <fieldset class="form-section">
+      <legend class="section-legend">Section 1 of 3: About you (optional)</legend>
+
+      <div class="form-group">
+        <label for="reporter_name" class="form-label">Your name</label>
+        <input type="text" id="reporter_name" name="reporter_name" class="form-control"
+               autocomplete="name" aria-describedby="reporter_name-hint">
+        <div class="field-hint" id="reporter_name-hint">You can leave this blank if you prefer.</div>
+        <div class="field-error" id="reporter_name-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="reporter_pronouns" class="form-label">Your pronouns</label>
+        <input type="text" id="reporter_pronouns" name="reporter_pronouns" class="form-control"
+               list="pronouns-list" autocomplete="off">
+        <datalist id="pronouns-list">
+          {% for p in config.pronouns %}
+          <option value="{{ p }}">
+          {% endfor %}
+        </datalist>
+        <div class="field-error" id="reporter_pronouns-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="reporter_email" class="form-label">Your email address</label>
+        <input type="email" id="reporter_email" name="reporter_email" class="form-control"
+               inputmode="email" autocomplete="email" aria-describedby="reporter_email-hint">
+        <div class="field-hint" id="reporter_email-hint">Optional. Only used to follow up with you if needed.</div>
+        <div class="field-error" id="reporter_email-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      {% if is_active_routing_window %}
+      <div class="form-group">
+        <label for="reporter_phone" class="form-label">Your phone / DECT number</label>
+        <input type="tel" id="reporter_phone" name="reporter_phone" class="form-control"
+               autocomplete="tel" aria-describedby="reporter_phone-hint">
+        <div class="field-hint" id="reporter_phone-hint">Optional. DECT short codes (e.g. 1234) or mobile numbers accepted.</div>
+        <div class="field-error" id="reporter_phone-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="reporter_camping_with" class="form-label">Who are you camping with?</label>
+        <input type="text" id="reporter_camping_with" name="reporter_camping_with" class="form-control"
+               aria-describedby="reporter_camping_with-hint">
+        <div class="field-hint" id="reporter_camping_with-hint">Optional. Helps us find you on site if needed.</div>
+        <div class="field-error" id="reporter_camping_with-error" role="alert" aria-live="polite"></div>
+      </div>
+      {% endif %}
+    </fieldset>
+
+    <fieldset class="form-section">
+      <legend class="section-legend">Section 2 of 3: What happened</legend>
+
+      <div class="form-group">
+        <label for="what_happened" class="form-label">
+          What happened <span class="required" aria-hidden="true">*</span>
+        </label>
+        <textarea id="what_happened" name="what_happened" class="form-control"
+                  rows="6" required aria-required="true"
+                  minlength="10" maxlength="10000"
+                  aria-describedby="what_happened-hint what_happened-count what_happened-error"></textarea>
+        <div class="field-hint" id="what_happened-hint">Please describe what happened in as much detail as you can.</div>
+        <div class="char-count" id="what_happened-count" aria-live="polite"></div>
+        <div class="field-error" id="what_happened-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="incident_date" class="form-label">
+            Date of incident <span class="required" aria-hidden="true">*</span>
+          </label>
+          <input type="date" id="incident_date" name="incident_date" class="form-control"
+                 required aria-required="true">
+          <div class="field-error" id="incident_date-error" role="alert" aria-live="polite"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="incident_time" class="form-label">
+            Approximate time <span class="required" aria-hidden="true">*</span>
+          </label>
+          <input type="time" id="incident_time" name="incident_time" class="form-control"
+                 required aria-required="true">
+          <div class="field-error" id="incident_time-error" role="alert" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="location_text" class="form-label">Where did this happen?</label>
+        <input type="text" id="location_text" name="location_text" class="form-control"
+               aria-describedby="location_text-hint">
+        <div class="field-hint" id="location_text-hint">Describe the location (e.g. "near the main stage", "Workshop tent B").</div>
+        <div class="field-error" id="location_text-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div id="map-container" class="map-container" hidden aria-hidden="true">
+        <div id="map" style="height: 300px;"></div>
+      </div>
+      <input type="hidden" id="location_lat" name="location_lat">
+      <input type="hidden" id="location_lon" name="location_lon">
+
+      {% if is_active_routing_window %}
+      <div class="form-group">
+        <label for="urgency" class="form-label">How urgent is this?</label>
+        <select id="urgency" name="urgency" class="form-control">
+          <option value="low">Low — no immediate risk</option>
+          <option value="medium" selected>Medium — needs attention today</option>
+          <option value="high">High — needs attention soon</option>
+          <option value="urgent">Urgent — someone may be at risk now</option>
+        </select>
+        <div class="field-error" id="urgency-error" role="alert" aria-live="polite"></div>
+      </div>
+      {% else %}
+      <input type="hidden" name="urgency" value="medium">
+      {% endif %}
+
+      <div class="form-group">
+        <label for="additional_info" class="form-label">Any additional information</label>
+        <textarea id="additional_info" name="additional_info" class="form-control" rows="3"
+                  aria-describedby="additional_info-hint"></textarea>
+        <div class="field-hint" id="additional_info-hint">Anything else about the incident itself.</div>
+        <div class="field-error" id="additional_info-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="support_needed" class="form-label">What support do you need?</label>
+        <textarea id="support_needed" name="support_needed" class="form-control" rows="3"
+                  aria-describedby="support_needed-hint"></textarea>
+        <div class="field-hint" id="support_needed-hint">What outcome are you hoping for from this report?</div>
+        <div class="field-error" id="support_needed-error" role="alert" aria-live="polite"></div>
+      </div>
+    </fieldset>
+
+    <fieldset class="form-section">
+      <legend class="section-legend">Section 3 of 3: Optional context</legend>
+
+      <div class="form-group">
+        <label for="others_involved" class="form-label">Were others involved?</label>
+        <textarea id="others_involved" name="others_involved" class="form-control" rows="2"
+                  aria-describedby="others_involved-hint"></textarea>
+        <div class="field-hint" id="others_involved-hint">Names, descriptions, or roles of others involved (optional).</div>
+        <div class="field-error" id="others_involved-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="why_it_happened" class="form-label">Why do you think this happened?</label>
+        <textarea id="why_it_happened" name="why_it_happened" class="form-control" rows="2"></textarea>
+        <div class="field-error" id="why_it_happened-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <fieldset class="form-group">
+        <legend class="form-label">Can the conduct team contact you about this report?</legend>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="can_contact" value="true"> Yes
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="can_contact" value="false"> No
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="can_contact" value="" checked> Prefer not to say
+          </label>
+        </div>
+        <div class="field-error" id="can_contact-error" role="alert" aria-live="polite"></div>
+      </fieldset>
+
+      <div class="form-group">
+        <label for="anything_else" class="form-label">Is there anything else you want to tell us?</label>
+        <textarea id="anything_else" name="anything_else" class="form-control" rows="3"></textarea>
+        <div class="field-error" id="anything_else-error" role="alert" aria-live="polite"></div>
+      </div>
+    </fieldset>
+
+    <div class="form-actions">
+      <button type="submit" id="submit-btn" class="btn btn--primary" aria-describedby="submit-status">
+        <span id="submit-label">Submit report</span>
+        <span id="submit-spinner" class="spinner" aria-hidden="true" hidden></span>
+      </button>
+      <div id="submit-status" aria-live="polite" aria-atomic="true" class="submit-status"></div>
+    </div>
+  </form>
+</div>
+<script src="/static/form.js" defer></script>
+{% endblock %}
