@@ -315,34 +315,23 @@
   }
 
   function initMap() {
-    var cfg = window.__mapConfig;
-    if (!cfg || typeof L === "undefined") return;
-    var mapEl = getById("map");
+    if (!window.__mapConfig) return;
     var latInput = getById("location_lat");
     var lonInput = getById("location_lon");
     var pinStatus = getById("location-pin-status");
-    if (!mapEl || !latInput || !lonInput) return;
+    if (!latInput || !lonInput) return;
 
-    var map = L.map(mapEl).setView([cfg.lat, cfg.lon], cfg.zoom);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      subdomains: "abc",
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    }).addTo(map);
-
-    var marker = null;
-
-    map.on("click", function (e) {
-      var lat = e.latlng.lat.toFixed(6);
-      var lon = e.latlng.lng.toFixed(6);
-      latInput.value = lat;
-      lonInput.value = lon;
-      if (marker) {
-        marker.setLatLng(e.latlng);
+    window.addEventListener("message", function (e) {
+      if (!e.data || e.data.type !== "emf-marker") return;
+      if (e.data.lat === null || e.data.lon === null) {
+        latInput.value = "";
+        lonInput.value = "";
+        if (pinStatus) pinStatus.textContent = "";
       } else {
-        marker = L.marker(e.latlng).addTo(map);
+        latInput.value = String(e.data.lat);
+        lonInput.value = String(e.data.lon);
+        if (pinStatus) pinStatus.textContent = "Pinned: " + e.data.lat + ", " + e.data.lon;
       }
-      if (pinStatus) pinStatus.textContent = "Pinned: " + lat + ", " + lon;
     });
   }
 
