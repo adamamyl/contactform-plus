@@ -1,8 +1,9 @@
 FROM python:3.12-slim AS builder
-WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-COPY apps/tts/pyproject.toml apps/tts/uv.lock ./
-COPY shared /shared
+WORKDIR /workspace
+COPY apps/tts/pyproject.toml apps/tts/uv.lock apps/tts/
+COPY shared/ shared/
+WORKDIR /workspace/apps/tts
 RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim
@@ -20,7 +21,7 @@ RUN mkdir -p /app/piper /app/models && \
     curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json" \
     -o /app/models/en_GB-alan-medium.onnx.json
 
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /workspace/apps/tts/.venv /app/.venv
 COPY apps/tts/src/ ./src/
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PIPER_BIN=/app/piper/piper
