@@ -1,15 +1,14 @@
 FROM python:3.12-slim AS builder
 WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-COPY pyproject.toml uv.lock ./
-COPY ../../shared /shared
+COPY apps/tts/pyproject.toml apps/tts/uv.lock ./
+COPY shared /shared
 RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim
 RUN useradd -m -u 1001 appuser
 WORKDIR /app
 
-# Download Piper TTS binary and model at build time
 ARG PIPER_VERSION=2023.11.14-2
 ARG PIPER_ARCH=amd64
 RUN apt-get update && apt-get install -y --no-install-recommends curl tar && rm -rf /var/lib/apt/lists/*
@@ -22,7 +21,7 @@ RUN mkdir -p /app/piper /app/models && \
     -o /app/models/en_GB-alan-medium.onnx.json
 
 COPY --from=builder /app/.venv /app/.venv
-COPY src/ ./src/
+COPY apps/tts/src/ ./src/
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PIPER_BIN=/app/piper/piper
 ENV PIPER_MODEL=/app/models/en_GB-alan-medium.onnx

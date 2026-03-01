@@ -190,9 +190,7 @@ def signal_setup_walkthrough() -> None:
     input("  Press Enter when done (or Ctrl+C to skip)...")
 
 
-def validate_installation(dry_run: bool = False) -> None:
-    print("\n  Validating installation...")
-
+def validate_config(dry_run: bool = False) -> None:
     compose_file = REPO_ROOT / "infra" / "docker-compose.yml"
     _run(["docker", "compose", "-f", str(compose_file), "config", "--quiet"], dry_run=dry_run)
 
@@ -209,6 +207,14 @@ def validate_installation(dry_run: bool = False) -> None:
         print("  ⚠  .env file not found — run: python scripts/generate_secrets.py")
     else:
         print("  [dry-run] Would check .env for placeholder values")
+
+
+def start_stack(dry_run: bool = False) -> None:
+    compose_file = REPO_ROOT / "infra" / "docker-compose.yml"
+    _run(
+        ["docker", "compose", "-f", str(compose_file), "up", "-d", "--build"],
+        dry_run=dry_run,
+    )
 
 
 def main() -> None:
@@ -230,31 +236,33 @@ def main() -> None:
     _say(f"\nSelected components: {', '.join(components) or 'none'}", quiet=quiet)
     _say(f"Proxy: {proxy}, TLS: {tls_method}", quiet=quiet)
 
-    _say("\n[1/5] Generating secrets...", quiet=quiet)
+    _say("\n[1/6] Generating secrets...", quiet=quiet)
     _run(
         [sys.executable, str(REPO_ROOT / "scripts" / "generate_secrets.py")],
         dry_run=dry_run,
     )
 
-    _say("[2/5] Generating PostgreSQL TLS certificate...", quiet=quiet)
+    _say("[2/6] Generating PostgreSQL TLS certificate...", quiet=quiet)
     generate_postgres_tls_cert(dry_run=dry_run)
 
-    _say("[3/5] Configuring Docker Compose...", quiet=quiet)
+    _say("[3/6] Configuring Docker Compose...", quiet=quiet)
     generate_compose(components, dry_run=dry_run)
 
-    _say("[4/5] Configuring Caddy...", quiet=quiet)
+    _say("[4/6] Configuring Caddy...", quiet=quiet)
     generate_caddyfile(proxy, tls_method, dry_run=dry_run)
+
+    _say("[5/6] Validating configuration...", quiet=quiet)
+    validate_config(dry_run=dry_run)
+
+    _say("[6/6] Starting services...", quiet=quiet)
+    start_stack(dry_run=dry_run)
 
     if "router" in components:
         answer = input("\nSet up Signal notifications? [y/N]: ").strip().lower()
         if answer in ("y", "yes"):
             signal_setup_walkthrough()
 
-    _say("[5/5] Validating...", quiet=quiet)
-    validate_installation(dry_run=dry_run)
-
     _say("\n✅ Installation complete!", quiet=quiet)
-    _say("Run: docker compose -f infra/docker-compose.yml up -d", quiet=quiet)
 
 
 if __name__ == "__main__":

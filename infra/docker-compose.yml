@@ -36,8 +36,8 @@ services:
 
   form:
     build:
-      context: ../apps/form
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/form/Dockerfile
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD}@postgres/emf_forms
@@ -52,8 +52,8 @@ services:
 
   panel:
     build:
-      context: ../apps/panel
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/panel/Dockerfile
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://team_member:${TEAM_MEMBER_DB_PASSWORD}@postgres/emf_forms
@@ -71,8 +71,8 @@ services:
 
   msg-router:
     build:
-      context: ../apps/router
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/router/Dockerfile
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD}@postgres/emf_forms
@@ -87,15 +87,15 @@ services:
 
   tts:
     build:
-      context: ../apps/tts
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/tts/Dockerfile
     networks:
       - contactform
 
   jambonz-adapter:
     build:
-      context: ../apps/jambonz
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/jambonz/Dockerfile
     env_file: ../.env
     environment:
       CONFIG_PATH: /app/config.json

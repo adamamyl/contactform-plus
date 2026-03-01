@@ -1,15 +1,15 @@
 FROM python:3.12-slim AS builder
 WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-COPY pyproject.toml uv.lock ./
-COPY ../../shared /shared
+COPY apps/router/pyproject.toml apps/router/uv.lock ./
+COPY shared /shared
 RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim
 RUN useradd -m -u 1001 appuser
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
-COPY src/ ./src/
+COPY apps/router/src/ ./src/
 ENV PATH="/app/.venv/bin:$PATH"
 USER appuser
 EXPOSE 8002
