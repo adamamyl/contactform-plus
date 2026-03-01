@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "feature/**"]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  shared:
+    name: shared lib
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shared
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check src/
+      - run: uv run ruff format --check src/
+      - run: uv run python -m mypy src/ --strict
+      - run: uv run bandit -r src/ -ll
+      - run: uv run pytest tests/ -q
+      - run: uv run pip-audit
+
+  form:
+    name: form app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/form
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check src/
+      - run: uv run ruff format --check src/
+      - run: uv run python -m mypy src/ --strict
+      - run: uv run bandit -r src/ -ll
+      - run: uv run pytest tests/ -q
+      - run: uv run pip-audit
+
+  panel:
+    name: panel app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check src/
+      - run: uv run ruff format --check src/
+      - run: uv run python -m mypy src/ --strict
+      - run: uv run bandit -r src/ -ll
+      - run: uv run pytest tests/ -q
+      - run: uv run pip-audit
+
+  router:
+    name: router app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/router
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check src/
+      - run: uv run ruff format --check src/
+      - run: uv run python -m mypy src/ --strict
+      - run: uv run bandit -r src/ -ll
+      - run: uv run pytest tests/ -q
+      - run: uv run pip-audit
+
+  tts:
+    name: tts app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/tts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check src/
+      - run: uv run ruff format --check src/
+      - run: uv run python -m mypy src/ --strict
+      - run: uv run bandit -r src/ -ll
+      - run: uv run pytest tests/ -q
+      - run: uv run pip-audit
+
+  jambonz:
+    name: jambonz app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/jambonz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check src/
+      - run: uv run ruff format --check src/
+      - run: uv run python -m mypy src/ --strict
+      - run: uv run bandit -r src/ -ll
+      - run: uv run pytest tests/ -q
+      - run: uv run pip-audit
+
+  security:
+    name: security tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run pytest security/ -q
