@@ -84,6 +84,7 @@ class CaseSubmission(BaseModel):
     location: Location
     additional_info: str | None = None
     support_needed: str | None = None
+    outcome_hoped: str | None = None
     urgency: str = "medium"
     others_involved: str | None = None
     why_it_happened: str | None = None
@@ -95,6 +96,7 @@ class CaseSubmission(BaseModel):
         "event_name",
         "additional_info",
         "support_needed",
+        "outcome_hoped",
         "others_involved",
         "why_it_happened",
         "anything_else",

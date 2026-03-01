@@ -1,5 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Report an Incident — EMF Conduct{% endblock %}
+{% block head %}
+{% if config.site_map %}
+<link rel="stylesheet" href="/static/leaflet.css">
+<script>
+window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lon }}, zoom: {{ config.site_map.zoom }}};
+</script>
+{% endif %}
+{% endblock %}
 {% block content %}
 <div class="container">
   {% if phase == "event_time" %}
@@ -125,9 +133,13 @@
         <div class="field-error" id="location_text-error" role="alert" aria-live="polite"></div>
       </div>
 
-      <div id="map-container" class="map-container" hidden aria-hidden="true">
-        <div id="map" style="height: 300px;"></div>
+      {% if config.site_map %}
+      <div id="map-container" class="map-container">
+        <p class="field-hint" style="padding: 0.5rem 0.75rem; margin: 0;">Click the map to pin a location.</p>
+        <div id="map" style="height: 350px;"></div>
+        <div id="location-pin-status" class="field-hint" style="padding: 0.25rem 0.75rem; min-height: 1.5em;"></div>
       </div>
+      {% endif %}
       <input type="hidden" id="location_lat" name="location_lat">
       <input type="hidden" id="location_lon" name="location_lon">
 
@@ -156,10 +168,14 @@
 
       <div class="form-group">
         <label for="support_needed" class="form-label">What support do you need?</label>
-        <textarea id="support_needed" name="support_needed" class="form-control" rows="3"
-                  aria-describedby="support_needed-hint"></textarea>
-        <div class="field-hint" id="support_needed-hint">What outcome are you hoping for from this report?</div>
+        <textarea id="support_needed" name="support_needed" class="form-control" rows="3"></textarea>
         <div class="field-error" id="support_needed-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="outcome_hoped" class="form-label">What outcome are you hoping for from this report?</label>
+        <textarea id="outcome_hoped" name="outcome_hoped" class="form-control" rows="3"></textarea>
+        <div class="field-error" id="outcome_hoped-error" role="alert" aria-live="polite"></div>
       </div>
     </fieldset>
 
@@ -212,5 +228,6 @@
     </div>
   </form>
 </div>
+{% if config.site_map %}<script src="/static/leaflet.js" defer></script>{% endif %}
 <script src="/static/form.js" defer></script>
 {% endblock %}

@@ -28,7 +28,7 @@ async def get_form(
 ) -> HTMLResponse:
     config = settings.app_config
     phase = current_phase(config)
-    active = is_active_routing_window(config)
+    active = settings.local_dev or is_active_routing_window(config)
     events = events_for_form(config)
     current_event_name = events[0].name if events else ""
     return templates.TemplateResponse(

@@ -41,6 +41,12 @@ class SmtpConfig(BaseModel):
     username: str | None = None
 
 
+class SiteMap(BaseModel):
+    lat: float
+    lon: float
+    zoom: int = 16
+
+
 class AppConfig(BaseModel):
     events: list[EventConfig]
     conduct_emails: list[str]
@@ -55,6 +61,7 @@ class AppConfig(BaseModel):
         "They/Them/Theirs",
     ]
     smtp: SmtpConfig
+    site_map: SiteMap | None = None
     panel_base_url: str
     mattermost_webhook: str | None = None
     slack_webhook: str | None = None

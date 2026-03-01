@@ -23,3 +23,14 @@ tts.emf-forms.internal {
 	import security_headers
 	reverse_proxy tts:8003
 }
+
+map.emf-forms.internal {
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Content-Security-Policy "default-src 'self'; script-src 'self' blob:; worker-src blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' https://map.emfcamp.org; connect-src 'self' https://map.emfcamp.org https://www.emfcamp.org https://tracking.tfemf.uk https://geojson.thinkl33t.co.uk; frame-ancestors https://report.emf-forms.internal"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	reverse_proxy emf-map:8080
+}

@@ -35,7 +35,7 @@ app.add_middleware(
     same_site="lax",
 )
 
-_static_dir = Path(__file__).parent.parent.parent.parent / "static"
+_static_dir = Path(__file__).parent.parent.parent / "static"
 if _static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 app.include_router(router)

@@ -43,6 +43,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD}@postgres/emf_forms
       CONFIG_PATH: /app/config.json
+      LOCAL_DEV: "true"
+    ports:
+      - "8000:8000"
     volumes:
       - ../config.json:/app/config.json:ro
     depends_on:
@@ -105,6 +108,13 @@ services:
     depends_on:
       - msg-router
       - tts
+    networks:
+      - contactform
+
+  emf-map:
+    build:
+      context: ../../emf/map/web
+      dockerfile: Dockerfile
     networks:
       - contactform
 

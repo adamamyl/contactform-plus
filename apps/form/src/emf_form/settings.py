@@ -4,7 +4,7 @@ from emf_shared.config import Settings as BaseSettings
 
 
 class Settings(BaseSettings):
-    pass
+    local_dev: bool = False
 
 
 def get_settings() -> Settings:

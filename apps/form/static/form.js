@@ -217,6 +217,7 @@
       location: location,
       additional_info: getValue("additional_info") || null,
       support_needed: getValue("support_needed") || null,
+      outcome_hoped: getValue("outcome_hoped") || null,
       urgency: getValue("urgency") || "medium",
       others_involved: getValue("others_involved") || null,
       why_it_happened: getValue("why_it_happened") || null,
@@ -313,10 +314,43 @@
       });
   }
 
+  function initMap() {
+    var cfg = window.__mapConfig;
+    if (!cfg || typeof L === "undefined") return;
+    var mapEl = getById("map");
+    var latInput = getById("location_lat");
+    var lonInput = getById("location_lon");
+    var pinStatus = getById("location-pin-status");
+    if (!mapEl || !latInput || !lonInput) return;
+
+    var map = L.map(mapEl).setView([cfg.lat, cfg.lon], cfg.zoom);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      subdomains: "abc",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+
+    var marker = null;
+
+    map.on("click", function (e) {
+      var lat = e.latlng.lat.toFixed(6);
+      var lon = e.latlng.lng.toFixed(6);
+      latInput.value = lat;
+      lonInput.value = lon;
+      if (marker) {
+        marker.setLatLng(e.latlng);
+      } else {
+        marker = L.marker(e.latlng).addTo(map);
+      }
+      if (pinStatus) pinStatus.textContent = "Pinned: " + lat + ", " + lon;
+    });
+  }
+
   function init() {
     initCharCount();
     initDateTimeDefaults();
     initStateTracking();
+    initMap();
 
     const form = getById("conduct-form");
     if (form) {
