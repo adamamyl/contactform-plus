@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl tar \
          "swagger-ui-${SWAGGER_UI_VERSION}/dist/swagger-ui-bundle.js" \
          "swagger-ui-${SWAGGER_UI_VERSION}/dist/swagger-ui.css" \
          -C swagger_ui_dist \
-    && apt-get remove -y curl tar && apt-get autoremove -y \
+    && apt-get remove -y curl && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
