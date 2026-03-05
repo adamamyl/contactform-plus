@@ -34,13 +34,13 @@
 
 <section class="case-section">
   <h2>Actions</h2>
-  <form class="inline-form" method="post" action="/api/cases/{{ case.id }}/assignee" id="assignee-form">
+  <form class="inline-form" id="assignee-form" data-case-id="{{ case.id }}">
     <label for="assignee">Assignee</label>
     <input type="text" id="assignee" name="assignee" value="{{ case.assignee or '' }}" placeholder="Username">
     <button type="submit" class="btn btn--small">Save</button>
   </form>
 
-  <form class="inline-form" method="post" action="/api/cases/{{ case.id }}/tags" id="tags-form">
+  <form class="inline-form" id="tags-form" data-case-id="{{ case.id }}">
     <label for="tags">Tags (comma-separated)</label>
     <input type="text" id="tags" name="tags" value="{{ case.tags | join(', ') }}"
            list="existing-tags" placeholder="tag1, tag2">
@@ -50,7 +50,7 @@
   <div class="status-transitions">
     <p><strong>Transition status:</strong></p>
     {% for next_status in valid_next_statuses %}
-    <form method="post" action="/api/cases/{{ case.id }}/status" style="display:inline">
+    <form class="status-form" style="display:inline" data-case-id="{{ case.id }}">
       <input type="hidden" name="status" value="{{ next_status }}">
       <button type="submit" class="btn btn--small">→ {{ next_status | replace('_',' ') }}</button>
     </form>
@@ -59,6 +59,7 @@
     {% endfor %}
   </div>
 </section>
+<script src="/static/panel.js"></script>
 
 <section class="case-section">
   <h2>History</h2>
