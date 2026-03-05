@@ -44,28 +44,50 @@ def panel_client(panel_base_url: str) -> Iterator[httpx.Client]:
 
 
 class SyncDB:
-    """Sync wrapper around asyncpg for use in synchronous Playwright tests.
+    """Sync wrapper around asyncpg using a persistent connection in a dedicated thread.
 
-    Runs each query in a fresh thread so asyncio.run() doesn't conflict with
-    pytest-asyncio's event loop.
+    Opens a single asyncpg connection for the lifetime of the object so each
+    fetchrow() call reuses it rather than creating a new thread and connection.
+    Call connect() before use, close() when done.
     """
 
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        # Create a dedicated event loop in the background thread.
+        self._loop: asyncio.AbstractEventLoop = self._executor.submit(
+            asyncio.new_event_loop
+        ).result()
+        self._conn: asyncpg.Connection[asyncpg.Record] | None = None
+
+    def _run(self, coro: Any) -> Any:
+        return self._executor.submit(self._loop.run_until_complete, coro).result()
+
+    def connect(self) -> None:
+        self._conn = self._run(asyncpg.connect(self._dsn))
 
     def fetchrow(self, query: str, *args: Any) -> Any:
-        async def _run() -> Any:
-            conn: asyncpg.Connection = await asyncpg.connect(self._dsn)
+        assert self._conn is not None
+
+        async def _fetch() -> Any:
             try:
-                return await conn.fetchrow(query, *args)
-            finally:
-                await conn.close()
+                return await self._conn.fetchrow(query, *args)
+            except asyncpg.PostgresError:
+                await self._conn.execute("ROLLBACK")
+                raise
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, _run()).result()
+        return self._run(_fetch())
+
+    def close(self) -> None:
+        if self._conn is not None:
+            self._run(self._conn.close())
+        self._executor.shutdown(wait=True)
 
 
-@pytest.fixture()
-def db() -> SyncDB:
+@pytest.fixture(scope="session")
+def db() -> Iterator[SyncDB]:
     dsn = os.environ.get("E2E_DB_URL", "postgresql://emf_forms_admin@localhost:5432/emf_forms")
-    return SyncDB(dsn)
+    sync_db = SyncDB(dsn)
+    sync_db.connect()
+    yield sync_db
+    sync_db.close()

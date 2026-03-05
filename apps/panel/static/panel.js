@@ -23,47 +23,43 @@
     }, 600);
   }
 
-  function initAssigneeForm() {
-    var form = document.getElementById("assignee-form");
+  function initPatchForm(formId, endpoint, getBody, successMsg) {
+    var form = document.getElementById(formId);
     if (!form) return;
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       var btn = form.querySelector("button[type=submit]");
-      var caseId = form.dataset.caseId;
-      var val = (form.querySelector("#assignee").value || "").trim() || null;
-      jsonPatch("/api/cases/" + caseId + "/assignee", { assignee: val })
-        .then(function (r) { flashBtn(btn, r.ok ? "Saved" : "Error", r.ok); })
+      jsonPatch("/api/cases/" + form.dataset.caseId + "/" + endpoint, getBody(form))
+        .then(function (r) { flashBtn(btn, r.ok ? successMsg : "Error", r.ok); })
         .catch(function () { flashBtn(btn, "Error", false); });
     });
   }
 
-  function initTagsForm() {
-    var form = document.getElementById("tags-form");
-    if (!form) return;
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var btn = form.querySelector("button[type=submit]");
-      var caseId = form.dataset.caseId;
-      var raw = form.querySelector("#tags").value || "";
-      var tags = raw.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
-      jsonPatch("/api/cases/" + caseId + "/tags", { tags: tags })
-        .then(function (r) { flashBtn(btn, r.ok ? "Saved" : "Error", r.ok); })
-        .catch(function () { flashBtn(btn, "Error", false); });
-    });
-  }
+  // Delegated handler for status transition forms (rendered per-case).
+  // Hoisted to module level so it is registered exactly once regardless of
+  // how many times initCaseForms() might be called.
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.matches || !form.matches(".status-form")) return;
+    e.preventDefault();
+    var btn = form.querySelector("button[type=submit]");
+    jsonPatch(
+      "/api/cases/" + form.dataset.caseId + "/status",
+      { status: form.querySelector("input[name=status]").value }
+    )
+      .then(function (r) { flashBtn(btn, r.ok ? "Done" : "Error", r.ok); })
+      .catch(function () { flashBtn(btn, "Error", false); });
+  });
 
-  function initStatusForms() {
-    document.querySelectorAll(".status-form").forEach(function (form) {
-      form.addEventListener("submit", function (e) {
-        e.preventDefault();
-        var btn = form.querySelector("button[type=submit]");
-        var caseId = form.dataset.caseId;
-        var status = form.querySelector("input[name=status]").value;
-        jsonPatch("/api/cases/" + caseId + "/status", { status: status })
-          .then(function (r) { flashBtn(btn, r.ok ? "Done" : "Error", r.ok); })
-          .catch(function () { flashBtn(btn, "Error", false); });
-      });
-    });
+  function initCaseForms() {
+    initPatchForm("assignee-form", "assignee", function (f) {
+      return { assignee: (f.querySelector("#assignee").value || "").trim() || null };
+    }, "Saved");
+
+    initPatchForm("tags-form", "tags", function (f) {
+      var raw = f.querySelector("#tags").value || "";
+      return { tags: raw.split(",").map(function (t) { return t.trim(); }).filter(Boolean) };
+    }, "Saved");
   }
 
   function initDispatcherShare() {
@@ -115,33 +111,30 @@
     if (!main) return;
     var token = main.dataset.token || "";
 
-    document.querySelectorAll("[data-action=ack]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        btn.disabled = true;
-        var caseId = btn.dataset.caseId;
+    main.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-action]");
+      if (!btn || btn.disabled) return;
+      var caseId = btn.dataset.caseId;
+      var action = btn.dataset.action;
+      btn.disabled = true;
+      if (action === "ack") {
         fetch("/api/dispatcher/ack/" + caseId + "?token=" + token, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: '{"acked_by":"dispatcher"}',
         }).then(function () { btn.textContent = "✅"; });
-      });
-    });
-
-    document.querySelectorAll("[data-action=trigger]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        btn.disabled = true;
-        var caseId = btn.dataset.caseId;
+      } else if (action === "trigger") {
         fetch("/api/dispatcher/trigger/" + caseId + "?token=" + token, {
           method: "POST",
         }).then(function () { btn.textContent = "📞 Sent"; });
-      });
+      } else {
+        btn.disabled = false;
+      }
     });
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    initAssigneeForm();
-    initTagsForm();
-    initStatusForms();
+    initCaseForms();
     initDispatcherShare();
     initDispatcher();
   });

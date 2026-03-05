@@ -67,8 +67,11 @@ def _submit_and_capture(page: Page, base_url: str) -> dict[str, Any]:
         route.fulfill(response=resp)
 
     page.route("**/api/submit", handle_route)
-    page.locator("#submit-btn").click()
-    page.wait_for_url(f"{base_url}/success**", timeout=15_000)
+    try:
+        page.locator("#submit-btn").click()
+        page.wait_for_url(f"{base_url}/success**", timeout=15_000)
+    finally:
+        page.unroute("**/api/submit", handle_route)
     return result
 
 
