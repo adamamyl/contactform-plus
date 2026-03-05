@@ -81,7 +81,7 @@ class CaseSubmission(BaseModel):
     what_happened: str
     incident_date: date
     incident_time: time
-    location: Location
+    location: Location | None = None
     additional_info: str | None = None
     support_needed: str | None = None
     outcome_hoped: str | None = None

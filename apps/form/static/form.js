@@ -191,15 +191,12 @@
     const lonVal = getValue("location_lon");
     const locationText = getValue("location_text");
 
-    const location = {};
-    if (locationText) location.text = locationText;
-    if (latVal) location.lat = parseFloat(latVal);
-    if (lonVal) location.lon = parseFloat(lonVal);
-
-    if (!location.text && !location.lat && !location.lon) {
-      location.text = null;
-      location.lat = null;
-      location.lon = null;
+    var location = null;
+    if (locationText || latVal || lonVal) {
+      location = {};
+      if (locationText) location.text = locationText;
+      if (latVal) location.lat = parseFloat(latVal);
+      if (lonVal) location.lon = parseFloat(lonVal);
     }
 
     return {

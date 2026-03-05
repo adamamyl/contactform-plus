@@ -104,7 +104,7 @@ async def submit_form(
         urgency=submission.urgency,
         phase=str(phase),
         form_data=form_data,
-        location_hint=submission.location.text,
+        location_hint=submission.location.text if submission.location else None,
         status="new",
         tags=[],
     )
