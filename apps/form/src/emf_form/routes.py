@@ -94,7 +94,7 @@ async def submit_form(
     friendly_id = generate_unique(existing_ids, str(case_id))
 
     form_data: dict[str, object] = submission.model_dump(
-        mode="json", exclude={"website", "location", "urgency", "event_name"}
+        mode="json", exclude={"website", "urgency", "event_name"}
     )
 
     case = Case(

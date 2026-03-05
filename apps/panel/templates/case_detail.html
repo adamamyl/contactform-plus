@@ -8,7 +8,15 @@
   <span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span>
   <span class="chip">{{ case.status | replace('_',' ') }}</span>
   <span class="meta-item">Submitted {{ case.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</span>
-  {% if case.location_hint %}<span class="meta-item">📍 {{ case.location_hint }}</span>{% endif %}
+  {% set loc = case.form_data.get('location') if case.form_data else None %}
+  {% if case.location_hint or loc %}
+  <span class="meta-item">📍
+    {% if case.location_hint %}{{ case.location_hint }}{% endif %}
+    {% if loc and loc.lat is not none and loc.lon is not none %}
+      <a href="https://map.emf-forms.internal/#18/{{ loc.lat }}/{{ loc.lon }}" target="_blank" rel="noopener">[map]</a>
+    {% endif %}
+  </span>
+  {% endif %}
 </div>
 
 <section class="case-section">
