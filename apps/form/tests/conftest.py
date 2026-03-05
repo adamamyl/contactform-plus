@@ -21,8 +21,8 @@ def mock_config() -> AppConfig:
         events=[
             EventConfig(
                 name="EMF 2026",
-                start_date=date(2026, 5, 28),
-                end_date=date(2026, 6, 1),
+                start_date=date(2026, 7, 12),
+                end_date=date(2026, 7, 20),
             )
         ],
         conduct_emails=["conduct@emfcamp.org"],
@@ -85,6 +85,7 @@ async def client(
 def make_valid_payload(**overrides: object) -> dict[str, object]:
     base: dict[str, object] = {
         "event_name": "EMF 2026",
+        "outcome_hoped": None,
         "reporter": {
             "name": "Test Person",
             "pronouns": "They/Them/Theirs",
@@ -93,7 +94,7 @@ def make_valid_payload(**overrides: object) -> dict[str, object]:
             "camping_with": None,
         },
         "what_happened": "Something bad happened here at the event.",
-        "incident_date": "2026-05-30",
+        "incident_date": "2024-05-30",
         "incident_time": "14:30:00",
         "location": {"text": "Main stage area"},
         "additional_info": None,
@@ -101,7 +102,7 @@ def make_valid_payload(**overrides: object) -> dict[str, object]:
         "urgency": "medium",
         "others_involved": None,
         "why_it_happened": None,
-        "can_contact": None,
+        "can_contact": True,
         "anything_else": None,
         "website": None,
     }

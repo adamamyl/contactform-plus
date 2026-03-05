@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, time
+from datetime import date, datetime, time, timezone
 
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
@@ -88,7 +88,7 @@ class CaseSubmission(BaseModel):
     urgency: str = "medium"
     others_involved: str | None = None
     why_it_happened: str | None = None
-    can_contact: bool | None = None
+    can_contact: bool
     anything_else: str | None = None
     website: str | None = None
 
@@ -122,6 +122,14 @@ class CaseSubmission(BaseModel):
             raise ValueError("what_happened must be at least 10 characters")
         if len(v) > 10000:
             raise ValueError("what_happened must be at most 10000 characters")
+        return v
+
+    @field_validator("incident_date")
+    @classmethod
+    def not_in_future(cls, v: date) -> date:
+        today = datetime.now(tz=timezone.utc).date()
+        if v > today:
+            raise ValueError("incident date cannot be in the future")
         return v
 
     @field_validator("urgency")

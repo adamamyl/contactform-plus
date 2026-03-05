@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, cast
 
+from authlib.integrations.base_client.errors import MismatchingStateError
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -49,7 +50,14 @@ async def login(request: Request) -> RedirectResponse:
 
 @router.get("/auth/callback", name="auth_callback")
 async def auth_callback(request: Request) -> RedirectResponse:
-    token = await oauth.emf.authorize_access_token(request)
+    try:
+        token = await oauth.emf.authorize_access_token(request)
+    except MismatchingStateError:
+        # State already consumed (double request / browser retry).
+        # If the first hit already stored the user, just continue.
+        if request.session.get("user"):
+            return RedirectResponse(url="/", status_code=302)
+        return RedirectResponse(url="/login", status_code=302)
     user: dict[str, object] = token.get("userinfo", {})
     request.session["user"] = user
     return RedirectResponse(url="/", status_code=302)

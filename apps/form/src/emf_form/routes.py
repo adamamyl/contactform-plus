@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated
 
 from emf_shared.db import get_session
@@ -31,6 +32,7 @@ async def get_form(
     active = settings.local_dev or is_active_routing_window(config)
     events = events_for_form(config)
     current_event_name = events[0].name if events else ""
+    today = datetime.now(tz=timezone.utc).date().isoformat()
     return templates.TemplateResponse(
         request,
         "form.html",
@@ -40,6 +42,7 @@ async def get_form(
             "events": events,
             "is_active_routing_window": active,
             "current_event_name": current_event_name,
+            "today": today,
         },
     )
 
@@ -91,7 +94,7 @@ async def submit_form(
     friendly_id = generate_unique(existing_ids, str(case_id))
 
     form_data: dict[str, object] = submission.model_dump(
-        exclude={"website", "location", "urgency", "event_name"}
+        mode="json", exclude={"website", "location", "urgency", "event_name"}
     )
 
     case = Case(

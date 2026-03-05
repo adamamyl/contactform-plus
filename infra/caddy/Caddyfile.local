@@ -24,6 +24,12 @@ tts.emf-forms.internal {
 	reverse_proxy tts:8003
 }
 
+http://oidc.emf-forms.internal {
+	reverse_proxy mock-oidc:8080 {
+		header_up Host {http.request.host}
+	}
+}
+
 map.emf-forms.internal {
 	header {
 		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"

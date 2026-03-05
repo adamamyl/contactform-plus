@@ -248,6 +248,29 @@
       clearError("what_happened");
     }
 
+    const dateInput = getById("incident_date");
+    if (dateInput && dateInput.value) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const chosen = new Date(dateInput.value + "T00:00:00");
+      if (chosen > today) {
+        setError("incident_date", "Incident date cannot be in the future");
+        valid = false;
+      } else {
+        clearError("incident_date");
+      }
+    }
+
+    const canContactChecked = document.querySelector("input[name=\"can_contact\"]:checked");
+    if (!canContactChecked) {
+      const errEl = getById("can_contact-error");
+      if (errEl) errEl.textContent = "Please select Yes or No";
+      valid = false;
+    } else {
+      const errEl = getById("can_contact-error");
+      if (errEl) errEl.textContent = "";
+    }
+
     return valid;
   }
 
@@ -287,6 +310,19 @@
         });
       })
       .then(function (result) {
+        if (result.status >= 400) {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.removeAttribute("aria-busy");
+          }
+          if (submitLabel) submitLabel.textContent = "Submit report";
+          if (submitSpinner) submitSpinner.hidden = true;
+          if (statusEl) {
+            statusEl.textContent =
+              "An error occurred submitting your report. Please check the form and try again.";
+          }
+          return;
+        }
         const alreadySubmitted = result.status === 200;
         const friendlyId = result.data.friendly_id || "";
         try {

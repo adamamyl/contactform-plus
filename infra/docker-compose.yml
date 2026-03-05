@@ -13,7 +13,9 @@ services:
       - panel
       - msg-router
     networks:
-      - contactform
+      contactform:
+        aliases:
+          - oidc.emf-forms.internal
 
   postgres:
     image: postgres:17-alpine
@@ -41,7 +43,7 @@ services:
       dockerfile: apps/form/Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD}@postgres/emf_forms
+      DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD:-localdev}@postgres/emf_forms
       CONFIG_PATH: /app/config.json
       LOCAL_DEV: "true"
     ports:
@@ -60,10 +62,10 @@ services:
       dockerfile: apps/panel/Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://team_member:${TEAM_MEMBER_DB_PASSWORD}@postgres/emf_forms
-      OIDC_ISSUER: ${OIDC_ISSUER}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      DATABASE_URL: postgresql+asyncpg://team_member:${TEAM_MEMBER_DB_PASSWORD:-localdev}@postgres/emf_forms
+      OIDC_ISSUER: ${OIDC_ISSUER:-http://oidc.emf-forms.internal/default}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-panel}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-secret}
       CONFIG_PATH: /app/config.json
     volumes:
       - ../config.json:/app/config.json:ro
@@ -79,7 +81,7 @@ services:
       dockerfile: apps/router/Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD}@postgres/emf_forms
+      DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD:-localdev}@postgres/emf_forms
       CONFIG_PATH: /app/config.json
     volumes:
       - ../config.json:/app/config.json:ro
@@ -145,7 +147,7 @@ services:
   mock-oidc:
     image: ghcr.io/navikt/mock-oauth2-server:2.1.10
     environment:
-      JSON_CONFIG: '{"interactiveLogin":true,"httpServer":"NettyWrapper"}'
+      JSON_CONFIG: '{"interactiveLogin":true,"httpServer":"NettyWrapper","tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"client_id","match":"panel","claims":{"groups":["team_conduct"]}}]}]}'
     profiles:
       - local
     networks:

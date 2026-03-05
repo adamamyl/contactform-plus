@@ -18,4 +18,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH=/app/src
 USER appuser
 EXPOSE 8001
-CMD ["uvicorn", "emf_panel.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uvicorn", "emf_panel.main:app", "--host", "0.0.0.0", "--port", "8001", "--proxy-headers", "--forwarded-allow-ips=*"]

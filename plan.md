@@ -2796,3 +2796,9 @@ _Low priority. Scope to be confirmed with EMF team._
 - [x] Add `zap` service to `infra/docker-compose.yml`: `ghcr.io/zaproxy/zaproxy:stable`, `profiles: [zap]`, volumes `./zap:/zap/wrk:ro` and `../reports/zap:/zap/reports`
 - [x] Add `zap` job to `.github/workflows/security.yml`: `workflow_dispatch` only (never scheduled), starts stack, waits for `/health`, runs `uv run scripts/run_zap.py`, uploads report artifact
 - [x] Add `reports/zap/*.html` and `reports/zap/*.json` to `.gitignore`
+
+---
+
+### TODOs / Follow-up
+
+- [ ] Make postgres SSL key/cert files readable by the postgres user — currently `infra/postgres/certs/` files are owned by root so `ssl=on` in postgresql.conf fails; fix ownership in `install.py` or add a `postgres-init` entrypoint script that chowns the certs before postgres starts

@@ -20,7 +20,7 @@ def init_db(database_url: str) -> None:
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=10,
-        connect_args={"ssl": "require"},
+        connect_args={"ssl": "prefer"},
     )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 

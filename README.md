@@ -70,6 +70,19 @@ docker compose -f infra/docker-compose.yml down
 docker compose -f infra/docker-compose.yml down -v
 ```
 
+### Local URLs
+
+| URL | Description | Profile |
+|-----|-------------|---------|
+| [https://report.emf-forms.internal/](https://report.emf-forms.internal/) | Public incident report form | always |
+| [https://panel.emf-forms.internal/](https://panel.emf-forms.internal/) | Conduct team case management panel | always |
+| [https://oidc.emf-forms.internal/default](https://oidc.emf-forms.internal/default) | Mock OIDC provider (panel login) | `local` |
+| [https://map.emf-forms.internal/](https://map.emf-forms.internal/) | EMF site map (also embedded in form) | always |
+| [http://localhost:8080](http://localhost:8080) | Swagger UI / API docs | `local`, `swagger` |
+| [http://localhost:3000](http://localhost:3000) | Grafana dashboards | `monitoring` |
+
+> Requires dnsmasq mapping `*.emf-forms.internal → 127.0.0.1` and the Caddy local CA cert trusted in your system keychain. See memory notes for setup details.
+
 ---
 
 ## Development
