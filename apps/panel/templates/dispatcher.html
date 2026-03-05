@@ -12,7 +12,7 @@
       <span class="home-link">EMF Conduct — Dispatcher</span>
     </nav>
   </header>
-  <main class="main-content">
+  <main class="main-content" id="dispatcher-main" data-token="{{ token }}">
     <h1>Active cases</h1>
     <p class="hint">Showing unassigned cases by default. <a href="?token={{ token }}&all=true">Show all</a></p>
 
@@ -34,10 +34,8 @@
           <td><span class="chip">{{ case.status | replace('_',' ') }}</span></td>
           <td>{{ case.location_hint or '—' }}</td>
           <td>
-            <button class="btn btn--small btn--ack"
-                    onclick="ack('{{ case.id }}', this)">ACK</button>
-            <button class="btn btn--small btn--trigger"
-                    onclick="trigger('{{ case.id }}', this)">Trigger call</button>
+            <button class="btn btn--small btn--ack" data-case-id="{{ case.id }}" data-action="ack">ACK</button>
+            <button class="btn btn--small btn--trigger" data-case-id="{{ case.id }}" data-action="trigger">Trigger call</button>
           </td>
         </tr>
         {% else %}
@@ -47,18 +45,6 @@
     </table>
   </main>
   {% include "footer.html" %}
-  <script>
-    const TOKEN = {{ token | tojson }};
-    async function ack(caseId, btn) {
-      btn.disabled = true;
-      await fetch(`/api/dispatcher/ack/${caseId}?token=${TOKEN}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{"acked_by":"dispatcher"}'});
-      btn.textContent = '✅';
-    }
-    async function trigger(caseId, btn) {
-      btn.disabled = true;
-      await fetch(`/api/dispatcher/trigger/${caseId}?token=${TOKEN}`, {method:'POST'});
-      btn.textContent = '📞 Sent';
-    }
-  </script>
+  <script src="/static/panel.js"></script>
 </body>
 </html>

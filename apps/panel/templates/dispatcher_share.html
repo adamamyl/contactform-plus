@@ -7,46 +7,15 @@
 <form id="session-form">
   <label for="send_to">Email to (optional)</label>
   <input type="email" id="send_to" name="send_to" placeholder="dispatcher@emfcamp.org" autocomplete="email" inputmode="email">
-  <button type="button" class="btn btn--primary" onclick="generateSession()">Generate URL</button>
+  <button type="button" id="generate-session-btn" class="btn btn--primary">Generate URL</button>
 </form>
 
 <div id="result" class="result-box" hidden>
   <label for="session-url">Session URL (share securely)</label>
   <input type="text" id="session-url" readonly onclick="this.select()">
-  <button type="button" onclick="copyUrl()">Copy</button>
+  <button type="button" id="copy-url-btn">Copy</button>
   <p class="hint" id="expiry-note"></p>
 </div>
 
 <div id="gen-error" style="color:var(--color-error,#c00);margin-top:0.5rem;" hidden></div>
-<script>
-async function generateSession() {
-  const errEl = document.getElementById('gen-error');
-  errEl.hidden = true;
-  try {
-    const sendTo = document.getElementById('send_to').value;
-    const res = await fetch('/api/dispatcher-session', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({send_to: sendTo || null}),
-    });
-    if (!res.ok) {
-      errEl.textContent = 'Failed to generate session (HTTP ' + res.status + '). Are you logged in?';
-      errEl.hidden = false;
-      return;
-    }
-    const data = await res.json();
-    document.getElementById('session-url').value = data.url;
-    document.getElementById('expiry-note').textContent = 'Expires in ' + data.expires_in_hours + ' hours.';
-    document.getElementById('result').hidden = false;
-  } catch (e) {
-    errEl.textContent = 'Error: ' + e.message;
-    errEl.hidden = false;
-  }
-}
-function copyUrl() {
-  const el = document.getElementById('session-url');
-  el.select();
-  navigator.clipboard.writeText(el.value);
-}
-</script>
 {% endblock %}
