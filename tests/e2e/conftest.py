@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 
+import asyncpg
 import httpx
 import pytest
 
@@ -37,3 +38,13 @@ def form_client(form_base_url: str) -> Iterator[httpx.Client]:
 def panel_client(panel_base_url: str) -> Iterator[httpx.Client]:
     with httpx.Client(base_url=panel_base_url, follow_redirects=False, timeout=10.0) as c:
         yield c
+
+
+@pytest.fixture()
+async def db() -> AsyncIterator[asyncpg.Connection]:
+    dsn = os.environ.get("E2E_DB_URL", "postgresql://emf_forms_admin@localhost:5432/emf_forms")
+    conn: asyncpg.Connection = await asyncpg.connect(dsn)
+    try:
+        yield conn
+    finally:
+        await conn.close()

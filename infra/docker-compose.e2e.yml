@@ -5,7 +5,7 @@
 #  - Fresh ephemeral postgres volume (pg_e2e_data) so each run starts clean
 #  - POSTGRES_HOST_AUTH_METHOD=trust — no passwords needed for test roles
 #  - e2e init SQL (no psql variable syntax) replaces the production init
-#  - Port bindings added to form and panel so tests can reach them directly
+#  - Port bindings added to form, panel, and postgres so tests can reach them directly
 #  - mock-oidc profile removed so it always starts (needed for panel auth tests)
 
 services:
@@ -20,6 +20,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    ports:
+      - "5432:5432"
 
   form:
     ports:
