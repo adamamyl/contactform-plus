@@ -69,6 +69,7 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-panel}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-secret}
       CONFIG_PATH: /app/config.json
+      BASE_URL: ${PANEL_BASE_URL:-https://panel.emf-forms.internal}
     volumes:
       - ../config.json:/app/config.json:ro
     depends_on:

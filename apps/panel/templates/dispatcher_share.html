@@ -17,19 +17,31 @@
   <p class="hint" id="expiry-note"></p>
 </div>
 
+<div id="gen-error" style="color:var(--color-error,#c00);margin-top:0.5rem;" hidden></div>
 <script>
 async function generateSession() {
-  const sendTo = document.getElementById('send_to').value;
-  const res = await fetch('/api/dispatcher-session', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({send_to: sendTo || null}),
-  });
-  if (!res.ok) return alert('Failed to generate session');
-  const data = await res.json();
-  document.getElementById('session-url').value = data.url;
-  document.getElementById('expiry-note').textContent = `Expires in ${data.expires_in_hours} hours.`;
-  document.getElementById('result').hidden = false;
+  const errEl = document.getElementById('gen-error');
+  errEl.hidden = true;
+  try {
+    const sendTo = document.getElementById('send_to').value;
+    const res = await fetch('/api/dispatcher-session', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({send_to: sendTo || null}),
+    });
+    if (!res.ok) {
+      errEl.textContent = 'Failed to generate session (HTTP ' + res.status + '). Are you logged in?';
+      errEl.hidden = false;
+      return;
+    }
+    const data = await res.json();
+    document.getElementById('session-url').value = data.url;
+    document.getElementById('expiry-note').textContent = 'Expires in ' + data.expires_in_hours + ' hours.';
+    document.getElementById('result').hidden = false;
+  } catch (e) {
+    errEl.textContent = 'Error: ' + e.message;
+    errEl.hidden = false;
+  }
 }
 function copyUrl() {
   const el = document.getElementById('session-url');
