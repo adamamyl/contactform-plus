@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import os
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import asyncpg
 import httpx
@@ -40,11 +43,29 @@ def panel_client(panel_base_url: str) -> Iterator[httpx.Client]:
         yield c
 
 
+class SyncDB:
+    """Sync wrapper around asyncpg for use in synchronous Playwright tests.
+
+    Runs each query in a fresh thread so asyncio.run() doesn't conflict with
+    pytest-asyncio's event loop.
+    """
+
+    def __init__(self, dsn: str) -> None:
+        self._dsn = dsn
+
+    def fetchrow(self, query: str, *args: Any) -> Any:
+        async def _run() -> Any:
+            conn: asyncpg.Connection = await asyncpg.connect(self._dsn)
+            try:
+                return await conn.fetchrow(query, *args)
+            finally:
+                await conn.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, _run()).result()
+
+
 @pytest.fixture()
-async def db() -> AsyncIterator[asyncpg.Connection]:
+def db() -> SyncDB:
     dsn = os.environ.get("E2E_DB_URL", "postgresql://emf_forms_admin@localhost:5432/emf_forms")
-    conn: asyncpg.Connection = await asyncpg.connect(dsn)
-    try:
-        yield conn
-    finally:
-        await conn.close()
+    return SyncDB(dsn)

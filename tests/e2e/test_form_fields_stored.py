@@ -15,9 +15,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import asyncpg
 import pytest
 from playwright.sync_api import Page, Route, expect
+
+from conftest import SyncDB
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -214,17 +215,78 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
 
 
 # ---------------------------------------------------------------------------
-# The test
+# Cross-product: every urgency × every event
+# ---------------------------------------------------------------------------
+
+_URGENCIES = ["low", "medium", "high", "urgent"]
+
+_EVENTS = [
+    "EMF 2026",
+    "EMF 2024",
+    "EMF 2022",
+    "EMF 2018",
+    "EMF 2016",
+    "EMF 2014",
+    "EMF 2012",
+]
+
+_URGENCY_EVENT_CASES = [
+    (f"{urgency}_x_{event.replace(' ', '_')}", urgency, event)
+    for urgency in _URGENCIES
+    for event in _EVENTS
+]
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize(
+    "case_name,urgency,event_name",
+    _URGENCY_EVENT_CASES,
+    ids=[c[0] for c in _URGENCY_EVENT_CASES],
+)
+def test_urgency_and_event_stored(
+    page: Page,
+    form_base_url: str,
+    db: SyncDB,
+    case_name: str,
+    urgency: str,
+    event_name: str,
+) -> None:
+    page.goto(form_base_url)
+    expect(page.locator("#conduct-form")).to_be_visible()
+
+    page.locator("#what_happened").fill(_WHAT_HAPPENED)
+    page.locator("#incident_date").fill("2024-06-01")
+    page.locator("#incident_time").fill("12:00")
+    page.locator("#event_name").select_option(event_name)
+    _select(page, "#urgency", urgency)
+    page.locator("input[name=can_contact][value=true]").check()
+
+    api_resp = _submit_and_capture(page, form_base_url)
+    assert "case_id" in api_resp, f"No case_id in response: {api_resp}"
+    case_id = api_resp["case_id"]
+
+    row = db.fetchrow(
+        "SELECT urgency, event_name FROM forms.cases WHERE id = $1::uuid",
+        case_id,
+    )
+    assert row is not None, f"Case {case_id} not found in DB"
+    assert row["urgency"] == urgency, f"urgency: {row['urgency']!r} != {urgency!r}"
+    assert row["event_name"] == event_name, (
+        f"event_name: {row['event_name']!r} != {event_name!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# The main field-storage test
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
 @pytest.mark.parametrize("case_name,fields", _CASES, ids=[c[0] for c in _CASES])
-async def test_form_fields_stored_in_db(
+def test_form_fields_stored_in_db(
     page: Page,
     form_base_url: str,
-    db: asyncpg.Connection,
+    db: SyncDB,
     case_name: str,
     fields: dict[str, Any],
 ) -> None:
@@ -276,7 +338,7 @@ async def test_form_fields_stored_in_db(
     case_id = api_resp["case_id"]
 
     # --- query DB ---
-    row = await db.fetchrow(
+    row = db.fetchrow(
         "SELECT urgency, form_data, location_hint FROM forms.cases WHERE id = $1::uuid",
         case_id,
     )

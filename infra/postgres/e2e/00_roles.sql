@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS forms.idempotency_tokens (
 );
 
 GRANT INSERT ON forms.cases TO form_user;
+GRANT SELECT (friendly_id) ON forms.cases TO form_user;
 GRANT INSERT, SELECT ON forms.idempotency_tokens TO form_user;
 
 CREATE VIEW forms.cases_router WITH (security_barrier = true) AS
