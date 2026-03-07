@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,11 +10,25 @@
   <header class="site-header">
     <nav class="top-nav">
       <span class="home-link">EMF Conduct — Dispatcher</span>
+      <button id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode">🌙</button>
     </nav>
   </header>
   <main class="main-content" id="dispatcher-main" data-token="{{ token }}">
-    <h1>Active cases</h1>
-    <p class="hint">Showing unassigned cases by default. <a href="?token={{ token }}&all=true">Show all</a></p>
+    <h1>Active cases{% if active_event %} — {{ active_event }}{% endif %}</h1>
+    {% if not active_event %}
+    <div class="alert alert--warning" role="alert" style="background:#5c3c00;color:#ffe082;padding:0.75rem 1rem;border-radius:4px;margin-bottom:1rem;">
+      No active event. Cases from all events are shown.
+    </div>
+    {% endif %}
+    <p class="hint">
+      Showing unassigned{% if not show_acked %}, unacknowledged{% endif %} cases.
+      {% if show_acked %}
+      <a href="?token={{ token }}">Hide ACK'd</a>
+      {% else %}
+      <a href="?token={{ token }}&show_acked=true">Show ACK'd</a>
+      {% endif %}
+      · <a href="?token={{ token }}&all=true">Show all</a>
+    </p>
 
     <table class="cases-table">
       <thead>

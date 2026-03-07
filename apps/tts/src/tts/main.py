@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import re
 import secrets
-import tempfile
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -23,9 +23,11 @@ PIPER_MODEL = os.environ.get(
     "PIPER_MODEL", "/app/models/en_GB-alan-medium.onnx"
 )
 PIPER_BIN = os.environ.get("PIPER_BIN", "/app/piper/piper")
+AUDIO_DIR = Path(os.environ.get("AUDIO_DIR", "/app/audio"))
 
-# token → (file_path, created_at)
-_audio_files: dict[str, tuple[str, float]] = {}
+# token → (file_path, created_at, persistent)
+# persistent=True means the file should not be deleted on expiry
+_audio_files: dict[str, tuple[str, float, bool]] = {}
 
 _ALLOWED_CHARS = re.compile(r"[^\w\s\.,\-'!?:;/()]")
 
@@ -37,9 +39,12 @@ def _sanitise(text: str) -> str:
 
 def _purge_expired() -> None:
     now = time.monotonic()
-    expired = [t for t, (_, created) in _audio_files.items() if now - created > AUDIO_TTL_SECONDS]
+    expired = [
+        t for t, (_, created, persistent) in _audio_files.items()
+        if not persistent and now - created > AUDIO_TTL_SECONDS
+    ]
     for t in expired:
-        path, _ = _audio_files.pop(t)
+        path, _, _ = _audio_files.pop(t)
         try:
             os.unlink(path)
         except OSError:
@@ -48,12 +53,14 @@ def _purge_expired() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     yield
-    for path, _ in _audio_files.values():
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
+    for path, _, persistent in _audio_files.values():
+        if not persistent:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
     _audio_files.clear()
 
 
@@ -121,13 +128,15 @@ async def synthesise_file(req: TTSRequest) -> JSONResponse:
     _purge_expired()
     text = _resolve_text(req)
 
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-        tmp_path = f.name
+    cache_key = hashlib.sha256(text.encode()).hexdigest()
+    cache_path = AUDIO_DIR / f"{cache_key}.wav"
 
-    await _run_piper(text, output_path=tmp_path)
+    if not cache_path.exists():
+        AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+        await _run_piper(text, output_path=str(cache_path))
 
     token = secrets.token_urlsafe(16)
-    _audio_files[token] = (tmp_path, time.monotonic())
+    _audio_files[token] = (str(cache_path), time.monotonic(), True)
 
     return JSONResponse({"audio_url": f"/audio/{token}"})
 
@@ -138,7 +147,7 @@ async def serve_audio(token: str) -> FileResponse:
     entry = _audio_files.get(token)
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    path, _ = entry
+    path, _, _ = entry
     if not Path(path).exists():
         _audio_files.pop(token, None)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

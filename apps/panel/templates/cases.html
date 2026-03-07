@@ -7,31 +7,51 @@
 </div>
 
 <form class="filter-form" method="get" action="/">
-  <select name="status" aria-label="Filter by status">
-    <option value="">All statuses</option>
+  <fieldset class="filter-checkboxes">
+    <legend>Status</legend>
     {% for s in ["new","assigned","in_progress","action_needed","decision_needed","closed"] %}
-    <option value="{{ s }}" {% if request.query_params.get('status') == s %}selected{% endif %}>{{ s | replace('_',' ') | title }}</option>
+    <label>
+      <input type="checkbox" name="status" value="{{ s }}"
+        {% if s in selected_statuses %}checked{% endif %}>
+      {{ s | replace('_',' ') | title }}
+    </label>
     {% endfor %}
-  </select>
-  <select name="urgency" aria-label="Filter by urgency">
-    <option value="">All urgencies</option>
+  </fieldset>
+  <fieldset class="filter-checkboxes">
+    <legend>Urgency</legend>
     {% for u in ["urgent","high","medium","low"] %}
-    <option value="{{ u }}" {% if request.query_params.get('urgency') == u %}selected{% endif %}>{{ u | title }}</option>
+    <label>
+      <input type="checkbox" name="urgency" value="{{ u }}"
+        {% if u in selected_urgencies %}checked{% endif %}>
+      {{ u | title }}
+    </label>
     {% endfor %}
-  </select>
+  </fieldset>
+  <input type="text" name="assignee" placeholder="Assignee"
+         value="{{ request.query_params.get('assignee', '') }}" aria-label="Filter by assignee">
   <button type="submit" class="btn btn--small">Filter</button>
+  <a href="/?assignee=me" class="btn btn--small btn--outline">Assigned to me</a>
   <a href="/" class="btn btn--small btn--outline">Clear</a>
 </form>
 
 <table class="cases-table">
   <thead>
+    {% macro sort_th(col, label) %}
+    <th class="sortable{% if sort == col %} sort-active{% endif %}">
+      <a href="{{ make_sort_url(col) }}">{{ label }}
+        {% if sort == col %}{{ '↑' if order == 'asc' else '↓' }}{% endif %}
+      </a>
+    </th>
+    {% endmacro %}
     <tr>
-      <th>ID</th>
-      <th>Urgency</th>
-      <th>Status</th>
-      <th>Assignee</th>
+      {{ sort_th('id', 'ID') }}
+      {{ sort_th('urgency', 'Urgency') }}
+      {{ sort_th('status', 'Status') }}
+      <th>Notif</th>
+      {{ sort_th('assignee', 'Assignee') }}
       <th>Location</th>
-      <th>Submitted</th>
+      {{ sort_th('submitted', 'Submitted') }}
+      <th>Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -40,12 +60,32 @@
       <td><a href="/cases/{{ case.id }}">{{ case.friendly_id }}</a></td>
       <td><span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span></td>
       <td><span class="chip">{{ case.status | replace('_',' ') }}</span></td>
+      <td>
+        {% if case.id in notif_states %}
+          {% if notif_states[case.id] == 'nack' %}
+          <span class="badge badge--nack">NACK</span>
+          {% else %}
+          <span class="badge badge--acked">ACK</span>
+          {% endif %}
+        {% else %}—{% endif %}
+      </td>
       <td>{{ case.assignee or '—' }}</td>
-      <td>{{ case.location_hint or '—' }}</td>
+      <td>
+        {{ case.location_hint or '—' }}
+        {% if case.id in map_urls %}
+        <a href="{{ map_urls[case.id] }}" target="_blank" rel="noopener" title="Open on map">&#x1F4CD;</a>
+        {% endif %}
+      </td>
       <td>{{ case.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td class="row-actions">
+        <button class="btn btn--small btn--ack" data-action="admin-ack"
+                data-case-id="{{ case.id }}">ACK</button>
+        <button class="btn btn--small btn--trigger" data-action="admin-trigger"
+                data-case-id="{{ case.id }}">Call</button>
+      </td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="empty">No cases found.</td></tr>
+    <tr><td colspan="8" class="empty">No cases found.</td></tr>
     {% endfor %}
   </tbody>
 </table>

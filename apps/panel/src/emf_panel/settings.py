@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     base_url: str = "http://localhost:8001"
     redis_url: str = "redis://redis:6379"
     dispatcher_session_ttl_hours: int = 8
+    current_event_override: str | None = None
+    attachment_dir: str = "/app/attachments"
 
 
 def get_settings() -> Settings:

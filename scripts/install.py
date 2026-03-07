@@ -15,11 +15,38 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
+import socket
 import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent.resolve()
+
+_PREFERRED_PORTS: dict[str, int] = {
+    "FORM_PORT": 8000,
+    "PANEL_PORT": 8001,
+    "ROUTER_PORT": 8002,
+    "TTS_PORT": 8003,
+    "JAMBONZ_PORT": 8004,
+    "SWAGGER_PORT": 8080,
+}
+
+
+def find_free_port(preferred: int, lo: int = 8100, hi: int = 9000) -> int:
+    candidates = [preferred] + random.sample(range(lo, hi), 20)
+    for port in candidates:
+        with socket.socket() as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError("No free port found in range")
+
+
+def resolve_ports() -> dict[str, int]:
+    return {var: find_free_port(pref) for var, pref in _PREFERRED_PORTS.items()}
 
 
 def _say(msg: str, verbose: bool = False, quiet: bool = False, is_verbose_msg: bool = False) -> None:

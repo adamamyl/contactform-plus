@@ -50,14 +50,18 @@ window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lo
       </div>
 
       <div class="form-group">
-        <label for="reporter_pronouns" class="form-label">Your pronouns</label>
-        <input type="text" id="reporter_pronouns" name="reporter_pronouns" class="form-control"
-               list="pronouns-list" autocomplete="off">
-        <datalist id="pronouns-list">
+        <label for="reporter_pronouns_preset" class="form-label">Your pronouns</label>
+        <select id="reporter_pronouns_preset" class="form-control" aria-label="Select pronouns">
+          <option value="">— pick a suggestion, or type below —</option>
           {% for p in config.pronouns %}
-          <option value="{{ p }}">
+          <option value="{{ p }}">{{ p }}</option>
           {% endfor %}
-        </datalist>
+          <option value="__other__">Other / prefer to self-describe</option>
+        </select>
+        <input type="text" id="reporter_pronouns" name="reporter_pronouns" class="form-control"
+               autocomplete="off" maxlength="50" placeholder="Type your pronouns"
+               aria-describedby="reporter_pronouns-hint" style="margin-top: 0.5rem; display: none;">
+        <div class="field-hint" id="reporter_pronouns-hint">Optional.</div>
         <div class="field-error" id="reporter_pronouns-error" role="alert" aria-live="polite"></div>
       </div>
 
@@ -219,6 +223,14 @@ window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lo
         <textarea id="anything_else" name="anything_else" class="form-control" rows="3"></textarea>
         <div class="field-error" id="anything_else-error" role="alert" aria-live="polite"></div>
       </div>
+
+      <div class="form-group">
+        <label for="media_links" class="form-label">Links to photos or videos</label>
+        <textarea id="media_links" name="media_links" class="form-control" rows="3"
+                  aria-describedby="media_links-hint"></textarea>
+        <div class="field-hint" id="media_links-hint">Paste one link per line (e.g. Google Drive, Dropbox, YouTube). Optional.</div>
+        <div class="field-error" id="media_links-error" role="alert" aria-live="polite"></div>
+      </div>
     </fieldset>
 
     <div class="form-actions">
@@ -230,5 +242,5 @@ window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lo
     </div>
   </form>
 </div>
-<script src="/static/form.js?v=3" defer></script>
+<script src="/static/form.js?v=6" defer></script>
 {% endblock %}

@@ -220,6 +220,12 @@
       why_it_happened: getValue("why_it_happened") || null,
       can_contact: canContact,
       anything_else: getValue("anything_else") || null,
+      media_links: (function () {
+        var raw = getValue("media_links");
+        if (!raw) return null;
+        var links = raw.split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+        return links.length ? links : null;
+      }()),
       website: getValue("website") || null,
     };
   }
@@ -347,6 +353,22 @@
       });
   }
 
+  function initPronouns() {
+    var preset = getById("reporter_pronouns_preset");
+    var text = getById("reporter_pronouns");
+    if (!preset || !text) return;
+    preset.addEventListener("change", function () {
+      if (preset.value === "__other__") {
+        text.value = "";
+        text.style.display = "";
+        text.focus();
+      } else {
+        text.value = preset.value;
+        text.style.display = "none";
+      }
+    });
+  }
+
   function initMap() {
     if (!window.__mapConfig) return;
     var latInput = getById("location_lat");
@@ -372,6 +394,7 @@
     initCharCount();
     initDateTimeDefaults();
     initStateTracking();
+    initPronouns();
     initMap();
 
     const form = getById("conduct-form");

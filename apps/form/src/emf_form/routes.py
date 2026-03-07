@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Annotated
 
 from emf_shared.db import get_session
 from emf_shared.friendly_id import generate_unique
 from emf_shared.phase import current_phase, events_for_form, is_active_routing_window
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, text
@@ -144,6 +145,63 @@ async def success_page(
             "already_submitted": already_submitted,
         },
     )
+
+
+_IMAGE_MAGIC: dict[bytes, str] = {
+    b"\xff\xd8\xff": "jpg",
+    b"\x89PNG\r\n": "png",
+    b"GIF87a": "gif",
+    b"GIF89a": "gif",
+    b"RIFF": "webp",
+}
+
+_WEBP_SIG = b"WEBP"
+
+
+def _detect_image_ext(header: bytes) -> str | None:
+    for magic, ext in _IMAGE_MAGIC.items():
+        if header[: len(magic)].startswith(magic):
+            if ext == "webp" and len(header) >= 12 and header[8:12] == _WEBP_SIG:
+                return "webp"
+            elif ext != "webp":
+                return ext
+    return None
+
+
+@router.post("/attachments", status_code=status.HTTP_201_CREATED)
+async def upload_attachment(
+    case_id: uuid.UUID,
+    file: Annotated[UploadFile, File()],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
+    header = await file.read(12)
+    ext = _detect_image_ext(header)
+    if ext is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only JPEG, PNG, GIF, and WebP images are accepted",
+        )
+    rest = await file.read()
+    total = len(header) + len(rest)
+    cfg = settings.app_config
+    if total > cfg.attachment_max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large (max {cfg.attachment_max_bytes // (1024 * 1024)} MB)",
+        )
+    case_dir = settings.attachment_dir / str(case_id)
+    case_dir.mkdir(parents=True, exist_ok=True)
+    existing = list(case_dir.glob("*.jpg")) + list(case_dir.glob("*.png")) + \
+        list(case_dir.glob("*.gif")) + list(case_dir.glob("*.webp"))
+    if len(existing) >= cfg.attachment_max_per_case:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Maximum {cfg.attachment_max_per_case} attachments per case",
+        )
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    dest = case_dir / filename
+    dest.write_bytes(header + rest)
+    return {"id": filename, "case_id": str(case_id)}
 
 
 @router.get("/health")

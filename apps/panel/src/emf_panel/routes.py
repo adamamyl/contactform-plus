@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Annotated, cast
 
 from authlib.integrations.base_client.errors import MismatchingStateError
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sqlalchemy import func, select, text, update
+from sqlalchemy import case as sa_case, exists, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from emf_shared.config import EventConfig
 from emf_shared.db import get_session
 
 from .auth import oauth, require_conduct_team
@@ -26,6 +28,18 @@ from .settings import Settings, get_settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+
+def _current_active_event(events: list[EventConfig], today: date | None = None) -> str | None:
+    today = today or date.today()
+    for ev in events:
+        pad = ev.signal_padding
+        start = ev.start_date - timedelta(days=pad.before_event_days)
+        end = ev.end_date + timedelta(days=pad.after_event_days)
+        if start <= today <= end:
+            return ev.name
+    return None
+
 
 VALID_TRANSITIONS: dict[str, set[str]] = {
     "new": {"assigned"},
@@ -74,32 +88,91 @@ async def logout(request: Request) -> RedirectResponse:
 # ---------------------------------------------------------------------------
 
 
+_URGENCY_ORDER = sa_case(
+    {"urgent": 0, "high": 1, "medium": 2, "low": 3},
+    value=Case.urgency,
+    else_=9,
+)
+
+_SORT_COLS = {
+    "id": Case.friendly_id,
+    "urgency": _URGENCY_ORDER,
+    "status": Case.status,
+    "assignee": Case.assignee,
+    "submitted": Case.created_at,
+}
+
+
 @router.get("/", response_class=HTMLResponse)
 async def case_list(
     request: Request,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    status_filter: str | None = Query(None, alias="status"),
-    urgency: str | None = None,
+    status_filter: Annotated[list[str], Query(alias="status")] = [],
+    urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],
     assignee: str | None = None,
     tag: str | None = None,
+    sort: str = "submitted",
+    order: str = "desc",
 ) -> HTMLResponse:
-    stmt = select(Case).order_by(Case.created_at.desc())
+    if assignee == "me":
+        assignee = str(user.get("preferred_username", ""))
+    sort_col = _SORT_COLS.get(sort, Case.created_at)
+    sort_expr = sort_col.desc() if order == "desc" else sort_col.asc()
+    stmt = select(Case).order_by(sort_expr)
     if status_filter:
-        stmt = stmt.where(Case.status == status_filter)
-    if urgency:
-        stmt = stmt.where(Case.urgency == urgency)
+        stmt = stmt.where(Case.status.in_(status_filter))
+    if urgency_filter:
+        stmt = stmt.where(Case.urgency.in_(urgency_filter))
     if assignee:
         stmt = stmt.where(Case.assignee == assignee)
     if tag:
         stmt = stmt.where(Case.tags.contains([tag]))
+
+    def make_sort_url(col: str) -> str:
+        new_order = "desc" if sort == col and order == "asc" else "asc"
+        return str(request.url.include_query_params(sort=col, order=new_order))
     result = await session.execute(stmt)
     cases = result.scalars().all()
+    map_urls: dict[uuid.UUID, str] = {}
+    for c in cases:
+        fd = c.form_data
+        if not isinstance(fd, dict):
+            continue
+        loc = fd.get("location")
+        if not isinstance(loc, dict):
+            continue
+        lat = loc.get("lat")
+        lon = loc.get("lon")
+        if lat is not None and lon is not None:
+            map_urls[c.id] = f"https://map.emf-forms.internal/?marker={lat},{lon}#16/{lat}/{lon}"
+    case_ids = [c.id for c in cases]
+    notif_states: dict[uuid.UUID, str] = {}
+    if case_ids:
+        notif_rows = await session.execute(
+            select(
+                Notification.case_id,
+                sa_case(
+                    (func.count().filter(Notification.state != "acked") > 0, "nack"),
+                    else_="acked",
+                ).label("notif_state"),
+            )
+            .where(Notification.case_id.in_(case_ids))
+            .group_by(Notification.case_id)
+        )
+        notif_states = {row.case_id: row.notif_state for row in notif_rows}
     return templates.TemplateResponse(request, "cases.html", {
             "request": request,
             "cases": cases,
             "user": user,
             "valid_transitions": VALID_TRANSITIONS,
+            "selected_statuses": status_filter,
+            "selected_urgencies": urgency_filter,
+            "map_urls": map_urls,
+            "notif_states": notif_states,
+            "sort": sort,
+            "order": order,
+            "make_sort_url": make_sort_url,
         },
     )
 
@@ -110,6 +183,7 @@ async def case_detail(
     request: Request,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> HTMLResponse:
     case = await session.get(Case, case_id)
     if not case:
@@ -121,12 +195,20 @@ async def case_detail(
     )
     history = hist_result.scalars().all()
     valid_next = VALID_TRANSITIONS.get(case.status, set())
+    attach_dir = Path(settings.attachment_dir) / str(case_id)
+    attachments: list[str] = []
+    if attach_dir.is_dir():
+        attachments = [
+            f.name for f in sorted(attach_dir.iterdir())
+            if f.suffix.lower() in {".jpg", ".png", ".gif", ".webp"}
+        ]
     return templates.TemplateResponse(request, "case_detail.html", {
             "request": request,
             "case": case,
             "history": history,
             "user": user,
             "valid_next_statuses": sorted(valid_next),
+            "attachments": attachments,
         },
     )
 
@@ -247,6 +329,42 @@ async def list_tags(
     return [row[0] for row in result.fetchall()]
 
 
+@router.post("/api/cases/{case_id}/ack")
+async def admin_ack(
+    case_id: uuid.UUID,
+    user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, bool]:
+    username = str(user.get("preferred_username", "admin"))
+    now = datetime.now(tz=UTC)
+    await session.execute(
+        update(Notification)
+        .where(Notification.case_id == case_id, Notification.state != "acked")
+        .values(state="acked", acked_at=now, acked_by=username)
+    )
+    await session.execute(
+        update(Case)
+        .where(Case.id == case_id)
+        .values(assignee=username, updated_at=now)
+    )
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/api/cases/{case_id}/trigger-call")
+async def admin_trigger_call(
+    case_id: uuid.UUID,
+    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, bool]:
+    await session.execute(
+        text("SELECT pg_notify('new_case', :payload)"),
+        {"payload": str(case_id)},
+    )
+    await session.commit()
+    return {"ok": True}
+
+
 class DispatcherSessionRequest(BaseModel):
     send_to: str | None = None
 
@@ -292,6 +410,8 @@ async def dispatcher_share_page(
 async def dispatcher_view(
     request: Request,
     token: str = Query(...),
+    show_acked: bool = Query(False),
+    event_override: str | None = Query(None, alias="event"),
     device_id: Annotated[str | None, Cookie()] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
     session: Annotated[AsyncSession, Depends(get_session)] = None,  # type: ignore[assignment]
@@ -300,13 +420,41 @@ async def dispatcher_view(
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
     validate_dispatcher_token(token, dev_id, settings.secret_key)
-    result = await session.execute(
+    cfg = settings.app_config
+    known_event_names = {e.name for e in cfg.events}
+    active_event: str | None
+    if event_override and event_override in known_event_names:
+        active_event = event_override
+    else:
+        active_event = settings.current_event_override or _current_active_event(cfg.events)
+    stmt = (
         select(Case)
         .where(Case.assignee.is_(None))
         .order_by(Case.urgency.desc(), Case.created_at.desc())
     )
+    if active_event:
+        stmt = stmt.where(Case.event_name == active_event)
+    if not show_acked:
+        stmt = stmt.where(
+            ~exists(
+                select(Notification.id).where(
+                    Notification.case_id == Case.id,
+                    Notification.state == "acked",
+                )
+            )
+        )
+    result = await session.execute(stmt)
     cases = result.scalars().all()
-    response = templates.TemplateResponse(request, "dispatcher.html", {"request": request, "cases": cases, "token": token},
+    response = templates.TemplateResponse(
+        request,
+        "dispatcher.html",
+        {
+            "request": request,
+            "cases": cases,
+            "token": token,
+            "active_event": active_event,
+            "show_acked": show_acked,
+        },
     )
     response.set_cookie("device_id", dev_id, httponly=True, samesite="strict")
     return response
@@ -388,6 +536,37 @@ async def dispatcher_trigger(
     )
     await session.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Attachment proxy — team-auth required
+# ---------------------------------------------------------------------------
+
+_ATTACHMENT_MIME: dict[str, str] = {
+    "jpg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "webp": "image/webp",
+}
+
+
+@router.get("/cases/{case_id}/attachments/{filename}")
+async def serve_attachment(
+    case_id: uuid.UUID,
+    filename: str,
+    user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> FileResponse:
+    if "/" in filename or ".." in filename:
+        raise HTTPException(status_code=400)
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    media_type = _ATTACHMENT_MIME.get(ext)
+    if media_type is None:
+        raise HTTPException(status_code=400, detail="Unknown file type")
+    path = Path(settings.attachment_dir) / str(case_id) / filename
+    if not path.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(path, media_type=media_type)
 
 
 # ---------------------------------------------------------------------------

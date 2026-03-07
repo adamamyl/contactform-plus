@@ -23,7 +23,7 @@ _PATHS: dict[str, list[str]] = {
     "form": ["form"],
     "team": ["team"],
     "dispatch": ["router", "jambonz"],
-    "sysadmin": ["tts"],
+    "text-to-speech": ["tts"],
 }
 
 _specs: dict[str, object] = {}
@@ -146,6 +146,8 @@ async def get_spec(service: str) -> JSONResponse:
 @app.get("/all", response_class=HTMLResponse)
 async def swagger_all() -> HTMLResponse:
     urls = [{"service": name, "name": name} for name in _specs]
+    if not urls:
+        return HTMLResponse("<p>No specs available yet — try reloading.</p>")
     return _swagger_multi_page("EMF — All APIs", urls)
 
 
@@ -153,7 +155,9 @@ async def swagger_all() -> HTMLResponse:
 async def swagger_path(path: str) -> HTMLResponse:
     if path not in _PATHS:
         raise HTTPException(status_code=404, detail=f"Unknown path: /{path}")
-    svc_keys = _PATHS[path]
+    svc_keys = [k for k in _PATHS[path] if k in _specs]
+    if not svc_keys:
+        return HTMLResponse(f"<p>No specs available for /{path} — try reloading.</p>")
     if len(svc_keys) == 1:
         return _swagger_page(f"EMF — {path}", f"/api/specs/{svc_keys[0]}")
     urls = [{"service": k, "name": k} for k in svc_keys]

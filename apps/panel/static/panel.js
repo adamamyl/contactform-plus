@@ -133,7 +133,38 @@
     });
   }
 
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-action=admin-ack],[data-action=admin-trigger]");
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    var caseId = btn.dataset.caseId;
+    var action = btn.dataset.action;
+    var url = action === "admin-ack"
+      ? "/api/cases/" + caseId + "/ack"
+      : "/api/cases/" + caseId + "/trigger-call";
+    fetch(url, { method: "POST" })
+      .then(function (r) {
+        btn.textContent = r.ok ? (action === "admin-ack" ? "\u2705 ACKed" : "\u{1F4DE} Sent") : "Error";
+      })
+      .catch(function () { btn.textContent = "Error"; });
+  });
+
+  function initTheme() {
+    var stored = localStorage.getItem("emf-theme");
+    if (stored) {
+      document.documentElement.setAttribute("data-theme", stored);
+    }
+    var btn = document.getElementById("theme-toggle");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem("emf-theme", next);
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    initTheme();
     initCaseForms();
     initDispatcherShare();
     initDispatcher();

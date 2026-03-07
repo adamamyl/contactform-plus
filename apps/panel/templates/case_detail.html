@@ -13,7 +13,7 @@
   <span class="meta-item">📍
     {% if case.location_hint %}{{ case.location_hint }}{% endif %}
     {% if loc and loc.lat is not none and loc.lon is not none %}
-      <a href="https://map.emf-forms.internal/#18/{{ loc.lat }}/{{ loc.lon }}" target="_blank" rel="noopener">[map]</a>
+      <a href="https://map.emf-forms.internal/?marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}" target="_blank" rel="noopener">[map]</a>
     {% endif %}
   </span>
   {% endif %}
@@ -38,6 +38,14 @@
   {% if d.additional_info %}<p><strong>Additional info:</strong> {{ d.additional_info }}</p>{% endif %}
   {% if d.support_needed %}<p><strong>Support needed:</strong> {{ d.support_needed }}</p>{% endif %}
   {% if d.anything_else %}<p><strong>Anything else:</strong> {{ d.anything_else }}</p>{% endif %}
+  {% if d.media_links %}
+  <p><strong>Media links:</strong></p>
+  <ul>
+    {% for link in d.media_links %}
+    <li><a href="{{ link }}" target="_blank" rel="noopener noreferrer">{{ link }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
 </section>
 
 <section class="case-section">
@@ -55,6 +63,13 @@
     <button type="submit" class="btn btn--small">Save</button>
   </form>
 
+  <div class="dispatcher-actions" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <button class="btn btn--small btn--ack" data-action="admin-ack"
+            data-case-id="{{ case.id }}">ACK notification</button>
+    <button class="btn btn--small btn--trigger" data-action="admin-trigger"
+            data-case-id="{{ case.id }}">Trigger call</button>
+  </div>
+
   <div class="status-transitions">
     <p><strong>Transition status:</strong></p>
     {% for next_status in valid_next_statuses %}
@@ -67,6 +82,23 @@
     {% endfor %}
   </div>
 </section>
+<section class="case-section">
+  <h2>Attachments</h2>
+  {% if attachments %}
+  <div class="attachments">
+    {% for filename in attachments %}
+    <a href="/cases/{{ case.id }}/attachments/{{ filename }}" target="_blank" rel="noopener">
+      <img src="/cases/{{ case.id }}/attachments/{{ filename }}"
+           alt="{{ filename }}" class="attachment-thumb"
+           loading="lazy" width="120" height="90">
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="hint">No attachments.</p>
+  {% endif %}
+</section>
+
 <section class="case-section">
   <h2>History</h2>
   <ol class="history-timeline">

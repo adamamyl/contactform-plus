@@ -44,7 +44,7 @@ class SmtpConfig(BaseModel):
 class SiteMap(BaseModel):
     lat: float
     lon: float
-    zoom: int = 16
+    zoom: float = 16
 
 
 class AppConfig(BaseModel):
@@ -66,6 +66,8 @@ class AppConfig(BaseModel):
     mattermost_webhook: str | None = None
     slack_webhook: str | None = None
     attachment_backend: str = "local"
+    attachment_max_bytes: int = 10 * 1024 * 1024
+    attachment_max_per_case: int = 3
     rate_limit_per_minute: int = 5
     rate_limit_per_hour: int = 20
 

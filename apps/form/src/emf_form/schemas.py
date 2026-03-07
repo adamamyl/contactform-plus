@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, time, timezone
 
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 _URGENCY_VALUES = {"low", "medium", "high", "urgent"}
 _PHONE_RE = re.compile(r"^[\d\s+\-.()\sA-Z]+$")
@@ -47,7 +47,7 @@ class Location(BaseModel):
 
 class ReporterDetails(BaseModel):
     name: str | None = None
-    pronouns: str | None = None
+    pronouns: str | None = Field(None, max_length=50)
     phone: str | None = None
     email: EmailStr | None = None
     camping_with: str | None = None
@@ -90,6 +90,7 @@ class CaseSubmission(BaseModel):
     why_it_happened: str | None = None
     can_contact: bool
     anything_else: str | None = None
+    media_links: list[str] | None = None
     website: str | None = None
 
     @field_validator(
@@ -137,6 +138,30 @@ class CaseSubmission(BaseModel):
     def validate_urgency(cls, v: str) -> str:
         if v not in _URGENCY_VALUES:
             raise ValueError(f"urgency must be one of {sorted(_URGENCY_VALUES)}")
+        return v
+
+    @field_validator("media_links", mode="before")
+    @classmethod
+    def parse_media_links(cls, v: object) -> object:
+        if isinstance(v, str):
+            lines = [ln.strip() for ln in v.splitlines()]
+            v = [ln for ln in lines if ln]
+        if not v:
+            return None
+        if isinstance(v, list):
+            validated: list[str] = []
+            for item in v:
+                if not isinstance(item, str):
+                    continue
+                item = item.strip()
+                if not item:
+                    continue
+                if not (item.startswith("http://") or item.startswith("https://")):
+                    raise ValueError(f"Each link must start with http:// or https://: {item!r}")
+                if len(item) > 2048:
+                    raise ValueError("Link too long (max 2048 characters)")
+                validated.append(item)
+            return validated or None
         return v
 
     @field_validator("website")
