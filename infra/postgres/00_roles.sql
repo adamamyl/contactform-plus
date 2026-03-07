@@ -110,7 +110,7 @@ GRANT SELECT ON forms.notifications TO panel_viewer;
 -- team_member: full access, scoped by RLS
 GRANT SELECT, UPDATE ON forms.cases TO team_member;
 GRANT SELECT, INSERT ON forms.case_history TO team_member;
-GRANT SELECT ON forms.notifications TO team_member;
+GRANT SELECT, UPDATE ON forms.notifications TO team_member;
 GRANT SELECT ON forms.idempotency_tokens TO team_member;
 
 -- ---------------------------------------------------------------------------
