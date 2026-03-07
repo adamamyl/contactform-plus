@@ -174,7 +174,7 @@ services:
     environment:
       MODE: native
     volumes:
-      - signal_data:/home/.local/share/signal-cli
+      - signal_data:/root/.local/share/signal-cli
     networks:
       - contactform
 
