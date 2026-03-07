@@ -2799,6 +2799,27 @@ _Low priority. Scope to be confirmed with EMF team._
 
 ---
 
+### Phase 20 — Admin Panel: urgency/priority editing
+
+Allow team members to change the urgency (priority) of a case after submission, with every change recorded in `case_history` for the audit trail.
+
+- [ ] Add `PATCH /api/cases/{case_id}/urgency` endpoint in `routes.py` (session auth via `require_conduct_team`; validate against `config.urgency_levels`; write `case_history` row with `field="urgency"`, `old_value`, `new_value`, `changed_by`)
+- [ ] Add urgency selector to `case_detail.html` Actions section — a `<select>` pre-filled with the current urgency, styled with the existing badge colours; submit via JS PATCH (same pattern as assignee/tags forms)
+- [ ] Update `panel.js` `initPatchForm` or add a dedicated `initUrgencyForm` handler that sends `{"urgency": value}` and reloads on success
+- [ ] Grant `UPDATE (urgency, updated_at)` on `forms.cases` to `team_member` in `infra/postgres/00_roles.sql` (currently only `status` and `assignee` are updatable by `team_member`)
+- [ ] Apply the live DB grant: `GRANT UPDATE (urgency, updated_at) ON forms.cases TO team_member;`
+- [ ] Update `cases.html` urgency badge to reflect live changes after reload
+- [ ] Test: change urgency → `case_history` row exists with correct `old_value`/`new_value`; badge updates in list view
+
+---
+
 ### TODOs / Follow-up
 
 - [ ] Make postgres SSL key/cert files readable by the postgres user — currently `infra/postgres/certs/` files are owned by root so `ssl=on` in postgresql.conf fails; fix ownership in `install.py` or add a `postgres-init` entrypoint script that chowns the certs before postgres starts
+- [ ] Swagger: fix `/dispatch` and `/all` pages on `localhost:8080` — filter missing services from URL list so Swagger UI doesn't error when `jambonz` is not running; see implementation notes in (now-deleted) TODO file
+- [ ] Swagger: rename `_PATHS["sysadmin"]` → `"text-to-speech"` in `infra/swagger/app.py`
+- [ ] Docker install: check port availability before assigning — `find_free_port(preferred, lo=8100, hi=9000)` in `scripts/install.py`; write chosen ports to `.env` as `FORM_PORT`, `PANEL_PORT`, etc.
+- [ ] ClamAV: integrate scan in attachment upload pipeline (clamd socket); currently ClamAV container exists but scanning is not wired up
+- [ ] Attachment tests: MIME rejection, ClamAV positive → 400, max 3 files, max 10 MB, unauthenticated → 403
+- [ ] Phase C: `CURRENT_EVENT_OVERRIDE` missing from `.env-example` — add it
+- [ ] e2e test coordinates: all three location pin test cases now use EMF site coords (~52.041, -2.377) ✅ done
