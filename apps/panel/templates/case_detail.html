@@ -7,17 +7,25 @@
 <div class="case-meta">
   <span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span>
   <span class="chip">{{ case.status | replace('_',' ') }}</span>
-  <span class="meta-item">Submitted {{ case.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+  <span class="meta-item">Submitted <time class="relative-time" datetime="{{ case.created_at.isoformat() }}">{{ case.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</time></span>
   {% set loc = case.form_data.get('location') if case.form_data else None %}
-  {% if case.location_hint or loc %}
-  <span class="meta-item">📍
-    {% if case.location_hint %}{{ case.location_hint }}{% endif %}
-    {% if loc and loc.lat is not none and loc.lon is not none %}
-      <a href="https://map.emf-forms.internal/?marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}" target="_blank" rel="noopener">[map]</a>
-    {% endif %}
-  </span>
+  {% if loc and loc.lat is not none and loc.lon is not none %}
+  <a class="meta-item" href="https://map.emf-forms.internal/?marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}" target="_blank" rel="noopener">📍 {{ case.location_hint or 'View on map' }}</a>
+  {% elif case.location_hint %}
+  <span class="meta-item">📍 {{ case.location_hint }}</span>
   {% endif %}
 </div>
+
+{% set loc = case.form_data.get('location') if case.form_data else None %}
+{% if loc and loc.lat is not none and loc.lon is not none %}
+<div class="case-map-container">
+  <iframe
+    src="https://map.emf-forms.internal/?embed=true&readonly=true&marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}"
+    style="width:100%;height:300px;border:0;display:block;"
+    title="Case location"></iframe>
+  <p class="hint" style="padding:0.25rem 0.75rem;">Zoom in/out to find the pin — it won't move.</p>
+</div>
+{% endif %}
 
 <section class="case-section">
   <h2>Report details</h2>
@@ -27,10 +35,10 @@
   {% if d.reporter %}
     {% set r = d.reporter %}
     <p><strong>Reporter:</strong>
-      {{ r.name or 'anonymous' }}
-      {% if r.pronouns %}({{ r.pronouns }}){% endif %}
-      {% if r.email %}· {{ r.email }}{% endif %}
-      {% if r.phone %}· {{ r.phone }}{% endif %}
+      {% if r.name %}👤 {{ r.name }}{% else %}👤 anonymous{% endif %}
+      {% if r.pronouns %}&nbsp;·&nbsp;🏷️ {{ r.pronouns }}{% endif %}
+      {% if r.email %}&nbsp;·&nbsp;✉️ <a href="mailto:{{ r.email }}">{{ r.email }}</a>{% endif %}
+      {% if r.phone %}&nbsp;·&nbsp;📞 {{ r.phone }}{% endif %}
     </p>
   {% endif %}
   {% if d.others_involved %}<p><strong>Others involved:</strong> {{ d.others_involved }}</p>{% endif %}
@@ -52,7 +60,9 @@
   <h2>Actions</h2>
   <form class="inline-form" id="assignee-form" data-case-id="{{ case.id }}">
     <label for="assignee">Assignee</label>
-    <input type="text" id="assignee" name="assignee" value="{{ case.assignee or '' }}" placeholder="Username">
+    <input type="text" id="assignee" name="assignee" value="{{ case.assignee or '' }}"
+           placeholder="Username" list="assignee-options" autocomplete="off">
+    <datalist id="assignee-options"></datalist>
     <button type="submit" class="btn btn--small">Save</button>
   </form>
 

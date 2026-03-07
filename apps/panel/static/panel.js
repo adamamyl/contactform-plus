@@ -149,6 +149,37 @@
       .catch(function () { btn.textContent = "Error"; });
   });
 
+  function relativeTime(ms) {
+    var diff = (Date.now() - ms) / 1000;
+    if (diff < 60) return "just now";
+    if (diff < 3600) return Math.round(diff / 60) + " min ago";
+    if (diff < 86400) return Math.round(diff / 3600) + " hr ago";
+    return Math.round(diff / 86400) + " days ago";
+  }
+
+  function initRelativeTimes() {
+    document.querySelectorAll("time.relative-time").forEach(function (el) {
+      var dt = new Date(el.getAttribute("datetime"));
+      if (isNaN(dt.getTime())) return;
+      el.textContent = el.textContent.trim() + " (" + relativeTime(dt.getTime()) + ")";
+    });
+  }
+
+  function initAssigneeList() {
+    var dl = document.getElementById("assignee-options");
+    if (!dl) return;
+    fetch("/api/assignees")
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (names) {
+        names.forEach(function (name) {
+          var opt = document.createElement("option");
+          opt.value = name;
+          dl.appendChild(opt);
+        });
+      })
+      .catch(function () {});
+  }
+
   function initTheme() {
     var stored = localStorage.getItem("emf-theme");
     if (stored) {
@@ -165,6 +196,8 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     initTheme();
+    initRelativeTimes();
+    initAssigneeList();
     initCaseForms();
     initDispatcherShare();
     initDispatcher();

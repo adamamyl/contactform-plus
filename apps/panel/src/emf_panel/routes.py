@@ -5,6 +5,8 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, cast
 
+import redis.asyncio as aioredis
+
 from authlib.integrations.base_client.errors import MismatchingStateError
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -28,6 +30,12 @@ from .settings import Settings, get_settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+_ASSIGNEES_KEY = "panel:assignees"
+
+
+async def get_redis(settings: Annotated[Settings, Depends(get_settings)]) -> aioredis.Redis:  # type: ignore[type-arg]
+    return aioredis.from_url(settings.redis_url, decode_responses=True)
 
 
 def _current_active_event(events: list[EventConfig], today: date | None = None) -> str | None:
@@ -256,12 +264,22 @@ class AssigneeUpdate(BaseModel):
     assignee: str | None
 
 
+@router.get("/api/assignees")
+async def list_assignees(
+    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],  # type: ignore[type-arg]
+) -> list[str]:
+    members: set[str] = await redis.smembers(_ASSIGNEES_KEY)
+    return sorted(members)
+
+
 @router.patch("/api/cases/{case_id}/assignee")
 async def update_assignee(
     case_id: uuid.UUID,
     body: AssigneeUpdate,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],  # type: ignore[type-arg]
 ) -> dict[str, str | None]:
     case = await session.get(Case, case_id)
     if not case:
@@ -282,6 +300,8 @@ async def update_assignee(
         )
     )
     await session.commit()
+    if body.assignee:
+        await redis.sadd(_ASSIGNEES_KEY, body.assignee)
     return {"assignee": body.assignee}
 
 
@@ -334,6 +354,7 @@ async def admin_ack(
     case_id: uuid.UUID,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],  # type: ignore[type-arg]
 ) -> dict[str, bool]:
     username = str(user.get("preferred_username", "admin"))
     now = datetime.now(tz=UTC)
@@ -348,6 +369,7 @@ async def admin_ack(
         .values(assignee=username, updated_at=now)
     )
     await session.commit()
+    await redis.sadd(_ASSIGNEES_KEY, username)
     return {"ok": True}
 
 

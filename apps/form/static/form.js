@@ -370,14 +370,33 @@
   }
 
   function initMap() {
-    if (!window.__mapConfig) return;
+    var mapIframe = getById("location-map");
+    if (mapIframe && mapIframe.dataset.src) {
+      var io = new IntersectionObserver(function (entries, observer) {
+        if (entries[0].isIntersecting) {
+          mapIframe.src = mapIframe.dataset.src;
+          observer.disconnect();
+        }
+      }, { rootMargin: "200px" });
+      io.observe(mapIframe);
+    }
     var latInput = getById("location_lat");
     var lonInput = getById("location_lon");
     var pinStatus = getById("location-pin-status");
     if (!latInput || !lonInput) return;
 
     window.addEventListener("message", function (e) {
-      if (!e.data || e.data.type !== "emf-marker") return;
+      if (!e.data) return;
+      if (e.data.type === "emf-view") {
+        if (!pinStatus) return;
+        var z = e.data.zoom !== undefined ? (+e.data.zoom).toFixed(2) : "?";
+        var lat = e.data.lat !== undefined ? (+e.data.lat).toFixed(5) : "?";
+        var lon = e.data.lon !== undefined ? (+e.data.lon).toFixed(5) : "?";
+        var pinned = latInput.value ? " · pin: " + latInput.value + ", " + lonInput.value : "";
+        pinStatus.textContent = "zoom: " + z + " · centre: " + lat + ", " + lon + pinned;
+        return;
+      }
+      if (e.data.type !== "emf-marker") return;
       if (e.data.lat === null || e.data.lon === null) {
         latInput.value = "";
         lonInput.value = "";

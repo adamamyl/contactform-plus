@@ -7,31 +7,48 @@
 </div>
 
 <form class="filter-form" method="get" action="/">
-  <fieldset class="filter-checkboxes">
-    <legend>Status</legend>
-    {% for s in ["new","assigned","in_progress","action_needed","decision_needed","closed"] %}
-    <label>
-      <input type="checkbox" name="status" value="{{ s }}"
-        {% if s in selected_statuses %}checked{% endif %}>
-      {{ s | replace('_',' ') | title }}
-    </label>
-    {% endfor %}
-  </fieldset>
-  <fieldset class="filter-checkboxes">
-    <legend>Urgency</legend>
-    {% for u in ["urgent","high","medium","low"] %}
-    <label>
-      <input type="checkbox" name="urgency" value="{{ u }}"
-        {% if u in selected_urgencies %}checked{% endif %}>
-      {{ u | title }}
-    </label>
-    {% endfor %}
-  </fieldset>
-  <input type="text" name="assignee" placeholder="Assignee"
-         value="{{ request.query_params.get('assignee', '') }}" aria-label="Filter by assignee">
-  <button type="submit" class="btn btn--small">Filter</button>
-  <a href="/?assignee=me" class="btn btn--small btn--outline">Assigned to me</a>
-  <a href="/" class="btn btn--small btn--outline">Clear</a>
+  <details class="filter-details"{% if selected_statuses or selected_urgencies or request.query_params.get('assignee') %} open{% endif %}>
+    <summary class="filter-summary">
+      Filters
+      {% if selected_statuses or selected_urgencies or request.query_params.get('assignee') %}
+      <span class="filter-active-hint">
+        {% if selected_statuses %}{{ selected_statuses | join(', ') | replace('_',' ') }}{% endif %}
+        {% if selected_urgencies %} · {{ selected_urgencies | join(', ') }}{% endif %}
+        {% if request.query_params.get('assignee') %} · {{ request.query_params.get('assignee') }}{% endif %}
+      </span>
+      {% endif %}
+    </summary>
+    <div class="filter-body">
+      <div class="filter-group">
+        <span class="filter-label">Status</span>
+        {% for s in ["new","assigned","in_progress","action_needed","decision_needed","closed"] %}
+        <label class="filter-check">
+          <input type="checkbox" name="status" value="{{ s }}"
+            {% if s in selected_statuses %}checked{% endif %}>
+          {{ s | replace('_',' ') | title }}
+        </label>
+        {% endfor %}
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Urgency</span>
+        {% for u in ["urgent","high","medium","low"] %}
+        <label class="filter-check">
+          <input type="checkbox" name="urgency" value="{{ u }}"
+            {% if u in selected_urgencies %}checked{% endif %}>
+          {{ u | title }}
+        </label>
+        {% endfor %}
+      </div>
+      <div class="filter-group filter-group--actions">
+        <input type="text" name="assignee" placeholder="Assignee"
+               value="{{ request.query_params.get('assignee', '') }}" aria-label="Filter by assignee"
+               class="filter-assignee-input">
+        <button type="submit" class="btn btn--small">Filter</button>
+        <a href="/?assignee=me" class="btn btn--small btn--outline">Assigned to me</a>
+        <a href="/" class="btn btn--small btn--outline">Clear</a>
+      </div>
+    </div>
+  </details>
 </form>
 
 <table class="cases-table">

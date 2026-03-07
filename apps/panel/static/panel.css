@@ -59,11 +59,19 @@ body { font-family: var(--font); font-size: 16px; background: var(--color-bg); c
 .page-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 .page-header h1 { flex: 1; }
 
-.filter-form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
-.filter-form select, .filter-form input[type=text] { padding: 0.4rem 0.6rem; border: 1px solid var(--color-border); border-radius: var(--radius); font-size: 0.9rem; }
-.filter-checkboxes { border: none; padding: 0; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-.filter-checkboxes legend { font-weight: 600; font-size: 0.82rem; padding-right: 0.4rem; float: left; }
-.filter-checkboxes label { display: flex; align-items: center; gap: 0.25rem; cursor: pointer; font-size: 0.85rem; }
+.filter-form { margin-bottom: 1rem; }
+.filter-details { border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); }
+.filter-summary { padding: 0.5rem 0.75rem; cursor: pointer; font-weight: 600; font-size: 0.9rem; list-style: none; display: flex; align-items: center; gap: 0.5rem; user-select: none; }
+.filter-summary::-webkit-details-marker { display: none; }
+.filter-summary::before { content: '▶'; font-size: 0.7rem; transition: transform 0.15s; }
+details[open] .filter-summary::before { transform: rotate(90deg); }
+.filter-active-hint { font-weight: 400; font-size: 0.82rem; color: var(--color-hint); }
+.filter-body { padding: 0.5rem 0.75rem 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px solid var(--color-border); }
+.filter-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.6rem; }
+.filter-label { font-weight: 600; font-size: 0.82rem; min-width: 4.5rem; }
+.filter-check { display: flex; align-items: center; gap: 0.25rem; cursor: pointer; font-size: 0.85rem; }
+.filter-group--actions { gap: 0.4rem; margin-top: 0.25rem; }
+.filter-assignee-input { padding: 0.3rem 0.6rem; border: 1px solid var(--color-border); border-radius: var(--radius); font-size: 0.9rem; width: 10rem; }
 
 .cases-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
 .cases-table th { background: var(--color-th-bg); text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--color-border); }
@@ -126,6 +134,8 @@ body { font-family: var(--font); font-size: 16px; background: var(--color-bg); c
 .site-footer { border-top: 1px solid var(--color-border); padding: 1rem; text-align: center; font-size: 0.85rem; color: var(--color-hint); margin-top: 3rem; }
 .site-footer a { color: var(--color-hint); margin: 0 0.4rem; }
 .site-footer a:hover { color: var(--color-text); }
+
+.case-map-container { border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; margin-bottom: 1.5rem; }
 
 .attachments { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
 .attachment-thumb { object-fit: cover; border-radius: var(--radius); border: 1px solid var(--color-border); background: var(--color-surface); }
