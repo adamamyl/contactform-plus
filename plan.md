@@ -2799,7 +2799,51 @@ _Low priority. Scope to be confirmed with EMF team._
 
 ---
 
-### Phase 20 — Admin Panel: urgency/priority editing
+### Phase P — Panel & Dispatcher: iteration and UX hardening ✅
+
+Post-launch iteration based on real use. All items below are shipped.
+
+**Status chips**
+- [x] Add `STATUS_EMOJI` map (`🆕👤🔄⚠️🤔✅`) to `routes.py`; pass to case list and detail templates
+- [x] Add `.chip--<status>` CSS variants with coloured backgrounds (new=dark blue, assigned=orange, in_progress=teal, action_needed=red, decision_needed=purple, closed=grey)
+- [x] Apply coloured chips with emoji in case list table and filter bar status checkboxes
+- [x] Case detail: status chip is a `<details>`/`<summary>` dropdown — clicking it reveals valid transition buttons inline in the meta bar; removed separate "Transition status" block from Actions section
+- [x] Transition buttons styled with the target status colour for quick visual scanning
+
+**Map embeds**
+- [x] Add `?readonly=true` param to emf-map embed mode — suppresses click-to-pin handler so pin stays fixed while pan/zoom still works
+- [x] Embed read-only map in case detail (`case_detail.html`) below the meta bar; 300px tall with hint "Zoom in/out to find the pin — it won't move."
+- [x] Update map `frame-ancestors` CSP in `Caddyfile.local` to allow `panel.emf-forms.internal` in addition to `report.emf-forms.internal`
+- [x] Dispatcher: location column shows 📍 link when coordinates available; per-row collapsible "🗺 Show map" `<details>` row with embedded read-only map
+- [x] emf-map repo: `?marker=lat,lon` query param pre-sets pin on load; `emf-view` postMessage on moveend/load; `map.on('load', resize)` for WebGL green-box fix
+
+**ACK / notification fixes**
+- [x] Fix `InsufficientPrivilegeError` on ACK button: `team_member` was missing `UPDATE` on `forms.notifications`; added to `00_roles.sql` and applied to live DB
+- [x] ACK on case detail now works for both admin and dispatcher routes (both use `team_member` DB user)
+
+**Case list improvements**
+- [x] Collapsible filter bar using `<details>`/`<summary>` — auto-opens when filters are active; each filter group on its own line; no boxes around fieldsets
+- [x] NACK/ACK notification badge column (purple NACK / green ACK) from `notifications` table aggregate
+- [x] ACK and Trigger Call buttons per row in case list
+- [x] ACK action also assigns the case to the current user (Redis `SADD` for autocomplete)
+- [x] Sortable columns with ↑/↓ arrows; sort state preserved across filter changes
+- [x] Redis-backed assignee autocomplete: `GET /api/assignees` populates datalist; name added on ACK or manual assign
+
+**Form: pronouns UX**
+- [x] Replace datalist with `<select>` + hidden text input; text input only shown when "Other / prefer to self-describe" chosen; hidden again if user switches back
+
+**Infrastructure fixes**
+- [x] `SiteMap.zoom: int → float` in shared config (fractional zoom values like `15.63` broke pydantic)
+- [x] Router listener: strip `postgresql+asyncpg://` prefix before passing DSN to asyncpg; replace non-existent `wait_closed()` with `is_closed()` poll loop
+- [x] `ADMIN_DB_PASSWORD` default `:-localdev` added to silence docker-compose warning
+- [x] `REDIS_URL` added to panel service environment in `docker-compose.yml`
+
+**E2E tests**
+- [x] Location pin coordinates in `test_form_fields_stored.py` updated to EMF site boundary (~52.041, -2.377) — previous coords (51.90, -2.58) were miles off-site
+
+---
+
+### Phase Q — Admin Panel: urgency/priority editing
 
 Allow team members to change the urgency (priority) of a case after submission, with every change recorded in `case_history` for the audit trail.
 
@@ -2822,4 +2866,4 @@ Allow team members to change the urgency (priority) of a case after submission, 
 - [ ] ClamAV: integrate scan in attachment upload pipeline (clamd socket); currently ClamAV container exists but scanning is not wired up
 - [ ] Attachment tests: MIME rejection, ClamAV positive → 400, max 3 files, max 10 MB, unauthenticated → 403
 - [ ] Phase C: `CURRENT_EVENT_OVERRIDE` missing from `.env-example` — add it
-- [ ] e2e test coordinates: all three location pin test cases now use EMF site coords (~52.041, -2.377) ✅ done
+- [x] e2e test coordinates: all three location pin test cases now use EMF site coords (~52.041, -2.377) — done in Phase P
