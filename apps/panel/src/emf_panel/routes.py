@@ -58,6 +58,15 @@ VALID_TRANSITIONS: dict[str, set[str]] = {
     "closed": set(),
 }
 
+STATUS_EMOJI: dict[str, str] = {
+    "new": "🆕",
+    "assigned": "👤",
+    "in_progress": "🔄",
+    "action_needed": "⚠️",
+    "decision_needed": "🤔",
+    "closed": "✅",
+}
+
 
 # ---------------------------------------------------------------------------
 # Auth routes
@@ -181,6 +190,7 @@ async def case_list(
             "sort": sort,
             "order": order,
             "make_sort_url": make_sort_url,
+            "status_emoji": STATUS_EMOJI,
         },
     )
 
@@ -217,6 +227,7 @@ async def case_detail(
             "user": user,
             "valid_next_statuses": sorted(valid_next),
             "attachments": attachments,
+            "status_emoji": STATUS_EMOJI,
         },
     )
 

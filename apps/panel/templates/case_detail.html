@@ -6,7 +6,19 @@
 
 <div class="case-meta">
   <span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span>
-  <span class="chip">{{ case.status | replace('_',' ') }}</span>
+  <details class="status-chip-details">
+    <summary><span class="chip chip--{{ case.status }}">{{ status_emoji[case.status] }} {{ case.status | replace('_',' ') }}</span></summary>
+    <div class="status-chip-dropdown">
+      {% for next_status in valid_next_statuses %}
+      <form class="status-form" data-case-id="{{ case.id }}">
+        <input type="hidden" name="status" value="{{ next_status }}">
+        <button type="submit" class="btn btn--small chip--{{ next_status }}">{{ status_emoji[next_status] }} → {{ next_status | replace('_',' ') }}</button>
+      </form>
+      {% else %}
+      <span class="hint">No further transitions</span>
+      {% endfor %}
+    </div>
+  </details>
   <span class="meta-item">Submitted <time class="relative-time" datetime="{{ case.created_at.isoformat() }}">{{ case.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</time></span>
   {% set loc = case.form_data.get('location') if case.form_data else None %}
   {% if loc and loc.lat is not none and loc.lon is not none %}
@@ -80,17 +92,6 @@
             data-case-id="{{ case.id }}">Trigger call</button>
   </div>
 
-  <div class="status-transitions">
-    <p><strong>Transition status:</strong></p>
-    {% for next_status in valid_next_statuses %}
-    <form class="status-form" style="display:inline" data-case-id="{{ case.id }}">
-      <input type="hidden" name="status" value="{{ next_status }}">
-      <button type="submit" class="btn btn--small">→ {{ next_status | replace('_',' ') }}</button>
-    </form>
-    {% else %}
-    <p class="hint">No further transitions available (case is {{ case.status }}).</p>
-    {% endfor %}
-  </div>
 </section>
 <section class="case-section">
   <h2>Attachments</h2>

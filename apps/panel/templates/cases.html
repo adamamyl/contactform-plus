@@ -25,7 +25,7 @@
         <label class="filter-check">
           <input type="checkbox" name="status" value="{{ s }}"
             {% if s in selected_statuses %}checked{% endif %}>
-          {{ s | replace('_',' ') | title }}
+          <span class="chip chip--{{ s }}">{{ status_emoji[s] }} {{ s | replace('_',' ') }}</span>
         </label>
         {% endfor %}
       </div>
@@ -76,7 +76,7 @@
     <tr>
       <td><a href="/cases/{{ case.id }}">{{ case.friendly_id }}</a></td>
       <td><span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span></td>
-      <td><span class="chip">{{ case.status | replace('_',' ') }}</span></td>
+      <td><span class="chip chip--{{ case.status }}">{{ status_emoji[case.status] }} {{ case.status | replace('_',' ') }}</span></td>
       <td>
         {% if case.id in notif_states %}
           {% if notif_states[case.id] == 'nack' %}
