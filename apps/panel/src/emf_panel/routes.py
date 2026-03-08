@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, cast
 
+import httpx
 import redis.asyncio as aioredis
 
 from authlib.integrations.base_client.errors import MismatchingStateError
@@ -27,6 +29,8 @@ from .dispatcher import (
 )
 from .models import Case, CaseHistory, Notification
 from .settings import Settings, get_settings
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -228,6 +232,7 @@ async def case_detail(
             "valid_next_statuses": sorted(valid_next),
             "attachments": attachments,
             "status_emoji": STATUS_EMOJI,
+            "urgency_levels": settings.app_config.urgency_levels,
         },
     )
 
@@ -349,6 +354,46 @@ async def update_tags(
     return {"tags": body.tags}
 
 
+class UrgencyUpdate(BaseModel):
+    urgency: str
+
+
+@router.patch("/api/cases/{case_id}/urgency")
+async def update_urgency(
+    case_id: uuid.UUID,
+    body: UrgencyUpdate,
+    user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
+    cfg = settings.app_config
+    if body.urgency not in cfg.urgency_levels:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid urgency '{body.urgency}'; must be one of {cfg.urgency_levels}",
+        )
+    case = await session.get(Case, case_id)
+    if not case:
+        raise HTTPException(status_code=404)
+    old_urgency = case.urgency
+    await session.execute(
+        update(Case)
+        .where(Case.id == case_id)
+        .values(urgency=body.urgency, updated_at=datetime.now(tz=UTC))
+    )
+    session.add(
+        CaseHistory(
+            case_id=case_id,
+            changed_by=str(user.get("preferred_username", "unknown")),
+            field="urgency",
+            old_value=old_urgency,
+            new_value=body.urgency,
+        )
+    )
+    await session.commit()
+    return {"urgency": body.urgency}
+
+
 @router.get("/api/tags")
 async def list_tags(
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],
@@ -360,11 +405,31 @@ async def list_tags(
     return [row[0] for row in result.fetchall()]
 
 
+async def _notify_router_ack(
+    case_id: uuid.UUID, acked_by: str, settings: Settings
+) -> None:
+    if not settings.router_internal_url:
+        return
+    headers: dict[str, str] = {}
+    if settings.router_internal_secret:
+        headers["X-Internal-Secret"] = settings.router_internal_secret
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                f"{settings.router_internal_url}/internal/ack/{case_id}",
+                json={"acked_by": acked_by},
+                headers=headers,
+            )
+    except Exception:
+        log.warning("Failed to notify router of ACK for case %s", case_id)
+
+
 @router.post("/api/cases/{case_id}/ack")
 async def admin_ack(
     case_id: uuid.UUID,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
     redis: Annotated[aioredis.Redis, Depends(get_redis)],  # type: ignore[type-arg]
 ) -> dict[str, bool]:
     username = str(user.get("preferred_username", "admin"))
@@ -381,6 +446,7 @@ async def admin_ack(
     )
     await session.commit()
     await redis.sadd(_ASSIGNEES_KEY, username)
+    await _notify_router_ack(case_id, username, settings)
     return {"ok": True}
 
 
@@ -548,6 +614,7 @@ async def dispatcher_ack(
         .values(state="acked", acked_at=now, acked_by=body.acked_by)
     )
     await session.commit()
+    await _notify_router_ack(case_id, "dispatcher", settings)
     return {"ok": True}
 
 

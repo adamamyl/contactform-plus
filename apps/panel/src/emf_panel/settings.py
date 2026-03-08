@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     dispatcher_session_ttl_hours: int = 8
     current_event_override: str | None = None
     attachment_dir: str = "/app/attachments"
+    router_internal_url: str = "http://msg-router:8002"
+    router_internal_secret: str = ""
 
 
 def get_settings() -> Settings:

@@ -20,6 +20,7 @@ class EventConfig(BaseModel):
     signal_group_id: str | None = None
     signal_mode: str = "fallback_only"
     signal_padding: SignalPadding = SignalPadding()
+    jambonz_mode: str = "disabled"
     dispatcher_emails: list[str] = []
     dispatcher_session_ttl_hours: int = 8
     dispatcher_session_max_devices: int = 2
@@ -64,6 +65,8 @@ class AppConfig(BaseModel):
     site_map: SiteMap | None = None
     panel_base_url: str
     mattermost_webhook: str | None = None
+    mattermost_url: str | None = None
+    mattermost_channel_id: str | None = None
     slack_webhook: str | None = None
     attachment_backend: str = "local"
     attachment_max_bytes: int = 10 * 1024 * 1024

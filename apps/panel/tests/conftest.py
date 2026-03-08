@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-panel-tests-0000")
 
+import pathlib
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +25,9 @@ TEST_SECRET = "test-secret-key-for-panel-tests-0000"
 TEST_CASE_ID = uuid.uuid4()
 
 
+_FIXTURE_CONFIG = pathlib.Path(__file__).parent / "fixtures" / "config.json"
+
+
 def _make_settings() -> Settings:
     return Settings(
         database_url="postgresql+asyncpg://test:test@localhost/test",
@@ -32,6 +37,7 @@ def _make_settings() -> Settings:
         oidc_client_id="test",
         oidc_client_secret="secret",
         base_url="http://testserver",
+        config_path=_FIXTURE_CONFIG,
     )
 
 

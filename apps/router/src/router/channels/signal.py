@@ -16,6 +16,8 @@ URGENCY_EMOJI: dict[str, str] = {
     "urgent": "🔴",
 }
 
+MAP_BASE_URL = "https://map.emfcamp.org"
+
 
 class SignalAdapter(ChannelAdapter):
     def __init__(self, api_url: str, sender: str, group_id: str) -> None:
@@ -33,10 +35,25 @@ class SignalAdapter(ChannelAdapter):
 
     async def send(self, alert: CaseAlert) -> str | None:
         emoji = URGENCY_EMOJI.get(alert.urgency, "⚪")
+
+        location_text = alert.location_hint or "not specified"
+        map_line = ""
+        if alert.location_lat is not None and alert.location_lon is not None:
+            map_line = (
+                f"\nMap: {MAP_BASE_URL}/#15/{alert.location_lat}/{alert.location_lon}"
+            )
+
+        also_line = ""
+        if alert.also_sent_via:
+            also_line = f"\nAlso sent via: {', '.join(alert.also_sent_via)}"
+
         text = (
             f"{emoji} *New {alert.urgency} case*: {alert.friendly_id}\n"
             f"Event: {alert.event_name}\n"
-            f"Location: {alert.location_hint or 'not specified'}"
+            f"Location: {location_text}"
+            f"{map_line}"
+            f"{also_line}\n"
+            f"\nReact 🤙 to acknowledge"
         )
         payload: dict[str, object] = {
             "message": text,
@@ -58,8 +75,10 @@ class SignalAdapter(ChannelAdapter):
             log.exception("SignalAdapter.send failed for case %s", alert.case_id)
             return None
 
-    async def send_ack_confirmation(self, alert: CaseAlert, message_id: str) -> None:
-        text = f"✅ Case {alert.friendly_id} has been acknowledged."
+    async def send_ack_confirmation(
+        self, alert: CaseAlert, acked_by: str, message_id: str
+    ) -> None:
+        text = f"✅ Case {alert.friendly_id} acknowledged by {acked_by}."
         payload: dict[str, object] = {
             "message": text,
             "number": self._sender,

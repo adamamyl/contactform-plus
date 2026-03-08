@@ -79,7 +79,11 @@ GRANT SELECT (friendly_id) ON forms.cases TO form_user;
 GRANT INSERT, SELECT ON forms.idempotency_tokens TO form_user;
 
 CREATE VIEW forms.cases_router WITH (security_barrier = true) AS
-    SELECT id, friendly_id, event_name, urgency, status, location_hint, created_at, updated_at
+    SELECT
+        id, friendly_id, event_name, urgency, status, location_hint,
+        (form_data -> 'location' ->> 'lat')::float AS location_lat,
+        (form_data -> 'location' ->> 'lon')::float AS location_lon,
+        created_at, updated_at
     FROM forms.cases;
 
 GRANT SELECT ON forms.cases_router TO router_user;
@@ -97,9 +101,10 @@ CREATE VIEW forms.cases_dispatcher WITH (security_barrier = true) AS
 GRANT SELECT ON forms.cases_dispatcher TO panel_viewer;
 GRANT SELECT ON forms.notifications TO panel_viewer;
 
-GRANT SELECT, UPDATE ON forms.cases TO team_member;
+GRANT SELECT ON forms.cases TO team_member;
+GRANT UPDATE (status, assignee, urgency, tags, updated_at) ON forms.cases TO team_member;
 GRANT SELECT, INSERT ON forms.case_history TO team_member;
-GRANT SELECT ON forms.notifications TO team_member;
+GRANT SELECT, UPDATE ON forms.notifications TO team_member;
 GRANT SELECT ON forms.idempotency_tokens TO team_member;
 
 ALTER TABLE forms.cases ENABLE ROW LEVEL SECURITY;

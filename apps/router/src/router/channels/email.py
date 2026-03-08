@@ -68,11 +68,16 @@ class EmailAdapter(ChannelAdapter):
         if ack_token:
             ack_line = f"\nAcknowledge: {self._ack_base_url}/ack/{ack_token}\n"
 
+        also_line = ""
+        if alert.also_sent_via:
+            also_line = f"Also sent via: {', '.join(alert.also_sent_via)}\n"
+
         body = (
             f"Case: {alert.friendly_id}\n"
             f"Urgency: {alert.urgency}\n"
             f"Event: {alert.event_name}\n"
             f"Location: {alert.location_hint or 'not specified'}\n"
+            f"{also_line}"
             f"{ack_line}"
             f"\nView full details: {self._panel_url}/cases/{alert.case_id}\n"
         )
@@ -93,7 +98,9 @@ class EmailAdapter(ChannelAdapter):
             log.exception("EmailAdapter.send failed for case %s", alert.case_id)
             return None
 
-    async def send_ack_confirmation(self, alert: CaseAlert, message_id: str) -> None:
+    async def send_ack_confirmation(
+        self, alert: CaseAlert, acked_by: str, message_id: str
+    ) -> None:
         emoji = URGENCY_EMOJI.get(alert.urgency, "⚪")
         msg = EmailMessage()
         msg["From"] = self._from
@@ -102,7 +109,7 @@ class EmailAdapter(ChannelAdapter):
         msg["In-Reply-To"] = message_id
         msg["References"] = message_id
         msg["Message-ID"] = make_msgid(domain=self._domain)
-        body = f"{emoji} Case {alert.friendly_id} has been acknowledged.\n"
+        body = f"{emoji} Case {alert.friendly_id} has been acknowledged by {acked_by}.\n"
         msg.set_content(body)
         try:
             await aiosmtplib.send(

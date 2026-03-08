@@ -8,6 +8,13 @@ class Settings(SharedSettings):
     signal_sender: str = ""
     jambonz_api_url: str = ""
     jambonz_api_key: str = ""
+    jambonz_account_sid: str = ""
+    jambonz_application_sid: str = ""
+    jambonz_from_number: str = ""
+    tts_service_url: str = "http://tts:8003"
+    mattermost_token: str = ""
+    mattermost_webhook_secret: str = ""
+    router_internal_secret: str = ""
     ack_base_url: str = ""
 
     model_config = {"env_file": ".env"}

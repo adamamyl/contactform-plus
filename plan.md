@@ -2843,17 +2843,328 @@ Post-launch iteration based on real use. All items below are shipped.
 
 ---
 
-### Phase Q — Admin Panel: urgency/priority editing
+### Phase Q — Admin Panel: urgency/priority editing ✅
 
 Allow team members to change the urgency (priority) of a case after submission, with every change recorded in `case_history` for the audit trail.
 
-- [ ] Add `PATCH /api/cases/{case_id}/urgency` endpoint in `routes.py` (session auth via `require_conduct_team`; validate against `config.urgency_levels`; write `case_history` row with `field="urgency"`, `old_value`, `new_value`, `changed_by`)
-- [ ] Add urgency selector to `case_detail.html` Actions section — a `<select>` pre-filled with the current urgency, styled with the existing badge colours; submit via JS PATCH (same pattern as assignee/tags forms)
-- [ ] Update `panel.js` `initPatchForm` or add a dedicated `initUrgencyForm` handler that sends `{"urgency": value}` and reloads on success
-- [ ] Grant `UPDATE (urgency, updated_at)` on `forms.cases` to `team_member` in `infra/postgres/00_roles.sql` (currently only `status` and `assignee` are updatable by `team_member`)
-- [ ] Apply the live DB grant: `GRANT UPDATE (urgency, updated_at) ON forms.cases TO team_member;`
-- [ ] Update `cases.html` urgency badge to reflect live changes after reload
-- [ ] Test: change urgency → `case_history` row exists with correct `old_value`/`new_value`; badge updates in list view
+- [x] Add `PATCH /api/cases/{case_id}/urgency` endpoint in `routes.py` (session auth via `require_conduct_team`; validate against `config.urgency_levels`; write `case_history` row with `field="urgency"`, `old_value`, `new_value`, `changed_by`)
+- [x] Add urgency selector to `case_detail.html` Actions section — a `<select>` pre-filled with the current urgency, styled with the existing badge colours; submit via JS PATCH (same pattern as assignee/tags forms)
+- [x] Update `panel.js` `initPatchForm` or add a dedicated `initUrgencyForm` handler that sends `{"urgency": value}` and reloads on success
+- [x] Grant `UPDATE (urgency, updated_at)` on `forms.cases` to `team_member` in `infra/postgres/00_roles.sql` (currently only `status` and `assignee` are updatable by `team_member`)
+- [x] Apply the live DB grant: `GRANT UPDATE (urgency, updated_at) ON forms.cases TO team_member;`
+- [x] Update `cases.html` urgency badge to reflect live changes after reload
+- [x] Test: change urgency → `case_history` row exists with correct `old_value`/`new_value`; badge updates in list view
+
+---
+
+### Phase R — Notification system: ACK wiring, cross-channel propagation, & housekeeping ✅
+
+Three inter-related gaps fixed together because they share the same data path:
+(a) email ACK magic links never appear in emails; (b) ACK on any one channel does not update the others; (c) the `notification_state_total` Prometheus counter is defined but never incremented; (d) `_signal_phone_available()` is hardcoded `False`.
+
+#### R.1 — Wire email ACK token into `_send_with_retry`
+
+`create_ack_token` exists in `router/ack/tokens.py`; it is never called.  `EmailAdapter.send()` already accepts an `ack_token: str | None` kwarg but `_send_with_retry` never passes one.
+
+- [x] In `alert_router.py` `_send_with_retry`: before the first send attempt, when `channel_name == "email"`, create a notification record first (to get its `id`), call `create_ack_token(notification.id, settings.secret_key)`, then pass the token to `adapter.send(alert, ack_token=token)` for that attempt
+- [x] If the adapter is not `EmailAdapter`, `ack_token` is not passed (it is ignored by other adapters anyway; no API change needed)
+- [x] Verify the emitted email body contains the `Acknowledge:` line with the correct URL
+- [x] Test: `EmailAdapter.send()` with a non-None `ack_token` includes `{ack_base_url}/ack/{token}` in the body; without token the line is absent
+
+#### R.2 — Cross-channel ACK confirmation after any ACK
+
+Current behaviour: when `mark_acked` is called, the code at the call site sends a confirmation only on the channel that just acked.  Other channels never know.
+
+**Design**: `mark_acked` is extended to also return the list of all other `SENT` notifications for the same case.  A new `send_ack_to_all_channels` coroutine then sends an (idempotent) ACK confirmation on every adapter that has a SENT notification.
+
+- [x] Extend `alert_router.mark_acked(notification_id, acked_by, session) -> tuple[CaseAlert | None, list[Notification]]`:
+  - After marking the notification ACKED, query `forms.notifications WHERE case_id = ? AND state = 'sent' AND id != notification_id`
+  - Return `(alert, other_sent_notifications)` — callers must unpack
+- [x] Add `alert_router.send_ack_to_all_channels(alert, acked_by, other_notifications, session)`:
+  - Maps each notification's `channel` field to the corresponding adapter
+  - Calls `adapter.send_ack_confirmation(alert, acked_by, notification.message_id)` for each
+  - Wraps each call in `asyncio.create_task` so a slow channel doesn't block others
+  - All current `send_ack_confirmation` signatures already accept `acked_by` via the base ABC; verify and fix any that don't
+- [x] Update all ACK call sites to use the new return signature and call `send_ack_to_all_channels`:
+  - `POST /webhook/signal` handler in `main.py`
+  - `GET /ack/{token}` handler in `main.py`
+- [x] Test: mock three adapters (email, signal, mattermost); ACK via signal webhook → email and mattermost adapters each receive `send_ack_confirmation` call with correct `acked_by` and `message_id`
+
+#### R.3 — Panel/dispatcher ACK triggers cross-channel notifications
+
+Panel ACK currently updates `forms.notifications` directly via DB and never calls the router.  Add a router internal endpoint and have the panel call it.
+
+Security: use a pre-shared secret.  Add `ROUTER_INTERNAL_SECRET` to router `Settings` and `.env-example`; the router checks the `X-Internal-Secret` request header on all `/internal/*` routes and returns 403 if it is absent or wrong.  Panel and Jambonz settings each also hold `ROUTER_INTERNAL_SECRET` and include it as `X-Internal-Secret` in every call to the internal endpoint.  This is sufficient given Docker-network isolation — no need for full OAuth on an endpoint that is never exposed via Caddy.
+
+- [x] Add `ROUTER_INTERNAL_SECRET` to `apps/router/src/router/settings.py`, `apps/panel/src/emf_panel/settings.py`, and `apps/jambonz/src/settings.py`; add to `.env-example` with a generation comment
+- [x] Add `POST /internal/ack/{case_id}` to `apps/router/src/router/main.py`:
+  - Check `X-Internal-Secret` header; return 403 if missing or wrong
+  - Accepts JSON body `{"acked_by": "<username>"}`, optional `{"notification_id": "<uuid>"}` (if present, marks that specific notification; otherwise finds the first SENT notification for the case)
+  - Marks notification(s) ACKED, calls `send_ack_to_all_channels`
+  - Returns `{"ok": True, "acked_count": N}`
+  - Do not expose via Caddy
+- [x] In `apps/panel/src/emf_panel/routes.py`, after updating notifications in `POST /api/cases/{case_id}/ack`:
+  - Call `httpx.AsyncClient().post(settings.router_internal_url + "/internal/ack/" + case_id, json={"acked_by": username}, headers={"X-Internal-Secret": settings.router_internal_secret})` (fire-and-forget with a short timeout; log failure but do not propagate to client)
+  - Add `ROUTER_INTERNAL_URL` to `apps/panel/src/emf_panel/settings.py` (default `http://msg-router:8002`)
+- [x] Do the same in `POST /api/dispatcher/ack/{case_id}`, passing `"dispatcher"` as `acked_by` (dispatcher sessions have no OIDC username)
+- [x] Test: panel ACK → router internal endpoint called → all SENT notifications get `send_ack_confirmation` calls
+- [x] Test: missing or wrong `X-Internal-Secret` → 403
+
+#### R.4 — Fix `_signal_phone_available()` to reflect Jambonz state
+
+Currently `_signal_phone_available()` is hardcoded `return False`, making `signal_mode="fallback_only"` behave identically to `"always"`.
+
+- [x] In `alert_router.py`, replace the stub with:
+  ```python
+  async def _signal_phone_available(self) -> bool:
+      if self._phone is None:
+          return False
+      return await self._phone.is_available()
+  ```
+- [x] `_phone` is the Jambonz adapter (already passed in via constructor); `JambonzAdapter.is_available()` already hits the Jambonz Accounts endpoint — this just wires the two together
+- [x] Test: `signal_mode="fallback_only"` + phone available → Signal not sent; phone unavailable → Signal sent
+
+#### R.5 — Increment `notification_state_total` counter
+
+The Prometheus counter `emf_notification_state_total` is defined in `main.py` but never incremented anywhere.
+
+- [x] In `alert_router._send_with_retry`, after each state transition (`SENT`, `FAILED`, `RETRYING`), call `notification_state_total.labels(channel=channel_name, state=new_state).inc()`
+- [x] In `mark_acked`, call `notification_state_total.labels(channel=notification.channel, state="acked").inc()`
+- [x] Expose the counter instance via a module-level singleton (or pass into `AlertRouter.__init__`) so it can be referenced from both `main.py` and `alert_router.py` without a circular import
+- [x] Test: verify counter increments in unit tests by patching the counter object
+
+#### R.6 — Tests
+
+- [x] `test_mark_acked_returns_other_sent_notifications` — set up two SENT notifications for same case; call `mark_acked`; assert the returned list contains the other notification
+- [x] `test_send_ack_to_all_channels_calls_each_adapter` — three adapters, two with SENT notifications; assert both `send_ack_confirmation` mocks called; adapter for non-SENT not called
+- [x] `test_email_ack_link_in_body` — `EmailAdapter.send(alert, ack_token="test_token")` → body contains `test_token`
+- [x] `test_signal_phone_available_delegates_to_phone_adapter` — phone adapter mock returns True/False; assert `_signal_phone_available` matches
+- [x] `test_notification_state_counter_incremented` — `_send_with_retry` success → counter `sent` incremented; all-fail → counter `failed` incremented
+
+---
+
+### Phase S — Mattermost: Posts API upgrade ✅
+
+Replace the incoming webhook (no message ID, no threading, no in-place update) with the Mattermost Posts API.  This is the primary improvement for the Mattermost channel.
+
+#### S.0 — Local Mattermost for development
+
+- [x] Add `mattermost/mattermost-team-edition` service to `docker-compose.yml` under the `local` profile (reference: https://docs.mattermost.com/deployment-guide/server/containers/install-docker.html); expose port 8065; mount a named volume for data persistence
+- [x] Add `MATTERMOST_URL`, `MATTERMOST_CHANNEL_ID`, and `MATTERMOST_TOKEN` to `.env-example` with comments explaining how to obtain a bot token and channel ID from the local instance
+- [x] Document the Mattermost local setup in `apps/router/README.md` (extend the existing channel-adapter section): how to start the local container, create a bot account, obtain a personal access token with `create_post` permission, find the channel ID, and configure `.env`
+
+#### S.1 — Config changes
+
+- [x] Add to `AppConfig` in `shared/src/emf_shared/config.py`:
+  ```python
+  mattermost_url: str | None = None          # e.g. "https://mattermost.emfcamp.org"
+  mattermost_channel_id: str | None = None   # target channel ID (not display name)
+  ```
+- [x] Add to router `Settings` in `apps/router/src/router/settings.py`:
+  ```
+  MATTERMOST_TOKEN=...   # personal access token or bot account token with create_post permission
+  ```
+- [x] Keep `mattermost_webhook` in `AppConfig` as a fallback: if `mattermost_url` + `mattermost_channel_id` + `MATTERMOST_TOKEN` are all set, use Posts API; otherwise fall back to webhook (for backward compat during transition)
+- [x] Update `config.json-example` and `.env-example` with new fields and comments
+
+#### S.2 — MattermostAdapter rewrite
+
+File: `apps/router/src/router/channels/mattermost.py`
+
+- [x] Constructor accepts both: `webhook_url` (legacy) and `api_url`, `channel_id`, `token` (Posts API)
+- [x] `send(alert) -> str | None` — when Posts API config present:
+  - `POST {mattermost_url}/api/v4/posts` with `Authorization: Bearer {token}`
+  - Body (Slack-compatible attachment with coloured border and interactive button):
+    ```json
+    {
+      "channel_id": "CHANNEL_ID",
+      "message": "{emoji} New {urgency} case: {friendly_id}",
+      "props": {
+        "attachments": [{
+          "color": "{urgency_colour}",
+          "title": "{emoji} New {urgency} case: {friendly_id}",
+          "title_link": "{case_url}",
+          "fields": [
+            {"title": "Event", "value": "{event_name}", "short": true},
+            {"title": "Location", "value": "{location_text}", "short": true}
+          ],
+          "actions": [{
+            "name": "Acknowledge",
+            "type": "button",
+            "integration": {
+              "url": "{router_base_url}/webhook/mattermost/action",
+              "context": {"action": "ack", "notification_id": "{notification_uuid}"}
+            }
+          }]
+        }]
+      },
+      "metadata": {"priority": {"priority": "urgent", "requested_ack": true}}
+    }
+    ```
+  - On 201 response: extract `response["id"]` as `message_id` — this is the post ID used for threading and in-place updates
+  - Fall back to webhook path if API call fails
+- [x] `send_ack_confirmation(alert, acked_by, message_id)` — when Posts API:
+  - `PUT {mattermost_url}/api/v4/posts/{message_id}` with updated body:
+    - Remove `actions` from the attachment (button disappears)
+    - Change `color` to `#2e7d32` (green)
+    - Add `{"title": "Acknowledged by", "value": "@{acked_by}", "short": true}` field
+    - Returns without error if post not found (already deleted/edited)
+- [x] `is_available()` — when Posts API: `GET {mattermost_url}/api/v4/system/ping` (no auth needed); fall back to `bool(webhook_url)`
+- [x] Urgency colour map (matches existing CSS variables):
+  - `urgent` → `#c62828`, `high` → `#e65100`, `medium` → `#1565c0`, `low` → `#558b2f`
+
+#### S.3 — Mattermost button action endpoint
+
+- [x] Add `POST /webhook/mattermost/action` to `apps/router/src/router/main.py`:
+  - Receives Mattermost button-click JSON: `{"user_name": "...", "context": {"action": "ack", "notification_id": "..."}}`
+  - Validate `context.action == "ack"` and `notification_id` is a valid UUID
+  - Call `mark_acked(notification_id, user_name, session)`
+  - Call `send_ack_to_all_channels(alert, user_name, other_notifications, session)`
+  - Return `{"update": {"message": "Acknowledged"}}` with HTTP 200 (Mattermost uses this to show ephemeral confirmation)
+- [x] Add a simple shared-secret check: include `MATTERMOST_WEBHOOK_SECRET` in `context` when building the action; verify it in the handler.  This prevents arbitrary external callers from triggering ACKs.
+
+#### S.4 — `message_id` format for cross-channel update
+
+For the Posts API path, `notifications.message_id` stores the Mattermost post ID (a 26-char alphanumeric string).  When ACK arrives from another channel and `send_ack_confirmation` is called with this `message_id`, it does the `PUT` update.
+
+- [x] Document this in `notifs-test.md` table (update column meaning for `message_id`)
+
+#### S.5 — Tests
+
+- [x] `test_mattermost_posts_api_send` — mock `httpx`, verify `POST /api/v4/posts` called with correct attachment structure; assert returned value is the post `id` from the response
+- [x] `test_mattermost_ack_updates_post` — mock `httpx`, call `send_ack_confirmation(alert, "adam", "post_id")` → verify `PUT /api/v4/posts/post_id` called with green colour and `acked_by` field
+- [x] `test_mattermost_webhook_action_endpoint` — POST to `/webhook/mattermost/action` with valid payload → `mark_acked` called, `send_ack_to_all_channels` called; response is `{"update": {"message": "Acknowledged"}}`
+- [x] `test_mattermost_falls_back_to_webhook` — Posts API creds absent → falls back to webhook path, returns `"mattermost"` as message_id
+
+---
+
+### Phase T — Jambonz: AlertRouter integration + DTMF ACK fix ✅
+
+Currently Jambonz calls are only initiated by the panel's "Call" button.  The goal: calls fire automatically on new cases (like Signal), controlled by config.  The DTMF ACK webhook exists but doesn't write to the DB.
+
+#### T.1 — Add Jambonz config flags
+
+- [x] Add to per-event `EventConfig` in `shared/src/emf_shared/config.py`:
+  ```python
+  jambonz_mode: str = "disabled"
+  # "disabled"                  — never auto-call (current behaviour)
+  # "always"                    — call on every new event-time case
+  # "high_priority_only"        — call only for urgency high/urgent
+  ```
+- [x] Add required Jambonz env vars to `apps/router/src/router/settings.py` (they already exist in `apps/jambonz/settings.py`; add to router settings as well):
+  ```
+  JAMBONZ_API_URL, JAMBONZ_API_KEY, JAMBONZ_ACCOUNT_SID,
+  JAMBONZ_APPLICATION_SID, JAMBONZ_FROM_NUMBER, TTS_SERVICE_URL
+  ```
+  All optional (default `None`); router creates `JambonzAdapter` only when all are set.
+- [x] Update `.env-example` with Jambonz vars and comments
+- [x] Document Jambonz configuration in `apps/jambonz/README.md` (extend the existing file): self-hosted vs cloud, required env vars, how the DTMF webhook URL is wired, and a note that cloud Jambonz requires a public-facing URL (ngrok or Caddy) while self-hosted on the same Docker network does not
+
+#### T.2 — Wire Jambonz into AlertRouter
+
+- [x] `AlertRouter.__init__` already has `phone: ChannelAdapter | None`; this is where `JambonzAdapter` plugs in.  The init code in `main.py` creates adapters on startup — add Jambonz adapter creation when env vars are present.
+- [x] Add `_jambonz_mode` (per-event string) alongside existing `_signal_mode` in `AlertRouter`.  Per-event lookup via `_event_config(event_name)`.
+- [x] In `_route_event_time`, after Signal logic, add Jambonz routing:
+  ```python
+  if self._phone and await self._phone.is_available():
+      if ev.jambonz_mode == "always" or (
+          ev.jambonz_mode == "high_priority_only" and alert.urgency in ("high", "urgent")
+      ):
+          asyncio.create_task(self._send_with_retry(alert, "telephony", self._phone, session))
+  ```
+- [x] The escalation logic (`apps/jambonz/src/escalation.py`) is not yet integrated with `_send_with_retry`; for now, `JambonzAdapter.send()` places a single call to `call_group`.  Escalation will be wired in a follow-up; note this as a TODO.
+
+#### T.3 — Fix DTMF ACK webhook to write to DB and propagate
+
+File: `apps/jambonz/src/main.py` (the DTMF webhook handler).
+
+- [x] DTMF webhook handler (`POST /webhook/jambonz`): on digit `"1"` (ACK):
+  - Look up the `Notification` row where `channel = 'telephony'` and `case_id = body.case_id` and `state = 'sent'`
+  - Call the router internal ACK endpoint `POST http://msg-router:8002/internal/ack/{case_id}` with `{"acked_by": "jambonz_dtmf", "notification_id": str(notification.id)}`
+  - This causes the router to mark all notifications acked and send cross-channel confirmations
+  - Jambonz adapter only needs `ROUTER_INTERNAL_URL` env var (default `http://msg-router:8002`)
+- [x] On digit `"2"` (pass/escalate): log and mark as escalated; for now this is a no-op in terms of notification state (escalation sequence remains in `escalation.py`)
+- [x] Add `ROUTER_INTERNAL_URL` to `apps/jambonz/src/main.py` settings
+- [x] Test: POST to `/webhook/jambonz` with `{"digit": "1", "case_id": "<uuid>"}` → router internal ACK endpoint called; digit `"2"` → endpoint not called
+
+#### T.4 — Tests
+
+- [x] `test_jambonz_auto_call_always_mode` — `jambonz_mode="always"`, Jambonz available → telephony `_send_with_retry` task spawned for any urgency
+- [x] `test_jambonz_auto_call_high_priority_only` — `jambonz_mode="high_priority_only"` → spawned for high/urgent; not spawned for medium/low
+- [x] `test_jambonz_disabled` — `jambonz_mode="disabled"` → no telephony task spawned regardless of urgency or availability
+- [x] `test_dtmf_digit_1_calls_router_ack` — POST to DTMF webhook with digit `"1"` → router internal endpoint called with correct body
+- [x] `test_dtmf_digit_2_does_not_ack` — digit `"2"` → router ACK not called
+
+---
+
+### Phase U — Signal: message improvements ✅
+
+Improve the Signal alert message and ACK confirmation to be more useful in the field.
+
+#### U.1 — Map link in Signal alerts
+
+- [x] In `SignalAdapter.send()`, when `alert.location` contains `lat` and `lon`, append a link to the EMF map using the **public** `map.emfcamp.org` URL.  In production, Signal recipients are on their phones and need a public URL.  In local testing with BlueStacks (Android emulator on the dev machine), `map.emf-forms.internal` is also reachable — but always use `map.emfcamp.org` in the message so it works in both contexts without configuration:
+  `https://map.emfcamp.org/#15/{lat}/{lon}` (standard map hash format; opens at the right coords)
+- [x] If only `location_hint` text (no coords), include the text only — no map link
+- [x] Signal markdown: map link as plain URL (Signal renders URLs as tappable links; no special markup needed)
+- [x] Updated message format:
+  ```
+  {emoji} *New {urgency} case: {friendly_id}*
+  Location: {location_text}
+  Map: https://map.emfcamp.org/#15/{lat}/{lon}
+  Case: {case_url}
+
+  React 🤙 to acknowledge
+  ```
+
+#### U.2 — Signal `send_ack_confirmation` when ACK from another channel
+
+Currently `send_ack_confirmation` sends a new message quoting the original.  When ACK comes from another channel (e.g. panel), the Signal message should also update.  Because Signal doesn't support in-place message editing via signal-cli-rest-api, the current approach (new quoted message) is correct; just ensure it includes who acked and from where.
+
+- [x] Update `SignalAdapter.send_ack_confirmation(alert, acked_by, message_id)` to include `acked_by` in the confirmation:
+  `"✅ Case {friendly_id} acknowledged by {acked_by}"`
+- [x] `send_ack_confirmation` already accepts `acked_by` in the base interface; verify the Signal implementation passes it through (currently the method signature exists but the value may not be used in the message body)
+
+#### U.3 — `also_sent_via` field on `CaseAlert`
+
+- [x] Add `also_sent_via: list[str] = field(default_factory=list)` to the `CaseAlert` dataclass in `shared/src/emf_shared/models.py` (or wherever the dataclass lives)
+- [x] In `AlertRouter._route_event_time`, after determining which adapters will be used, build the list and assign it: each channel name goes into the list except for the channel being sent to (e.g. when building the Signal message, `also_sent_via = ["email", "mattermost"]`)
+- [x] Signal: `SignalAdapter.send()` appends `"Also sent via: {', '.join(alert.also_sent_via)}"` if the list is non-empty (moved to Phase V for all text channels)
+
+#### U.4 — Tests
+
+- [x] `test_signal_message_includes_map_link` — alert with lat/lon → Signal message body contains the public `map.emfcamp.org` URL (Signal messages always use the public map regardless of local dev environment)
+- [x] `test_signal_message_no_map_link_when_no_coords` — alert with text-only location → no map URL in body
+- [x] `test_signal_ack_confirmation_includes_acked_by` — `send_ack_confirmation(alert, "alice", msg_id)` → confirmation message contains `"alice"`
+- [x] `test_signal_also_sent_via` — `alert.also_sent_via = ["email", "mattermost"]` → Signal message contains `"Also sent via: email, mattermost"`
+
+---
+
+### Phase V — "Also sent via" on all text channels ✅
+
+The `also_sent_via` field (Phase U.3) should appear in every text-based notification channel so that any responder — regardless of which channel they read — can immediately see what other channels were notified.  Voice (Jambonz) is excluded: the TTS script is kept short and this information is not useful during a call.
+
+#### V.1 — Signal
+
+Already covered by U.3/U.4: append `"Also sent via: …"` when `also_sent_via` is non-empty.
+
+#### V.2 — Email
+
+- [x] In `EmailAdapter.send()`, when `alert.also_sent_via` is non-empty, append a line to the email body (plain-text and HTML):
+  `Also sent via: {', '.join(alert.also_sent_via)}`
+- [x] Place it after the case URL and before the ACK link (if present), so it is visible without scrolling
+- [x] Test: `EmailAdapter.send(alert_with_also_sent_via)` → email body contains `"Also sent via: signal, mattermost"`
+
+#### V.3 — Mattermost
+
+- [x] In `MattermostAdapter.send()`, when `alert.also_sent_via` is non-empty, add an attachment field:
+  `{"title": "Also sent via", "value": "{', '.join(alert.also_sent_via)}", "short": true}`
+- [x] Test: `MattermostAdapter.send(alert_with_also_sent_via)` → Posts API body contains the `"Also sent via"` field in the attachment
+
+#### V.4 — AlertRouter wiring
+
+- [x] Confirm `_route_event_time` populates `also_sent_via` correctly for each adapter: each adapter receives the list of the *other* channels, not its own name
+- [x] Integration test: alert routed to signal + email + mattermost simultaneously → each channel's message contains the other two names
 
 ---
 
@@ -2867,3 +3178,173 @@ Allow team members to change the urgency (priority) of a case after submission, 
 - [ ] Attachment tests: MIME rejection, ClamAV positive → 400, max 3 files, max 10 MB, unauthenticated → 403
 - [ ] Phase C: `CURRENT_EVENT_OVERRIDE` missing from `.env-example` — add it
 - [x] e2e test coordinates: all three location pin test cases now use EMF site coords (~52.041, -2.377) — done in Phase P
+
+---
+
+## 16. Master Outstanding TODO
+
+Compact checklist of all remaining work, in implementation order.  Phases Q–V and the miscellaneous backlog.  Check items off here and in the detailed phase section above when complete.
+
+---
+
+### Phase Q — Urgency editing ✅
+
+- [x] `PATCH /api/cases/{case_id}/urgency` endpoint (`routes.py`) — auth via `require_conduct_team`; validate against `config.urgency_levels`; write `case_history` row
+- [x] Urgency `<select>` in `case_detail.html` Actions section — pre-filled; JS PATCH on change (reuse or extend `initPatchForm`)
+- [x] Grant `UPDATE (urgency, updated_at)` on `forms.cases` to `team_member` in `00_roles.sql`
+- [x] Apply live DB grant
+- [x] Urgency badge in `cases.html` reflects change after reload
+- [x] Test: change urgency → `case_history` row with correct `old_value`/`new_value`; badge updates
+
+---
+
+### Phase R — Notification ACK wiring & cross-channel propagation ✅
+
+#### R.1 — Email ACK token
+- [x] In `_send_with_retry` (email channel): create notification record first to get `id`; call `create_ack_token(notification.id, settings.secret_key)`; pass token to `adapter.send(alert, ack_token=token)`
+- [x] Test: `EmailAdapter.send()` with non-None token → body contains `{ack_base_url}/ack/{token}`; without token → line absent
+
+#### R.2 — Cross-channel ACK confirmation
+- [x] `mark_acked` → returns `tuple[CaseAlert | None, list[Notification]]` (other SENT notifications for same case)
+- [x] New `send_ack_to_all_channels(alert, acked_by, other_notifications, session)` — maps each notification's `channel` to its adapter; calls `send_ack_confirmation` per adapter; wraps each in `asyncio.create_task`
+- [x] Verify all `send_ack_confirmation` method signatures accept `acked_by`; fix any that don't
+- [x] Update `POST /webhook/signal` handler to use new `mark_acked` return signature and call `send_ack_to_all_channels`
+- [x] Update `GET /ack/{token}` handler similarly
+- [x] Test: ACK via signal → email and mattermost adapters each receive `send_ack_confirmation` with correct `acked_by` and `message_id`
+
+#### R.3 — Panel/dispatcher triggers router
+- [x] Add `ROUTER_INTERNAL_SECRET` to `apps/router/src/router/settings.py`, `apps/panel/src/emf_panel/settings.py`, `apps/jambonz/src/settings.py`, and `.env-example`
+- [x] `POST /internal/ack/{case_id}` in router `main.py`: check `X-Internal-Secret` header (403 if wrong); accept `{"acked_by", "notification_id?"}`; mark ACKED; call `send_ack_to_all_channels`; return `{"ok": true, "acked_count": N}`; do not expose via Caddy
+- [x] After DB update in `POST /api/cases/{case_id}/ack` (panel): fire-and-forget POST to `{ROUTER_INTERNAL_URL}/internal/ack/{case_id}` with `acked_by=username` and `X-Internal-Secret` header; add `ROUTER_INTERNAL_URL` to panel settings (default `http://msg-router:8002`)
+- [x] Same in `POST /api/dispatcher/ack/{case_id}`, passing `"dispatcher"` as `acked_by`
+- [x] Test: panel ACK → router internal endpoint called → all SENT notifications get `send_ack_confirmation`
+- [x] Test: missing or wrong `X-Internal-Secret` → 403
+
+#### R.4 — Fix `_signal_phone_available()`
+- [x] Replace `return False` stub with `return await self._phone.is_available()` (guard for `self._phone is None`)
+- [x] Test: `signal_mode="fallback_only"` + phone available → Signal not sent; phone unavailable → Signal sent
+
+#### R.5 — Prometheus counter
+- [x] In `_send_with_retry`: call `notification_state_total.labels(channel=…, state=…).inc()` after each state transition (`sent`, `failed`, `retrying`)
+- [x] In `mark_acked`: call `notification_state_total.labels(channel=…, state="acked").inc()`
+- [x] Expose counter via module-level singleton to avoid circular import between `main.py` and `alert_router.py`
+- [x] Test: `_send_with_retry` success → `sent` counter incremented; all-fail → `failed` counter incremented
+
+#### R.6 — Unit tests
+- [x] `test_mark_acked_returns_other_sent_notifications`
+- [x] `test_send_ack_to_all_channels_calls_each_adapter`
+- [x] `test_email_ack_link_in_body`
+- [x] `test_signal_phone_available_delegates_to_phone_adapter`
+- [x] `test_notification_state_counter_incremented`
+
+---
+
+### Phase S — Mattermost Posts API ✅
+
+#### S.0 — Local dev
+- [x] Add `mattermost/mattermost-team-edition` to `docker-compose.yml` `local` profile; port 8065; named data volume
+- [x] Add `MATTERMOST_URL`, `MATTERMOST_CHANNEL_ID`, `MATTERMOST_TOKEN` to `.env-example`
+- [x] Extend `apps/router/README.md`: local container setup, bot account, personal access token (`create_post` permission), channel ID lookup
+
+#### S.1 — Config
+- [x] Add `mattermost_url: str | None` and `mattermost_channel_id: str | None` to `AppConfig` (`shared/src/emf_shared/config.py`)
+- [x] Add `MATTERMOST_TOKEN` to router `Settings`
+- [x] Keep `mattermost_webhook` fallback: use Posts API only when all three new fields are set
+- [x] Update `config.json-example` and `.env-example`
+
+#### S.2 — MattermostAdapter rewrite (`apps/router/src/router/channels/mattermost.py`)
+- [x] Constructor accepts both `webhook_url` (legacy) and `api_url` + `channel_id` + `token`
+- [x] `send()` — Posts API path: `POST /api/v4/posts` with coloured attachment (urgency colour map) and interactive Acknowledge button (`integration.url` + `context.notification_id`); extract `response["id"]` as `message_id`; fall back to webhook on failure
+- [x] `send_ack_confirmation()` — `PUT /api/v4/posts/{message_id}`: remove `actions`, set green colour, add `"Acknowledged by"` field; no-op if post not found
+- [x] `is_available()` — `GET /api/v4/system/ping`; fall back to `bool(webhook_url)`
+- [x] Urgency colour map: `urgent=#c62828`, `high=#e65100`, `medium=#1565c0`, `low=#558b2f`
+
+#### S.3 — Button action endpoint
+- [x] `POST /webhook/mattermost/action` in router `main.py`: validate `context.action == "ack"` and `notification_id`; verify `MATTERMOST_WEBHOOK_SECRET` in context; call `mark_acked` + `send_ack_to_all_channels`; return `{"update": {"message": "Acknowledged"}}`
+
+#### S.4 — Documentation
+- [x] Update `message_id` column description in `notifs-test.md` research table to reflect Mattermost post ID (26-char alphanumeric)
+
+#### S.5 — Tests
+- [x] `test_mattermost_posts_api_send` — verify `POST /api/v4/posts` called; returned value is post `id`
+- [x] `test_mattermost_ack_updates_post` — verify `PUT /api/v4/posts/{id}` called with green colour and `acked_by` field
+- [x] `test_mattermost_webhook_action_endpoint` — valid payload → `mark_acked` called; response is `{"update": …}`
+- [x] `test_mattermost_falls_back_to_webhook` — no Posts API creds → webhook path used
+
+---
+
+### Phase T — Jambonz auto-call & DTMF ACK ✅
+
+#### T.1 — Config
+- [x] Add `jambonz_mode: str = "disabled"` to per-event `EventConfig` (`"disabled"` / `"always"` / `"high_priority_only"`)
+- [x] Add Jambonz env vars (`JAMBONZ_API_URL`, `JAMBONZ_API_KEY`, `JAMBONZ_ACCOUNT_SID`, `JAMBONZ_APPLICATION_SID`, `JAMBONZ_FROM_NUMBER`, `TTS_SERVICE_URL`) to router `Settings` (all optional; default `None`)
+- [x] Update `.env-example` with Jambonz vars
+- [x] Extend `apps/jambonz/README.md`: self-hosted vs cloud, env vars, DTMF webhook URL, ngrok requirement for cloud Jambonz
+
+#### T.2 — Wire Jambonz into AlertRouter
+- [x] In `main.py` startup: create `JambonzAdapter` when all Jambonz env vars are present; pass as `phone=` to `AlertRouter.__init__`
+- [x] Add per-event `_jambonz_mode` lookup (alongside existing `_signal_mode`) in `AlertRouter`
+- [x] In `_route_event_time`: after Signal logic, if `_phone` available and `jambonz_mode` matches urgency, spawn `_send_with_retry` task for `"telephony"` channel
+
+#### T.3 — DTMF ACK webhook (`apps/jambonz/src/main.py`)
+- [x] Digit `"1"`: look up telephony notification by `case_id`; POST to `{ROUTER_INTERNAL_URL}/internal/ack/{case_id}` with `{"acked_by": "jambonz_dtmf", "notification_id": str(notification.id)}` and `X-Internal-Secret` header
+- [x] Digit `"2"`: log + mark escalated; no notification state change
+- [x] Add `ROUTER_INTERNAL_URL` to jambonz settings (default `http://msg-router:8002`)
+
+#### T.4 — Tests
+- [x] `test_jambonz_auto_call_always_mode`
+- [x] `test_jambonz_auto_call_high_priority_only`
+- [x] `test_jambonz_disabled`
+- [x] `test_dtmf_digit_1_calls_router_ack`
+- [x] `test_dtmf_digit_2_does_not_ack`
+
+---
+
+### Phase U — Signal message improvements ✅
+
+#### U.1 — Map link
+- [x] `SignalAdapter.send()`: when `alert.location` has `lat`+`lon`, append `Map: https://map.emfcamp.org/#15/{lat}/{lon}` (plain URL; always use public `map.emfcamp.org`)
+- [x] No map link when only `location_hint` text (no coords)
+
+#### U.2 — `acked_by` in Signal ACK confirmation
+- [x] `SignalAdapter.send_ack_confirmation(alert, acked_by, message_id)` → message body includes `"acknowledged by {acked_by}"`
+- [x] Verify `acked_by` is used in the message, not just accepted in the signature
+
+#### U.3 — `also_sent_via` field
+- [x] Add `also_sent_via: list[str] = field(default_factory=list)` to `CaseAlert` dataclass
+- [x] `_route_event_time`: build per-adapter `also_sent_via` list (all other channels, not self)
+- [x] `SignalAdapter.send()`: append `"Also sent via: {…}"` when non-empty
+
+#### U.4 — Tests
+- [x] `test_signal_message_includes_map_link`
+- [x] `test_signal_message_no_map_link_when_no_coords`
+- [x] `test_signal_ack_confirmation_includes_acked_by`
+- [x] `test_signal_also_sent_via`
+
+---
+
+### Phase V — "Also sent via" on all text channels ✅
+
+#### V.2 — Email
+- [x] `EmailAdapter.send()`: when `also_sent_via` non-empty, append `"Also sent via: …"` to both plain-text and HTML body (after case URL, before ACK link)
+- [x] Test: email body contains `"Also sent via: signal, mattermost"`
+
+#### V.3 — Mattermost
+- [x] `MattermostAdapter.send()`: when `also_sent_via` non-empty, add `{"title": "Also sent via", "value": "…", "short": true}` attachment field
+- [x] Test: Posts API body contains the `"Also sent via"` field
+
+#### V.4 — Integration
+- [x] Confirm `_route_event_time` gives each adapter the list of the *other* channels
+- [x] Integration test: alert routed to signal + email + mattermost → each channel's message contains the other two names
+
+---
+
+### Miscellaneous backlog
+
+- [ ] Postgres SSL cert ownership — chown `infra/postgres/certs/` in `install.py` or a postgres-init entrypoint so `ssl=on` works at startup
+- [ ] Swagger: filter missing services from URL list so `/dispatch` and `/all` pages don't error when Jambonz is not running
+- [ ] Swagger: rename `_PATHS["sysadmin"]` → `"text-to-speech"` in `infra/swagger/app.py`
+- [ ] Docker install: `find_free_port(preferred, lo=8100, hi=9000)` in `scripts/install.py`; write chosen ports to `.env`
+- [ ] ClamAV: wire clamd socket into attachment upload pipeline
+- [ ] Attachment tests: MIME rejection, ClamAV positive → 400, max 3 files, max 10 MB, unauthenticated → 403
+- [ ] Add `CURRENT_EVENT_OVERRIDE` to `.env-example`

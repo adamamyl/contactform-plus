@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, status
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import HTMLResponse
@@ -22,6 +23,7 @@ from router.channels.email import EmailAdapter
 from router.channels.mattermost import MattermostAdapter
 from router.channels.signal import SignalAdapter
 from router.channels.slack import SlackAdapter
+from router.channels.telephony import TelephonyAdapter
 from router.listener import listen_for_cases
 from router.models import Notification, NotifState
 from router.settings import Settings
@@ -36,7 +38,7 @@ notification_dispatch_seconds = Histogram(
 notification_state_total = Counter(
     "emf_notification_state_total",
     "Notification state transitions",
-    ["state"],
+    ["channel", "state"],
 )
 
 _router_instance: AlertRouter | None = None
@@ -72,13 +74,45 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             group_id=ev.signal_group_id,
         )
 
+    router_base_url = settings.ack_base_url or cfg.panel_base_url
+    mattermost_action_url = (
+        f"{router_base_url}/webhook/mattermost/action"
+        if cfg.mattermost_url and settings.mattermost_token
+        else None
+    )
     mattermost_adapter: MattermostAdapter | None = None
-    if cfg.mattermost_webhook:
-        mattermost_adapter = MattermostAdapter(cfg.mattermost_webhook, cfg.panel_base_url)
+    if cfg.mattermost_webhook or (cfg.mattermost_url and cfg.mattermost_channel_id and settings.mattermost_token):
+        mattermost_adapter = MattermostAdapter(
+            webhook_url=cfg.mattermost_webhook,
+            panel_url=cfg.panel_base_url,
+            api_url=cfg.mattermost_url,
+            channel_id=cfg.mattermost_channel_id,
+            token=settings.mattermost_token or None,
+            action_url=mattermost_action_url,
+            webhook_secret=settings.mattermost_webhook_secret or None,
+        )
 
     slack_adapter: SlackAdapter | None = None
     if cfg.slack_webhook:
         slack_adapter = SlackAdapter(cfg.slack_webhook, cfg.panel_base_url)
+
+    jambonz_vars = [
+        settings.jambonz_api_url,
+        settings.jambonz_api_key,
+        settings.jambonz_account_sid,
+        settings.jambonz_application_sid,
+        settings.jambonz_from_number,
+    ]
+    phone_adapter: TelephonyAdapter | None = None
+    if all(jambonz_vars):
+        phone_adapter = TelephonyAdapter(
+            api_url=settings.jambonz_api_url,
+            api_key=settings.jambonz_api_key,
+            account_sid=settings.jambonz_account_sid,
+            application_sid=settings.jambonz_application_sid,
+            tts_service_url=settings.tts_service_url,
+            from_number=settings.jambonz_from_number,
+        )
 
     recipients = []
     for event in cfg.events:
@@ -92,7 +126,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         from_addr=cfg.smtp.from_addr,
         recipients=recipients,
         panel_url=cfg.panel_base_url,
-        ack_base_url=settings.ack_base_url or cfg.panel_base_url,
+        ack_base_url=router_base_url,
         password=settings.smtp_password,
         use_tls=cfg.smtp.use_tls,
         username=cfg.smtp.username,
@@ -104,6 +138,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         signal_adapter=signal_adapter,
         mattermost_adapter=mattermost_adapter,
         slack_adapter=slack_adapter,
+        phone_adapter=phone_adapter,
+        secret_key=settings.secret_key,
+        counter=notification_state_total,
     )
 
     task = asyncio.create_task(listen_for_cases(settings.database_url, _router_instance))
@@ -156,9 +193,9 @@ async def signal_webhook(
         return {"ok": True}
 
     acked_by = str(body.envelope.source or "signal")
-    alert = await alert_router.mark_acked(notif.id, acked_by, session)
-    if alert and notif.message_id:
-        await alert_router.send_ack_confirmations(alert, "signal", notif.message_id)
+    alert, other_notifications = await alert_router.mark_acked(notif.id, acked_by, session)
+    if alert:
+        await alert_router.send_ack_to_all_channels(alert, acked_by, other_notifications, session)
 
     return {"ok": True}
 
@@ -180,22 +217,114 @@ async def email_ack(
     except (JWTError, ValueError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
 
-    alert = await alert_router.mark_acked(notification_id, "email_link", session)
+    alert, other_notifications = await alert_router.mark_acked(notification_id, "email_link", session)
     if alert is None:
         return HTMLResponse(
             content="<p>This case is already acknowledged or the link has expired.</p>",
             status_code=200,
         )
 
-    notif = await session.get(Notification, notification_id)
-    if notif and notif.message_id:
-        await alert_router.send_ack_confirmations(alert, "email", notif.message_id)
+    await alert_router.send_ack_to_all_channels(alert, "email_link", other_notifications, session)
 
     html = (
         f"<h1>✅ Acknowledged</h1>"
         f"<p>Case <strong>{alert.friendly_id}</strong> has been marked as acknowledged.</p>"
     )
     return HTMLResponse(content=html)
+
+
+# ---------------------------------------------------------------------------
+# Mattermost button action webhook
+# ---------------------------------------------------------------------------
+
+
+class MattermostActionContext(BaseModel):
+    action: str = ""
+    notification_id: str = ""
+    secret: str = ""
+
+
+class MattermostActionBody(BaseModel):
+    user_name: str = ""
+    context: MattermostActionContext = MattermostActionContext()
+
+
+@api.post("/webhook/mattermost/action")
+async def mattermost_action(
+    body: MattermostActionBody,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    alert_router: Annotated[AlertRouter, Depends(get_alert_router)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    if settings.mattermost_webhook_secret and body.context.secret != settings.mattermost_webhook_secret:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid secret")
+
+    if body.context.action != "ack":
+        return {"update": {"message": "Unknown action"}}
+
+    try:
+        notification_id = uuid.UUID(body.context.notification_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid notification_id")
+
+    acked_by = body.user_name or "mattermost"
+    alert, other_notifications = await alert_router.mark_acked(notification_id, acked_by, session)
+    if alert:
+        await alert_router.send_ack_to_all_channels(alert, acked_by, other_notifications, session)
+
+    return {"update": {"message": "Acknowledged"}}
+
+
+# ---------------------------------------------------------------------------
+# Internal ACK endpoint (panel / dispatcher / Jambonz → router)
+# ---------------------------------------------------------------------------
+
+
+class InternalAckBody(BaseModel):
+    acked_by: str
+    notification_id: str | None = None
+
+
+def _check_internal_secret(
+    x_internal_secret: Annotated[str, Header()] = "",
+    settings: Settings = Depends(get_settings),
+) -> None:
+    if settings.router_internal_secret and x_internal_secret != settings.router_internal_secret:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+
+@api.post("/internal/ack/{case_id}")
+async def internal_ack(
+    case_id: uuid.UUID,
+    body: InternalAckBody,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    alert_router: Annotated[AlertRouter, Depends(get_alert_router)],
+    _auth: Annotated[None, Depends(_check_internal_secret)],
+) -> dict[str, object]:
+    if body.notification_id:
+        try:
+            notification_id = uuid.UUID(body.notification_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid notification_id")
+
+        alert, other_notifications = await alert_router.mark_acked(
+            notification_id, body.acked_by, session
+        )
+        if alert:
+            await alert_router.send_ack_to_all_channels(
+                alert, body.acked_by, other_notifications, session
+            )
+        acked_count = 1 if alert else 0
+    else:
+        notifications = await alert_router.load_sent_notifications(str(case_id), session)
+        alert = await alert_router.load_alert_from_db(str(case_id), session)
+        if alert and notifications:
+            await alert_router.send_ack_to_all_channels(
+                alert, body.acked_by, notifications, session
+            )
+        acked_count = len(notifications)
+
+    return {"ok": True, "acked_count": acked_count}
 
 
 # ---------------------------------------------------------------------------

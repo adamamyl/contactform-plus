@@ -4,13 +4,17 @@ import logging
 import os
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
+import httpx
+from fastapi import APIRouter, Depends, FastAPI, status
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 from jambonz.adapter import CaseAlert, JambonzAdapter
 
 log = logging.getLogger(__name__)
+
+ROUTER_INTERNAL_URL = os.environ.get("ROUTER_INTERNAL_URL", "http://msg-router:8002")
+ROUTER_INTERNAL_SECRET = os.environ.get("ROUTER_INTERNAL_SECRET", "")
 
 _adapter_instance: JambonzAdapter | None = None
 
@@ -38,6 +42,21 @@ api = APIRouter()
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 
+async def _call_router_ack(case_id: str, acked_by: str) -> None:
+    headers: dict[str, str] = {}
+    if ROUTER_INTERNAL_SECRET:
+        headers["X-Internal-Secret"] = ROUTER_INTERNAL_SECRET
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                f"{ROUTER_INTERNAL_URL}/internal/ack/{case_id}",
+                json={"acked_by": acked_by},
+                headers=headers,
+            )
+    except Exception:
+        log.warning("Failed to notify router of DTMF ACK for case %s", case_id)
+
+
 # ---------------------------------------------------------------------------
 # DTMF webhook — called by Jambonz when a digit is pressed
 # ---------------------------------------------------------------------------
@@ -59,6 +78,7 @@ async def jambonz_dtmf_webhook(body: DtmfWebhookBody) -> dict[str, object]:
 
     if digit == "1":
         log.info("DTMF ACK: case %s acknowledged via call %s", case_id, body.call_sid)
+        await _call_router_ack(case_id, "jambonz_dtmf")
         return {"ok": True, "action": "acked", "case_id": case_id}
 
     if digit == "2":

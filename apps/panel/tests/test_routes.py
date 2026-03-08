@@ -152,3 +152,41 @@ async def test_dispatcher_ack(
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_urgency_update_creates_history_row(
+    authed_client: AsyncClient, mock_session: AsyncMock
+) -> None:
+    case_id = str(uuid.uuid4())
+    case = MagicMock()
+    case.urgency = "low"
+    mock_session.get.return_value = case
+
+    resp = await authed_client.patch(
+        f"/api/cases/{case_id}/urgency",
+        json={"urgency": "high"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["urgency"] == "high"
+
+    # session.add is called once for the CaseHistory row
+    mock_session.add.assert_called_once()
+    history_row = mock_session.add.call_args.args[0]
+    from emf_panel.models import CaseHistory
+    assert isinstance(history_row, CaseHistory)
+    assert history_row.field == "urgency"
+    assert history_row.old_value == "low"
+    assert history_row.new_value == "high"
+
+
+@pytest.mark.asyncio
+async def test_urgency_update_rejects_invalid_level(
+    authed_client: AsyncClient, mock_session: AsyncMock
+) -> None:
+    case_id = str(uuid.uuid4())
+    resp = await authed_client.patch(
+        f"/api/cases/{case_id}/urgency",
+        json={"urgency": "catastrophic"},
+    )
+    assert resp.status_code == 422

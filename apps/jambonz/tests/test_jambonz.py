@@ -158,6 +158,30 @@ async def test_dtmf_digit_1_acks(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_dtmf_digit_1_calls_router_ack(client: AsyncClient) -> None:
+    case_id = str(uuid.uuid4())
+    with patch("jambonz.main._call_router_ack", new_callable=AsyncMock) as mock_ack:
+        resp = await client.post(
+            "/webhook/jambonz",
+            json={"call_sid": "c1", "digit": "1", "case_id": case_id},
+        )
+    assert resp.status_code == 200
+    mock_ack.assert_awaited_once_with(case_id, "jambonz_dtmf")
+
+
+@pytest.mark.asyncio
+async def test_dtmf_digit_2_does_not_ack(client: AsyncClient) -> None:
+    case_id = str(uuid.uuid4())
+    with patch("jambonz.main._call_router_ack", new_callable=AsyncMock) as mock_ack:
+        resp = await client.post(
+            "/webhook/jambonz",
+            json={"call_sid": "c1", "digit": "2", "case_id": case_id},
+        )
+    assert resp.status_code == 200
+    mock_ack.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_dtmf_digit_2_passes_to_next(client: AsyncClient) -> None:
     case_id = str(uuid.uuid4())
     resp = await client.post(

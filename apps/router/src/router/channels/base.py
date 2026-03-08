@@ -14,5 +14,7 @@ class ChannelAdapter(ABC):
         """Send alert. Returns an opaque message-ID string on success, None on failure."""
 
     @abstractmethod
-    async def send_ack_confirmation(self, alert: CaseAlert, message_id: str) -> None:
+    async def send_ack_confirmation(
+        self, alert: CaseAlert, acked_by: str, message_id: str
+    ) -> None:
         """Send a follow-up message confirming the alert was acknowledged."""

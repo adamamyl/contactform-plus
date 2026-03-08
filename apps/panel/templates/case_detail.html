@@ -70,6 +70,16 @@
 
 <section class="case-section">
   <h2>Actions</h2>
+  <form class="inline-form" id="urgency-form" data-case-id="{{ case.id }}">
+    <label for="urgency">Urgency</label>
+    <select id="urgency" name="urgency">
+      {% for level in urgency_levels %}
+      <option value="{{ level }}" {% if level == case.urgency %}selected{% endif %}>{{ level }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn--small">Save</button>
+  </form>
+
   <form class="inline-form" id="assignee-form" data-case-id="{{ case.id }}">
     <label for="assignee">Assignee</label>
     <input type="text" id="assignee" name="assignee" value="{{ case.assignee or '' }}"

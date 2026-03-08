@@ -159,6 +159,24 @@ services:
     networks:
       - contactform
 
+  mattermost:
+    image: mattermost/mattermost-team-edition:latest
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://emf_forms_admin:${ADMIN_DB_PASSWORD:-localdev}@postgres/mattermost?sslmode=disable
+      MM_SERVICESETTINGS_SITEURL: http://localhost:8065
+    ports:
+      - "8065:8065"
+    volumes:
+      - mattermost_data:/mattermost/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - local
+    networks:
+      - contactform
+
   zap:
     image: ghcr.io/zaproxy/zaproxy:stable
     command: zap.sh -cmd -autorun /zap/wrk/form-scan.yaml
@@ -242,6 +260,7 @@ volumes:
   clamav_data:
   prometheus_data:
   grafana_data:
+  mattermost_data:
 
 networks:
   contactform:

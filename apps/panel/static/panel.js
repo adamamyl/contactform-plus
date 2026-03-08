@@ -52,6 +52,10 @@
   });
 
   function initCaseForms() {
+    initPatchForm("urgency-form", "urgency", function (f) {
+      return { urgency: f.querySelector("#urgency").value };
+    }, "Saved");
+
     initPatchForm("assignee-form", "assignee", function (f) {
       return { assignee: (f.querySelector("#assignee").value || "").trim() || null };
     }, "Saved");

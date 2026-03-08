@@ -45,8 +45,10 @@ class SlackAdapter(ChannelAdapter):
             log.exception("SlackAdapter.send failed for case %s", alert.case_id)
             return None
 
-    async def send_ack_confirmation(self, alert: CaseAlert, message_id: str) -> None:
-        text = f"✅ Case {alert.friendly_id} has been acknowledged."
+    async def send_ack_confirmation(
+        self, alert: CaseAlert, acked_by: str, message_id: str
+    ) -> None:
+        text = f"✅ Case {alert.friendly_id} acknowledged by {acked_by}."
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 await client.post(self._webhook_url, json={"text": text})
