@@ -20,12 +20,25 @@ def _make_mock_adapter(available: bool = True, send_result: str | None = "msg-12
     return adapter
 
 
+def _make_mock_session_factory(notif_mock: MagicMock | None = None) -> MagicMock:
+    session = AsyncMock()
+    if notif_mock is not None:
+        session.get.return_value = notif_mock
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=session)
+    cm.__aexit__ = AsyncMock(return_value=None)
+    factory = MagicMock()
+    factory.return_value = cm
+    return factory
+
+
 def _make_router(
     email: AsyncMock,
     signal: AsyncMock | None = None,
     mattermost: AsyncMock | None = None,
     slack: AsyncMock | None = None,
     config: object = None,
+    session_factory: MagicMock | None = None,
 ) -> AlertRouter:
     import json
     import pathlib
@@ -40,6 +53,7 @@ def _make_router(
         signal_adapter=signal,
         mattermost_adapter=mattermost,
         slack_adapter=slack,
+        session_factory=session_factory,
     )
 
 
@@ -353,18 +367,16 @@ async def test_router_signal_mode_high_priority_only(
 
 @pytest.mark.asyncio
 async def test_send_with_retry_succeeds_first_attempt(
-    mock_session: AsyncMock,
     sample_alert: CaseAlert,
 ) -> None:
     email = _make_mock_adapter(send_result="msg-ok")
-    router = _make_router(email)
-
     notif_mock = MagicMock()
-    notif_mock.id = TEST_NOTIF_ID = uuid.uuid4()
+    notif_mock.id = uuid.uuid4()
+    router = _make_router(email, session_factory=_make_mock_session_factory(notif_mock))
 
     with patch("router.alert_router.Notification") as MockNotif:
         MockNotif.return_value = notif_mock
-        await router._send_with_retry(sample_alert, "email", email, mock_session)
+        await router._send_with_retry(sample_alert, "email", email)
 
     email.send.assert_called_once()
     assert notif_mock.state == NotifState.SENT
@@ -373,20 +385,18 @@ async def test_send_with_retry_succeeds_first_attempt(
 
 @pytest.mark.asyncio
 async def test_send_with_retry_fails_all_attempts(
-    mock_session: AsyncMock,
     sample_alert: CaseAlert,
 ) -> None:
     email = _make_mock_adapter(send_result=None)
-    router = _make_router(email)
-
     notif_mock = MagicMock()
+    router = _make_router(email, session_factory=_make_mock_session_factory(notif_mock))
 
     with (
         patch("router.alert_router.Notification") as MockNotif,
         patch("asyncio.sleep"),
     ):
         MockNotif.return_value = notif_mock
-        await router._send_with_retry(sample_alert, "email", email, mock_session)
+        await router._send_with_retry(sample_alert, "email", email)
 
     assert email.send.call_count == 4  # 4 retry delays [0, 5, 10, 15]
     assert notif_mock.state == NotifState.FAILED
@@ -602,7 +612,6 @@ async def test_signal_phone_available_returns_false_when_no_phone() -> None:
 
 @pytest.mark.asyncio
 async def test_notification_state_counter_incremented_on_success(
-    mock_session: AsyncMock,
     sample_alert: CaseAlert,
 ) -> None:
     from unittest.mock import MagicMock
@@ -611,15 +620,14 @@ async def test_notification_state_counter_incremented_on_success(
     counter.labels.return_value = MagicMock()
 
     email = _make_mock_adapter(send_result="msg-ok")
-    router = _make_router(email)
-    router._counter = counter  # type: ignore[attr-defined]
-
     notif_mock = MagicMock()
     notif_mock.id = uuid.uuid4()
+    router = _make_router(email, session_factory=_make_mock_session_factory(notif_mock))
+    router._counter = counter  # type: ignore[attr-defined]
 
     with patch("router.alert_router.Notification") as MockNotif:
         MockNotif.return_value = notif_mock
-        await router._send_with_retry(sample_alert, "email", email, mock_session)
+        await router._send_with_retry(sample_alert, "email", email)
 
     counter.labels.assert_called_with(channel="email", state="sent")
     counter.labels.return_value.inc.assert_called()
@@ -627,7 +635,6 @@ async def test_notification_state_counter_incremented_on_success(
 
 @pytest.mark.asyncio
 async def test_notification_state_counter_incremented_on_failure(
-    mock_session: AsyncMock,
     sample_alert: CaseAlert,
 ) -> None:
     from unittest.mock import MagicMock
@@ -636,17 +643,16 @@ async def test_notification_state_counter_incremented_on_failure(
     counter.labels.return_value = MagicMock()
 
     email = _make_mock_adapter(send_result=None)
-    router = _make_router(email)
-    router._counter = counter  # type: ignore[attr-defined]
-
     notif_mock = MagicMock()
+    router = _make_router(email, session_factory=_make_mock_session_factory(notif_mock))
+    router._counter = counter  # type: ignore[attr-defined]
 
     with (
         patch("router.alert_router.Notification") as MockNotif,
         patch("asyncio.sleep"),
     ):
         MockNotif.return_value = notif_mock
-        await router._send_with_retry(sample_alert, "email", email, mock_session)
+        await router._send_with_retry(sample_alert, "email", email)
 
     counter.labels.assert_called_with(channel="email", state="failed")
 
@@ -1295,6 +1301,7 @@ async def test_also_sent_via_each_channel_sees_others(
         signal_adapter=signal,
         mattermost_adapter=mattermost,
         slack_adapter=None,
+        session_factory=_make_mock_session_factory(),
     )
 
     sent_alerts: dict[str, CaseAlert] = {}

@@ -35,7 +35,7 @@
         <label class="filter-check">
           <input type="checkbox" name="urgency" value="{{ u }}"
             {% if u in selected_urgencies %}checked{% endif %}>
-          {{ u | title }}
+          <span class="badge badge--{{ u }}">{{ u }}</span>
         </label>
         {% endfor %}
       </div>

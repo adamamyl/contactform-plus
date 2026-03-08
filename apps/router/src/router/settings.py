@@ -4,6 +4,7 @@ from emf_shared.config import Settings as SharedSettings
 
 
 class Settings(SharedSettings):
+    local_dev: bool = False
     signal_api_url: str = ""
     signal_sender: str = ""
     jambonz_api_url: str = ""

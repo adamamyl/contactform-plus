@@ -87,6 +87,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD:-localdev}@postgres/emf_forms
       CONFIG_PATH: /app/config.json
+      LOCAL_DEV: "true"
     volumes:
       - ../config.json:/app/config.json:ro
     depends_on:
@@ -160,7 +161,8 @@ services:
       - contactform
 
   mattermost:
-    image: mattermost/mattermost-team-edition:latest
+    build:
+      context: ./mattermost
     environment:
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://emf_forms_admin:${ADMIN_DB_PASSWORD:-localdev}@postgres/mattermost?sslmode=disable
@@ -168,7 +170,7 @@ services:
     ports:
       - "8065:8065"
     volumes:
-      - mattermost_data:/mattermost/data
+      - mattermost_data:/opt/mattermost/data
     depends_on:
       postgres:
         condition: service_healthy

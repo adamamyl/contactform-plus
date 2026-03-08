@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from emf_shared.db import get_session, init_db
+from emf_shared.db import get_session, get_session_factory, init_db
 from router.ack.tokens import create_ack_token, decode_ack_token
 from router.alert_router import AlertRouter
 from router.channels.email import EmailAdapter
@@ -141,6 +141,8 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         phone_adapter=phone_adapter,
         secret_key=settings.secret_key,
         counter=notification_state_total,
+        session_factory=get_session_factory(),
+        local_dev=settings.local_dev,
     )
 
     task = asyncio.create_task(listen_for_cases(settings.database_url, _router_instance))

@@ -138,7 +138,7 @@ window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lo
 
       {% if config.site_map %}
       <div id="map-container" class="map-container">
-        <p class="field-hint" style="padding: 0.5rem 0.75rem; margin: 0;">Click anywhere on the map to activate it, then click to pin a location.</p>
+        <p class="map-instruction">Click anywhere on the map to activate it, then click to pin a location.</p>
         <iframe
           id="location-map"
           data-src="https://map.emf-forms.internal/?embed=true#{{ config.site_map.zoom }}/{{ config.site_map.lat }}/{{ config.site_map.lon }}"

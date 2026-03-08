@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from prometheus_client import Counter
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from emf_shared.config import AppConfig, EventConfig
 from emf_shared.phase import Phase, current_phase
@@ -35,6 +35,8 @@ class AlertRouter:
         phone_adapter: ChannelAdapter | None = None,
         secret_key: str = "",
         counter: Counter | None = None,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+        local_dev: bool = False,
     ) -> None:
         self._config = config
         self._email = email_adapter
@@ -44,6 +46,8 @@ class AlertRouter:
         self._phone = phone_adapter
         self._secret_key = secret_key
         self._counter = counter
+        self._session_factory = session_factory
+        self._local_dev = local_dev
 
     def _event_config(self, event_name: str) -> EventConfig | None:
         for ev in self._config.events:
@@ -61,7 +65,7 @@ class AlertRouter:
         }
 
     async def route(self, alert: CaseAlert, session: AsyncSession) -> None:
-        phase = current_phase(self._config)
+        phase = Phase.EVENT_TIME if self._local_dev else current_phase(self._config)
         ev = self._event_config(alert.event_name)
 
         if phase == Phase.EVENT_TIME:
@@ -111,12 +115,12 @@ class AlertRouter:
             others = [n for n in channel_names if n != channel_name]
             per_channel_alert = replace(alert, also_sent_via=others)
             asyncio.create_task(
-                self._send_with_retry(per_channel_alert, channel_name, adapter, session)
+                self._send_with_retry(per_channel_alert, channel_name, adapter)
             )
 
     async def _route_off_event(self, alert: CaseAlert, session: AsyncSession) -> None:
         asyncio.create_task(
-            self._send_with_retry(alert, "email", self._email, session)
+            self._send_with_retry(alert, "email", self._email)
         )
 
     async def _signal_phone_available(self) -> bool:
@@ -133,32 +137,41 @@ class AlertRouter:
         alert: CaseAlert,
         channel_name: str,
         adapter: ChannelAdapter,
-        session: AsyncSession,
     ) -> None:
         from router.ack.tokens import create_ack_token
 
-        notif_id = uuid.uuid4()
-        notif = Notification(
-            id=notif_id,
-            case_id=uuid.UUID(alert.case_id),
-            channel=channel_name,
-            state=NotifState.PENDING,
-            attempt_count=0,
-        )
-        session.add(notif)
-        await session.commit()
+        if self._session_factory is None:
+            log.error("No session factory — cannot persist notification for %s", channel_name)
+            return
 
+        notif_id = uuid.uuid4()
         ack_token: str | None = None
         if channel_name == "email" and self._secret_key:
             ack_token = create_ack_token(notif_id, self._secret_key)
+
+        async with self._session_factory() as session:
+            notif = Notification(
+                id=notif_id,
+                case_id=uuid.UUID(alert.case_id),
+                channel=channel_name,
+                state=NotifState.PENDING,
+                attempt_count=0,
+            )
+            session.add(notif)
+            await session.commit()
 
         for attempt_idx, delay_minutes in enumerate(RETRY_DELAYS_MINUTES):
             if delay_minutes > 0:
                 await asyncio.sleep(delay_minutes * 60)
 
-            notif.attempt_count = attempt_idx + 1
-            notif.last_attempt_at = datetime.now(tz=UTC)
-            await session.commit()
+            async with self._session_factory() as session:
+                row = await session.get(Notification, notif_id)
+                if row is None:
+                    log.error("Notification %s disappeared from DB", notif_id)
+                    return
+                row.attempt_count = attempt_idx + 1
+                row.last_attempt_at = datetime.now(tz=UTC)
+                await session.commit()
 
             if channel_name == "email" and ack_token:
                 from router.channels.email import EmailAdapter
@@ -170,9 +183,12 @@ class AlertRouter:
                 message_id = await adapter.send(alert)
 
             if message_id is not None:
-                notif.state = NotifState.SENT
-                notif.message_id = message_id
-                await session.commit()
+                async with self._session_factory() as session:
+                    row = await session.get(Notification, notif_id)
+                    if row is not None:
+                        row.state = NotifState.SENT
+                        row.message_id = message_id
+                        await session.commit()
                 self._inc_counter(channel_name, "sent")
                 log.info(
                     "Sent case %s via %s (attempt %d)",
@@ -191,8 +207,11 @@ class AlertRouter:
                 channel_name,
             )
 
-        notif.state = NotifState.FAILED
-        await session.commit()
+        async with self._session_factory() as session:
+            row = await session.get(Notification, notif_id)
+            if row is not None:
+                row.state = NotifState.FAILED
+                await session.commit()
         self._inc_counter(channel_name, "failed")
         log.error(
             "🚨 All %d send attempts failed for case %s via %s",
