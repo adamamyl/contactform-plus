@@ -44,6 +44,60 @@ notification_state_total = Counter(
 _router_instance: AlertRouter | None = None
 _settings_instance: Settings | None = None
 
+SIGNAL_POLL_INTERVAL = 10  # seconds
+
+
+async def _poll_signal_reactions(
+    api_url: str,
+    sender: str,
+    alert_router: AlertRouter,
+    session_factory: object,
+) -> None:
+    import httpx
+    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession as _AS
+
+    factory: async_sessionmaker[_AS] = session_factory  # type: ignore[assignment]
+    url = f"{api_url.rstrip('/')}/v1/receive/{sender}"
+    while True:
+        await asyncio.sleep(SIGNAL_POLL_INTERVAL)
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(url)
+            if resp.status_code != 200:
+                continue
+            messages = resp.json()
+        except Exception:
+            log.debug("Signal poll failed", exc_info=True)
+            continue
+
+        for msg in messages:
+            env = msg.get("envelope", {})
+            data_msg = env.get("dataMessage", {})
+            reaction = data_msg.get("reaction")
+            if not isinstance(reaction, dict):
+                continue
+            if reaction.get("emoji") != "🤙":
+                continue
+            target_ts = str(reaction.get("targetSentTimestamp", ""))
+            if not target_ts:
+                continue
+
+            try:
+                async with factory() as session:
+                    result = await session.execute(
+                        select(Notification).where(Notification.message_id == target_ts)
+                    )
+                    notif = result.scalar_one_or_none()
+                    if notif is None:
+                        continue
+                    acked_by = str(env.get("source") or "signal")
+                    alert, others = await alert_router.mark_acked(notif.id, acked_by, session)
+                    if alert:
+                        await alert_router.send_ack_to_all_channels(alert, acked_by, others, session)
+                        log.info("Signal reaction ACK processed for case %s", alert.friendly_id)
+            except Exception:
+                log.exception("Error processing Signal reaction")
+
 
 def get_settings() -> Settings:
     global _settings_instance
@@ -72,6 +126,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             api_url=settings.signal_api_url,
             sender=settings.signal_sender,
             group_id=ev.signal_group_id,
+            panel_base_url=cfg.panel_base_url,
         )
 
     router_base_url = settings.ack_base_url or cfg.panel_base_url
@@ -146,8 +201,20 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     )
 
     task = asyncio.create_task(listen_for_cases(settings.database_url, _router_instance))
+    poll_task: asyncio.Task[None] | None = None
+    if signal_adapter and settings.signal_api_url and settings.signal_sender:
+        poll_task = asyncio.create_task(
+            _poll_signal_reactions(
+                settings.signal_api_url,
+                settings.signal_sender,
+                _router_instance,
+                get_session_factory(),
+            )
+        )
     yield
     task.cancel()
+    if poll_task:
+        poll_task.cancel()
 
 
 app = FastAPI(title="EMF Router Service", lifespan=lifespan)

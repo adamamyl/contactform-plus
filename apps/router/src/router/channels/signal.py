@@ -10,20 +10,21 @@ from router.models import CaseAlert
 log = logging.getLogger(__name__)
 
 URGENCY_EMOJI: dict[str, str] = {
-    "low": "🟢",
-    "medium": "🟡",
-    "high": "🟠",
-    "urgent": "🔴",
+    "low": "📋",
+    "medium": "🔔",
+    "high": "⚠️",
+    "urgent": "🚨",
 }
 
 MAP_BASE_URL = "https://map.emfcamp.org"
 
 
 class SignalAdapter(ChannelAdapter):
-    def __init__(self, api_url: str, sender: str, group_id: str) -> None:
+    def __init__(self, api_url: str, sender: str, group_id: str, panel_base_url: str = "") -> None:
         self._api_url = api_url.rstrip("/")
         self._sender = sender
         self._group_id = group_id
+        self._panel_base_url = panel_base_url.rstrip("/")
 
     async def is_available(self) -> bool:
         try:
@@ -47,13 +48,17 @@ class SignalAdapter(ChannelAdapter):
         if alert.also_sent_via:
             also_line = f"\nAlso sent via: {', '.join(alert.also_sent_via)}"
 
+        ack_line = "Acknowledge via the panel"
+        if self._panel_base_url:
+            ack_line = f"Acknowledge: {self._panel_base_url}/cases/{alert.case_id}"
+
         text = (
             f"{emoji} *New {alert.urgency} case*: {alert.friendly_id}\n"
             f"Event: {alert.event_name}\n"
             f"Location: {location_text}"
             f"{map_line}"
             f"{also_line}\n"
-            f"\nReact 🤙 to acknowledge"
+            f"\n{ack_line}"
         )
         payload: dict[str, object] = {
             "message": text,

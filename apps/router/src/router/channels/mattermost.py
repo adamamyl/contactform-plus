@@ -10,10 +10,10 @@ from router.models import CaseAlert
 log = logging.getLogger(__name__)
 
 URGENCY_EMOJI: dict[str, str] = {
-    "low": "🟢",
-    "medium": "🟡",
-    "high": "🟠",
-    "urgent": "🔴",
+    "low": "📋",
+    "medium": "🔔",
+    "high": "⚠️",
+    "urgent": "🚨",
 }
 
 URGENCY_COLOUR: dict[str, str] = {
