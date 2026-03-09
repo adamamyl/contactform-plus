@@ -120,16 +120,16 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     cfg = settings.app_config
 
     ev = cfg.events[0] if cfg.events else None
+    router_base_url = settings.ack_base_url or cfg.panel_base_url
+
     signal_adapter: SignalAdapter | None = None
     if settings.signal_api_url and ev and ev.signal_group_id:
         signal_adapter = SignalAdapter(
             api_url=settings.signal_api_url,
             sender=settings.signal_sender,
             group_id=ev.signal_group_id,
-            panel_base_url=cfg.panel_base_url,
+            panel_base_url=router_base_url,
         )
-
-    router_base_url = settings.ack_base_url or cfg.panel_base_url
     mattermost_action_url = (
         f"{router_base_url}/webhook/mattermost/action"
         if cfg.mattermost_url and settings.mattermost_token
