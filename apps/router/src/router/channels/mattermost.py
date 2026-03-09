@@ -78,7 +78,7 @@ class MattermostAdapter(ChannelAdapter):
 
         actions: list[dict[str, object]] = []
         if self._action_url:
-            context: dict[str, object] = {"action": "ack"}
+            context: dict[str, object] = {"action": "ack", "case_id": alert.case_id}
             if self._webhook_secret:
                 context["secret"] = self._webhook_secret
             actions = [
@@ -166,6 +166,7 @@ class MattermostAdapter(ChannelAdapter):
     ) -> None:
         emoji = URGENCY_EMOJI.get(alert.urgency, "⚪")
         body: dict[str, object] = {
+            "id": post_id,
             "message": f"✅ {emoji} Case {alert.friendly_id} acknowledged by {acked_by}",
             "props": {
                 "attachments": [

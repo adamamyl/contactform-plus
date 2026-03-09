@@ -309,7 +309,7 @@ async def email_ack(
 
 class MattermostActionContext(BaseModel):
     action: str = ""
-    notification_id: str = ""
+    case_id: str = ""
     secret: str = ""
 
 
@@ -332,16 +332,26 @@ async def mattermost_action(
         return {"update": {"message": "Unknown action"}}
 
     try:
-        notification_id = uuid.UUID(body.context.notification_id)
+        case_id = uuid.UUID(body.context.case_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid notification_id")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid case_id")
 
     acked_by = body.user_name or "mattermost"
-    alert, other_notifications = await alert_router.mark_acked(notification_id, acked_by, session)
+
+    # Find the mattermost notification for this case and mark it acked
+    result = await session.execute(
+        select(Notification)
+        .where(Notification.case_id == case_id, Notification.channel == "mattermost")
+    )
+    notif = result.scalar_one_or_none()
+    if notif is None:
+        return {"update": {"message": "Case not found"}}
+
+    alert, other_notifications = await alert_router.mark_acked(notif.id, acked_by, session)
     if alert:
         await alert_router.send_ack_to_all_channels(alert, acked_by, other_notifications, session)
 
-    return {"update": {"message": "Acknowledged"}}
+    return {"update": {"message": "✅ Acknowledged"}}
 
 
 # ---------------------------------------------------------------------------
