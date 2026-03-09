@@ -5,16 +5,20 @@ import os
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Depends, FastAPI, status
+from fastapi import APIRouter, Depends, FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
-from jambonz.adapter import CaseAlert, JambonzAdapter
+from jambonz.adapter import JambonzAdapter
 
 log = logging.getLogger(__name__)
 
 ROUTER_INTERNAL_URL = os.environ.get("ROUTER_INTERNAL_URL", "http://msg-router:8002")
 ROUTER_INTERNAL_SECRET = os.environ.get("ROUTER_INTERNAL_SECRET", "")
+WEBHOOK_BASE_URL = os.environ.get("JAMBONZ_WEBHOOK_BASE_URL", "https://panel.emf-forms.internal")
+TTS_INTERNAL_URL = os.environ.get("TTS_SERVICE_URL", "http://tts:8003")
 
 _adapter_instance: JambonzAdapter | None = None
 
@@ -38,6 +42,12 @@ def get_adapter() -> JambonzAdapter:
 
 
 app = FastAPI(title="EMF Jambonz Adapter")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 api = APIRouter()
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
@@ -58,36 +68,66 @@ async def _call_router_ack(case_id: str, acked_by: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# DTMF webhook — called by Jambonz when a digit is pressed
+# Unified Jambonz webhook
+# Handles three cases:
+#   1. digits present  → DTMF gather result; press 1 to ACK
+#   2. tag.audio_url   → Initial calling webhook; return play+gather verbs
+#   3. otherwise       → Call status update; return {}
 # ---------------------------------------------------------------------------
 
 
-class DtmfWebhookBody(BaseModel):
+class JambonzWebhookBody(BaseModel):
     call_sid: str = ""
-    digit: str = ""
-    case_id: str = ""
+    call_status: str = ""
+    digits: str = ""
+    tag: dict[str, str] = {}
 
 
 @api.post("/webhook/jambonz")
-async def jambonz_dtmf_webhook(body: DtmfWebhookBody) -> dict[str, object]:
-    digit = body.digit.strip()
-    case_id = body.case_id.strip()
+async def jambonz_webhook(
+    body: JambonzWebhookBody,
+    case_id: str = Query(default=""),
+) -> object:
+    pressed = body.digits.strip()
+    tag_case_id = body.tag.get("case_id", "")
+    audio_url = body.tag.get("audio_url", "")
+    effective_case_id = case_id or tag_case_id
 
-    if not case_id:
-        return {"ok": False, "reason": "no case_id"}
+    if pressed:
+        if pressed.startswith("1") and effective_case_id:
+            log.info("DTMF ACK: case %s acknowledged via call %s", effective_case_id, body.call_sid)
+            await _call_router_ack(effective_case_id, "jambonz_dtmf")
+        return {}
 
-    if digit == "1":
-        log.info("DTMF ACK: case %s acknowledged via call %s", case_id, body.call_sid)
-        await _call_router_ack(case_id, "jambonz_dtmf")
-        return {"ok": True, "action": "acked", "case_id": case_id}
+    if audio_url and effective_case_id:
+        action_url = f"{WEBHOOK_BASE_URL.rstrip('/')}/webhook/jambonz?case_id={effective_case_id}"
+        return [
+            {"verb": "play", "url": audio_url},
+            {"verb": "gather", "input": ["digits"], "numDigits": 1, "timeout": 30, "action": action_url},
+        ]
 
-    if digit == "2":
-        log.info(
-            "DTMF skip: case %s passed to next responder via call %s", case_id, body.call_sid
+    return {}
+
+
+# ---------------------------------------------------------------------------
+# Audio proxy — lets Jambonz (cloud) fetch TTS files via this public adapter
+# ---------------------------------------------------------------------------
+
+
+@api.get("/audio/{filename}")
+async def proxy_audio(filename: str) -> Response:
+    url = f"{TTS_INTERNAL_URL.rstrip('/')}/audio/{filename}"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url)
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            media_type=resp.headers.get("content-type", "audio/wav"),
         )
-        return {"ok": True, "action": "next", "case_id": case_id}
-
-    return {"ok": True, "action": "ignored", "digit": digit}
+    except Exception:
+        log.exception("Failed to proxy audio %s", filename)
+        return Response(status_code=502)
 
 
 # ---------------------------------------------------------------------------

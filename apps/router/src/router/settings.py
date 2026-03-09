@@ -13,6 +13,7 @@ class Settings(SharedSettings):
     jambonz_application_sid: str = ""
     jambonz_from_number: str = ""
     tts_service_url: str = "http://tts:8003"
+    tts_audio_base_url: str = ""  # public base URL for Jambonz to fetch audio files; defaults to tts_service_url
     mattermost_token: str = ""
     mattermost_webhook_secret: str = ""
     router_internal_secret: str = ""

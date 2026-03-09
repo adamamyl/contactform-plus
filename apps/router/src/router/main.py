@@ -167,6 +167,8 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             application_sid=settings.jambonz_application_sid,
             tts_service_url=settings.tts_service_url,
             from_number=settings.jambonz_from_number,
+            to_number=ev.call_group_number if ev else None,
+            tts_audio_base_url=settings.tts_audio_base_url,
         )
 
     recipients = []

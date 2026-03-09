@@ -21,6 +21,7 @@ class EventConfig(BaseModel):
     signal_mode: str = "fallback_only"
     signal_padding: SignalPadding = SignalPadding()
     jambonz_mode: str = "disabled"
+    call_group_number: str | None = None
     dispatcher_emails: list[str] = []
     dispatcher_session_ttl_hours: int = 8
     dispatcher_session_max_devices: int = 2

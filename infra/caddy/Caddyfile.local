@@ -11,7 +11,12 @@ report.emf-forms.internal {
 
 panel.emf-forms.internal {
 	import security_headers
-	reverse_proxy panel:8001
+	handle /webhook/jambonz* {
+		reverse_proxy jambonz-adapter:8004
+	}
+	handle {
+		reverse_proxy panel:8001
+	}
 }
 
 router.emf-forms.internal {

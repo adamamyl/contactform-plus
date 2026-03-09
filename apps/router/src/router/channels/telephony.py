@@ -21,13 +21,17 @@ class TelephonyAdapter(ChannelAdapter):
         application_sid: str,
         tts_service_url: str,
         from_number: str,
+        to_number: str | None = None,
+        tts_audio_base_url: str = "",
     ) -> None:
         self._api_url = api_url.rstrip("/")
         self._api_key = api_key
         self._account_sid = account_sid
         self._application_sid = application_sid
         self._tts_url = tts_service_url.rstrip("/")
+        self._tts_audio_base_url = (tts_audio_base_url or tts_service_url).rstrip("/")
         self._from_number = from_number
+        self._to_number = to_number or from_number
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"}
@@ -57,7 +61,7 @@ class TelephonyAdapter(ChannelAdapter):
                 resp = await client.post(f"{self._tts_url}/synthesise/file", json=payload)
             if resp.status_code == 200:
                 rel_url: str = resp.json()["audio_url"]
-                return f"{self._tts_url}{rel_url}"
+                return f"{self._tts_audio_base_url}{rel_url}"
             log.warning("TTS /synthesise/file returned %s", resp.status_code)
             return None
         except Exception:
@@ -69,9 +73,15 @@ class TelephonyAdapter(ChannelAdapter):
         if audio_url is None:
             return None
 
+        if self._to_number.startswith("+"):
+            to_field: dict[str, str] = {"type": "phone", "number": self._to_number}
+        elif self._to_number.startswith("sip:"):
+            to_field = {"type": "sip", "sipUri": self._to_number}
+        else:
+            to_field = {"type": "user", "name": self._to_number}
         payload: dict[str, object] = {
             "application_sid": self._application_sid,
-            "to": {"type": "phone", "number": self._from_number},
+            "to": to_field,
             "from": self._from_number,
             "tag": {
                 "case_id": alert.case_id,
