@@ -248,6 +248,17 @@ class AlertRouter:
         )
         other_notifications = list(other_result.scalars().all())
 
+        # Mark all other non-acked notifications as acked so the case shows ACK everywhere
+        await session.execute(
+            update(Notification)
+            .where(
+                Notification.case_id == case_id,
+                Notification.state != NotifState.ACKED,
+                Notification.id != notification_id,
+            )
+            .values(state=NotifState.ACKED, acked_at=now, acked_by=acked_by)
+        )
+
         case_row = await session.get(CaseRouterView, uuid.UUID(str(case_id)))
         if case_row is None:
             await session.commit()

@@ -131,7 +131,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             panel_base_url=router_base_url,
         )
     mattermost_action_url = (
-        f"{router_base_url}/webhook/mattermost/action"
+        f"{settings.router_self_url}/webhook/mattermost/action"
         if cfg.mattermost_url and settings.mattermost_token
         else None
     )

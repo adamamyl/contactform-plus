@@ -167,6 +167,7 @@ services:
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://emf_forms_admin:${ADMIN_DB_PASSWORD:-localdev}@postgres/mattermost?sslmode=disable
       MM_SERVICESETTINGS_SITEURL: http://localhost:8065
+      MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS: msg-router
     ports:
       - "8065:8065"
     volumes:
@@ -196,6 +197,8 @@ services:
     image: bbernhard/signal-cli-rest-api:latest
     environment:
       MODE: native
+    ports:
+      - "8080:8080"
     volumes:
       - signal_data:/root/.local/share/signal-cli
     networks:

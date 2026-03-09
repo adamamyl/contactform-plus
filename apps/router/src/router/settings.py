@@ -17,5 +17,6 @@ class Settings(SharedSettings):
     mattermost_webhook_secret: str = ""
     router_internal_secret: str = ""
     ack_base_url: str = ""
+    router_self_url: str = "http://msg-router:8002"
 
     model_config = {"env_file": ".env"}
