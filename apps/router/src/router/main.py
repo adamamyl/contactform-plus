@@ -188,6 +188,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         password=settings.smtp_password,
         use_tls=cfg.smtp.use_tls,
         username=cfg.smtp.username,
+        resend_api_key=settings.resend_api_key,
     )
 
     _router_instance = AlertRouter(

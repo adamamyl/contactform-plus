@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.12.5",
     "pydantic-settings>=2.13.1",
     "python-jose>=3.5.0",
+    "resend>=2.23.0",
     "sqlalchemy[asyncio]>=2.0.47",
     "uvicorn[standard]>=0.41.0",
 ]

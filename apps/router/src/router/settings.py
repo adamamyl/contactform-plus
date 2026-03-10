@@ -20,5 +20,6 @@ class Settings(SharedSettings):
     router_internal_secret: str = ""
     ack_base_url: str = ""
     router_self_url: str = "http://msg-router:8002"
+    resend_api_key: str = ""
 
     model_config = {"env_file": ".env"}
