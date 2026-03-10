@@ -1,0 +1,1 @@
+{"events": [{"name": "emfcamp2026", "start_date": "2026-05-28", "end_date": "2026-05-31"}], "conduct_emails": ["conduct@emfcamp.org"], "smtp": {"host": "localhost", "port": 587, "from_addr": "conduct@emfcamp.org"}, "panel_base_url": "http://localhost:8001"}
