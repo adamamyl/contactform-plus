@@ -36,7 +36,7 @@ templates = Jinja2Templates(directory="templates")
 _ASSIGNEES_KEY = "panel:assignees"
 
 
-async def get_redis(settings: Annotated[Settings, Depends(get_settings)]) -> aioredis.Redis:  # type: ignore[type-arg]
+async def get_redis(settings: Annotated[Settings, Depends(get_settings)]) -> aioredis.Redis:
     return aioredis.from_url(settings.redis_url, decode_responses=True)
 
 
@@ -289,9 +289,9 @@ class AssigneeUpdate(BaseModel):
 @router.get("/api/assignees")
 async def list_assignees(
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],
-    redis: Annotated[aioredis.Redis, Depends(get_redis)],  # type: ignore[type-arg]
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> list[str]:
-    members: set[str] = await redis.smembers(_ASSIGNEES_KEY)
+    members: set[str] = await redis.smembers(_ASSIGNEES_KEY)  # type: ignore[misc]
     return sorted(members)
 
 
@@ -301,7 +301,7 @@ async def update_assignee(
     body: AssigneeUpdate,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    redis: Annotated[aioredis.Redis, Depends(get_redis)],  # type: ignore[type-arg]
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> dict[str, str | None]:
     case = await session.get(Case, case_id)
     if not case:
@@ -323,7 +323,7 @@ async def update_assignee(
     )
     await session.commit()
     if body.assignee:
-        await redis.sadd(_ASSIGNEES_KEY, body.assignee)
+        await redis.sadd(_ASSIGNEES_KEY, body.assignee)  # type: ignore[misc]
     return {"assignee": body.assignee}
 
 
@@ -434,7 +434,7 @@ async def admin_ack(
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
-    redis: Annotated[aioredis.Redis, Depends(get_redis)],  # type: ignore[type-arg]
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> dict[str, bool]:
     username = str(user.get("preferred_username", "admin"))
     now = datetime.now(tz=UTC)
@@ -447,7 +447,7 @@ async def admin_ack(
         update(Case).where(Case.id == case_id).values(assignee=username, updated_at=now)
     )
     await session.commit()
-    await redis.sadd(_ASSIGNEES_KEY, username)
+    await redis.sadd(_ASSIGNEES_KEY, username)  # type: ignore[misc]
     await _notify_router_ack(case_id, username, settings)
     return {"ok": True}
 

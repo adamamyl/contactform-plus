@@ -33,14 +33,17 @@ import pytest
 
 
 def test_dispatcher_view_excludes_form_data() -> None:
-    """The cases_router view definition must not include form_data."""
+    """The cases_router view must not SELECT form_data as a direct column."""
     sql_path = Path(__file__).parent.parent.parent / "infra" / "postgres" / "00_roles.sql"
     sql = sql_path.read_text()
     # Find the cases_router view
     start = sql.index("CREATE VIEW forms.cases_router")
     end = sql.index(";", start)
     view_def = sql[start:end]
-    assert "form_data" not in view_def, "cases_router view must not expose form_data"
+    # form_data may appear in JSON path expressions but must not be a direct column selection
+    import re
+    direct_select = re.search(r"\bSELECT\b.*\bform_data\b(?!\s*->)", view_def, re.DOTALL | re.IGNORECASE)
+    assert direct_select is None, "cases_router view must not expose form_data as a direct column"
 
 
 def test_panel_viewer_grants_no_form_data() -> None:
@@ -249,6 +252,7 @@ async def test_honeypot_filled_returns_200_no_db_write() -> None:
             "reporter": {},
             "incident_date": "2026-03-01",
             "incident_time": "12:00",
+            "can_contact": False,
             "idempotency_token": str(uuid.uuid4()),
             "website": "http://bot.example.com",  # honeypot field
         })

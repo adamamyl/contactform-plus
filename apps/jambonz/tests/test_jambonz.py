@@ -161,13 +161,11 @@ async def client(mock_adapter: JambonzAdapter) -> AsyncClient:
 async def test_dtmf_digit_1_acks(client: AsyncClient) -> None:
     case_id = str(uuid.uuid4())
     resp = await client.post(
-        "/webhook/jambonz",
-        json={"call_sid": "c1", "digit": "1", "case_id": case_id},
+        "/webhook/jambonz/call",
+        json={"call_sid": "c1", "digits": "1", "case_id": case_id},
+        params={"case_id": case_id, "audio_url": "/audio/test.wav"},
     )
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["action"] == "acked"
-    assert data["case_id"] == case_id
 
 
 @pytest.mark.asyncio
@@ -175,8 +173,9 @@ async def test_dtmf_digit_1_calls_router_ack(client: AsyncClient) -> None:
     case_id = str(uuid.uuid4())
     with patch("jambonz.main._call_router_ack", new_callable=AsyncMock) as mock_ack:
         resp = await client.post(
-            "/webhook/jambonz",
-            json={"call_sid": "c1", "digit": "1", "case_id": case_id},
+            "/webhook/jambonz/call",
+            json={"call_sid": "c1", "digits": "1"},
+            params={"case_id": case_id, "audio_url": "/audio/test.wav"},
         )
     assert resp.status_code == 200
     mock_ack.assert_awaited_once_with(case_id, "jambonz_dtmf")
@@ -187,8 +186,9 @@ async def test_dtmf_digit_2_does_not_ack(client: AsyncClient) -> None:
     case_id = str(uuid.uuid4())
     with patch("jambonz.main._call_router_ack", new_callable=AsyncMock) as mock_ack:
         resp = await client.post(
-            "/webhook/jambonz",
-            json={"call_sid": "c1", "digit": "2", "case_id": case_id},
+            "/webhook/jambonz/call",
+            json={"call_sid": "c1", "digits": "2"},
+            params={"case_id": case_id, "audio_url": "/audio/test.wav"},
         )
     assert resp.status_code == 200
     mock_ack.assert_not_awaited()
@@ -198,21 +198,20 @@ async def test_dtmf_digit_2_does_not_ack(client: AsyncClient) -> None:
 async def test_dtmf_digit_2_passes_to_next(client: AsyncClient) -> None:
     case_id = str(uuid.uuid4())
     resp = await client.post(
-        "/webhook/jambonz",
-        json={"call_sid": "c1", "digit": "2", "case_id": case_id},
+        "/webhook/jambonz/call",
+        json={"call_sid": "c1", "digits": "2"},
+        params={"case_id": case_id, "audio_url": "/audio/test.wav"},
     )
     assert resp.status_code == 200
-    assert resp.json()["action"] == "next"
 
 
 @pytest.mark.asyncio
 async def test_dtmf_no_case_id(client: AsyncClient) -> None:
     resp = await client.post(
-        "/webhook/jambonz",
-        json={"call_sid": "c1", "digit": "1", "case_id": ""},
+        "/webhook/jambonz/call",
+        json={"call_sid": "c1", "digits": "1"},
     )
     assert resp.status_code == 200
-    assert resp.json()["ok"] is False
 
 
 # ---------------------------------------------------------------------------

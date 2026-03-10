@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -70,17 +72,25 @@ def fake_wav() -> bytes:
 
 @pytest_asyncio.fixture
 async def client(fake_wav: bytes) -> AsyncClient:  # type: ignore[misc]
-    async def fake_piper(text: str, output_path: str | None = None) -> bytes:
-        if output_path:
-            Path(output_path).write_bytes(fake_wav)
-            return b""
-        return fake_wav
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        os.environ["AUDIO_DIR"] = tmp_dir
 
-    with patch("tts.main._run_piper", side_effect=fake_piper):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as ac:
-            yield ac
+        import tts.main as tts_main
+        tts_main.AUDIO_DIR = Path(tmp_dir)
+
+        async def fake_piper(text: str, output_path: str | None = None) -> bytes:
+            if output_path:
+                Path(output_path).write_bytes(fake_wav)
+                return b""
+            return fake_wav
+
+        with patch("tts.main._run_piper", side_effect=fake_piper):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as ac:
+                yield ac
+
+        os.environ.pop("AUDIO_DIR", None)
 
 
 @pytest.mark.asyncio

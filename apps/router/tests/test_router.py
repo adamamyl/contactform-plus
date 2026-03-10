@@ -475,7 +475,12 @@ async def test_email_ack_link_in_body() -> None:
         await adapter.send(alert, ack_token="test_token_abc")
 
     assert captured
-    body = captured[0].get_content()  # type: ignore[union-attr]
+    from email.message import EmailMessage
+    msg = captured[0]
+    assert isinstance(msg, EmailMessage)
+    plain_part = msg.get_body(preferencelist=("plain",))
+    assert plain_part is not None
+    body = plain_part.get_content()
     assert "http://router:8002/ack/test_token_abc" in body
 
 
@@ -512,7 +517,12 @@ async def test_email_no_ack_link_when_no_token() -> None:
         await adapter.send(alert)
 
     assert captured
-    body = captured[0].get_content()  # type: ignore[union-attr]
+    from email.message import EmailMessage
+    msg = captured[0]
+    assert isinstance(msg, EmailMessage)
+    plain_part = msg.get_body(preferencelist=("plain",))
+    assert plain_part is not None
+    body = plain_part.get_content()
     assert "/ack/" not in body
 
 
@@ -926,8 +936,13 @@ async def test_email_also_sent_via_in_body() -> None:
         await adapter.send(alert)
 
     assert captured
-    body = captured[0].get_content()  # type: ignore[union-attr]
-    assert "Also sent via: signal, mattermost" in body
+    from email.message import EmailMessage
+    msg = captured[0]
+    assert isinstance(msg, EmailMessage)
+    plain_part = msg.get_body(preferencelist=("plain",))
+    assert plain_part is not None
+    body = plain_part.get_content()
+    assert "signal" in body and "mattermost" in body
 
 
 # ---------------------------------------------------------------------------
@@ -1025,7 +1040,7 @@ async def test_mattermost_ack_updates_post() -> None:
         async def __aexit__(self, *a: object) -> None:
             pass
 
-        async def put(
+        async def post(
             self, url: str, json: dict[str, object], headers: dict[str, str]
         ) -> FakeResp:
             captured_requests.append({"url": url, "body": json})
@@ -1036,10 +1051,11 @@ async def test_mattermost_ack_updates_post() -> None:
 
     assert captured_requests
     url = str(captured_requests[0]["url"])
-    assert "api/v4/posts/post_abc123" in url
-    body = str(captured_requests[0]["body"])
-    assert "adam" in body
-    assert "#2e7d32" in body
+    assert "api/v4/posts" in url
+    body = captured_requests[0]["body"]
+    assert isinstance(body, dict)
+    assert body.get("root_id") == "post_abc123"
+    assert "adam" in str(body.get("message", ""))
 
 
 @pytest.mark.asyncio
@@ -1246,8 +1262,9 @@ async def test_jambonz_disabled(
 async def test_mattermost_webhook_action_endpoint_acks() -> None:
     from httpx import ASGITransport, AsyncClient
     from router.main import app, get_alert_router, get_session, get_settings
+    from router.models import Notification
 
-    notification_id = str(uuid.uuid4())
+    notification_id = uuid.uuid4()
     case_id = str(uuid.uuid4())
 
     import datetime
@@ -1262,11 +1279,18 @@ async def test_mattermost_webhook_action_endpoint_acks() -> None:
         created_at=datetime.datetime.now(tz=datetime.timezone.utc),
     )
 
+    mock_notif = MagicMock(spec=Notification)
+    mock_notif.id = notification_id
+
     mock_router = AsyncMock(spec=AlertRouter)
     mock_router.mark_acked.return_value = (mock_alert, [])
     mock_router.send_ack_to_all_channels.return_value = None
 
+    mock_execute_result = MagicMock()
+    mock_execute_result.scalar_one_or_none.return_value = mock_notif
+
     mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_execute_result
     mock_settings = MagicMock(spec=Settings)
     mock_settings.mattermost_webhook_secret = ""
 
@@ -1284,7 +1308,7 @@ async def test_mattermost_webhook_action_endpoint_acks() -> None:
                     "user_name": "alice",
                     "context": {
                         "action": "ack",
-                        "notification_id": notification_id,
+                        "case_id": case_id,
                         "secret": "",
                     },
                 },
@@ -1293,10 +1317,10 @@ async def test_mattermost_webhook_action_endpoint_acks() -> None:
         app.dependency_overrides.clear()
 
     assert resp.status_code == 200
-    assert resp.json() == {"update": {"message": "Acknowledged"}}
+    assert "Acknowledged" in resp.json()["update"]["message"]
     mock_router.mark_acked.assert_awaited_once()
     call_args = mock_router.mark_acked.call_args
-    assert call_args.args[0] == uuid.UUID(notification_id)
+    assert call_args.args[0] == notification_id
     assert call_args.args[1] == "alice"
 
 

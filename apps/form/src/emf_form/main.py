@@ -53,12 +53,23 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 
+def _make_serializable(obj: object) -> object:
+    if isinstance(obj, dict):
+        return {k: _make_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_make_serializable(v) for v in obj]
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    return str(obj)
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     _log.warning("422 on %s: %s", request.url.path, exc.errors())
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    errors = _make_serializable(exc.errors())
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 app.add_middleware(SlowAPIMiddleware)
