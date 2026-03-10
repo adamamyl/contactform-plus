@@ -3339,6 +3339,23 @@ Compact checklist of all remaining work, in implementation order.  Phases Q–V 
 
 ---
 
+### Phase W — Email: Resend integration, HTML template, ACK threading ✅
+
+Replaced broken SMTP (Outlook.com blocks SMTP auth; host.docker.internal unreachable) with Resend as primary sender and retained aiosmtplib SMTP as fallback.
+
+- [x] Add `resend==2.23.0` to `apps/router/pyproject.toml`
+- [x] Add `resend_api_key: str = ""` to `apps/router/src/router/settings.py`
+- [x] `EmailAdapter.__init__`: accept `resend_api_key`; call `resend.api_key = resend_api_key` when set
+- [x] Fix STARTTLS vs SSL-on-connect: `_start_tls = use_tls and port != 465`; `_ssl = use_tls and port == 465`
+- [x] Add `URGENCY_COLOUR` dict matching Mattermost/panel colours
+- [x] Add `_location_str()`: returns `location_hint` if set, else `"{lat:.5f}, {lon:.5f} (map pin)"` when coordinates present, else `"not specified"`
+- [x] Add `_build_body()`: returns `(plain, html)` tuple with urgency-coloured header banner and full case details
+- [x] `send()` Resend path: pass both `text` and `html`; store generated `Message-ID` in headers
+- [x] ACK confirmation email: same subject as notification (`{emoji} [{URGENCY}] New case: {id}`) for Gmail subject-based threading; green `#2e7d32` "✅ Acknowledged" banner to distinguish from initial alert
+- [x] ACK confirmation Resend path: no custom headers — SES overrides our generated `Message-ID`, causing a broken `In-Reply-To` chain that prevents Gmail threading; subject-match alone is sufficient and reliable
+
+---
+
 ### Miscellaneous backlog
 
 - [ ] Postgres SSL cert ownership — chown `infra/postgres/certs/` in `install.py` or a postgres-init entrypoint so `ssl=on` works at startup
