@@ -28,14 +28,22 @@ class Notification(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    case_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
     channel: Mapped[str] = mapped_column(String(32), nullable=False)
-    state: Mapped[str] = mapped_column(String(16), nullable=False, default=NotifState.PENDING)
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=NotifState.PENDING
+    )
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     message_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
     acked_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    acked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -45,6 +53,7 @@ class Notification(Base):
 
 class CaseRouterView(Base):
     """Read-only mapping to the cases_router security_barrier view."""
+
     __tablename__ = "cases_router"
     __table_args__ = {"schema": "forms"}
 
@@ -56,8 +65,12 @@ class CaseRouterView(Base):
     location_hint: Mapped[str | None] = mapped_column(Text, nullable=True)
     location_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     location_lon: Mapped[float | None] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 @dataclass

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from jose import JWTError, jwt
+from jose import jwt
 
 ALGORITHM = "HS256"
 ACK_TOKEN_TTL_HOURS = 72

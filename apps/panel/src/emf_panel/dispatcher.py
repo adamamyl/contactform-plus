@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
 from jose import JWTError, jwt
@@ -12,7 +12,7 @@ _active_sessions: dict[str, list[str]] = {}
 
 def create_dispatcher_token(secret_key: str, ttl_hours: int) -> str:
     jti = secrets.token_urlsafe(16)
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     payload: dict[str, object] = {
         "sub": "dispatcher",
         "jti": jti,
@@ -24,13 +24,11 @@ def create_dispatcher_token(secret_key: str, ttl_hours: int) -> str:
     return token
 
 
-def validate_dispatcher_token(
-    token: str, device_id: str, secret_key: str
-) -> dict[str, object]:
+def validate_dispatcher_token(token: str, device_id: str, secret_key: str) -> dict[str, object]:
     try:
         payload: dict[str, object] = jwt.decode(token, secret_key, algorithms=["HS256"])
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    except JWTError as err:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token") from err
 
     jti = str(payload.get("jti", ""))
     if jti in _revoked:
@@ -41,9 +39,7 @@ def validate_dispatcher_token(
     devices = _active_sessions.setdefault(jti, [])
     if device_id not in devices:
         if len(devices) >= 2:
-            raise HTTPException(
-                status_code=403, detail="Maximum devices for this session reached"
-            )
+            raise HTTPException(status_code=403, detail="Maximum devices for this session reached")
         devices.append(device_id)
 
     return payload

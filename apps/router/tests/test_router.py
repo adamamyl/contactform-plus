@@ -12,7 +12,9 @@ from router.models import CaseAlert, NotifState
 from router.settings import Settings
 
 
-def _make_mock_adapter(available: bool = True, send_result: str | None = "msg-123") -> AsyncMock:
+def _make_mock_adapter(
+    available: bool = True, send_result: str | None = "msg-123"
+) -> AsyncMock:
     adapter = AsyncMock(spec=ChannelAdapter)
     adapter.is_available.return_value = available
     adapter.send.return_value = send_result
@@ -97,7 +99,9 @@ async def test_email_adapter_send_returns_message_id() -> None:
         urgency="high",
         status="new",
         location_hint="Stage",
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     with patch("aiosmtplib.send") as mock_send:
@@ -111,7 +115,6 @@ async def test_email_adapter_send_returns_message_id() -> None:
 @pytest.mark.asyncio
 async def test_email_adapter_send_ack_sets_in_reply_to() -> None:
     from router.channels.email import EmailAdapter
-    import aiosmtplib
 
     adapter = EmailAdapter(
         host="localhost",
@@ -128,7 +131,9 @@ async def test_email_adapter_send_ack_sets_in_reply_to() -> None:
         urgency="high",
         status="new",
         location_hint=None,
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     captured: list[object] = []
@@ -166,21 +171,26 @@ async def test_signal_adapter_send_posts_to_group() -> None:
         urgency="urgent",
         status="new",
         location_hint="Stage",
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     captured: list[dict[str, object]] = []
 
     class FakeResp:
         status_code = 201
+
         def json(self) -> dict[str, object]:
             return {"timestamp": 1234567890}
 
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
+
         async def post(self, url: str, json: dict[str, object]) -> FakeResp:
             captured.append(json)
             return FakeResp()
@@ -237,6 +247,7 @@ async def test_router_event_time_sends_email_and_signal(
         patch("asyncio.create_task") as mock_task,
     ):
         from emf_shared.phase import Phase
+
         mock_phase.return_value = Phase.EVENT_TIME
         await router.route(sample_alert, mock_session)
 
@@ -257,6 +268,7 @@ async def test_router_off_event_only_emails(
         patch("asyncio.create_task") as mock_task,
     ):
         from emf_shared.phase import Phase
+
         mock_phase.return_value = Phase.PRE_EVENT
         await router.route(sample_alert, mock_session)
 
@@ -289,8 +301,11 @@ async def test_router_signal_mode_fallback_only_no_phone(
     email = _make_mock_adapter()
     signal = _make_mock_adapter()
     router = AlertRouter(
-        config=cfg, email_adapter=email, signal_adapter=signal,
-        mattermost_adapter=None, slack_adapter=None,
+        config=cfg,
+        email_adapter=email,
+        signal_adapter=signal,
+        mattermost_adapter=None,
+        slack_adapter=None,
     )
 
     # _signal_phone_available returns False by default → signal IS sent in fallback_only
@@ -299,6 +314,7 @@ async def test_router_signal_mode_fallback_only_no_phone(
         patch("asyncio.create_task") as mock_task,
     ):
         from emf_shared.phase import Phase
+
         mock_phase.return_value = Phase.EVENT_TIME
         await router.route(sample_alert, mock_session)
 
@@ -341,8 +357,11 @@ async def test_router_signal_mode_high_priority_only(
     email = _make_mock_adapter()
     signal = _make_mock_adapter()
     router = AlertRouter(
-        config=cfg, email_adapter=email, signal_adapter=signal,
-        mattermost_adapter=None, slack_adapter=None,
+        config=cfg,
+        email_adapter=email,
+        signal_adapter=signal,
+        mattermost_adapter=None,
+        slack_adapter=None,
     )
 
     # low urgency, phone unavailable (False) → still sends signal because phone unavailable
@@ -351,6 +370,7 @@ async def test_router_signal_mode_high_priority_only(
         patch("asyncio.create_task") as mock_task,
     ):
         from emf_shared.phase import Phase
+
         mock_phase.return_value = Phase.EVENT_TIME
         # patch phone available to True so signal is NOT sent for low urgency
         with patch.object(router, "_signal_phone_available", return_value=True):
@@ -441,7 +461,9 @@ async def test_email_ack_link_in_body() -> None:
         urgency="high",
         status="new",
         location_hint=None,
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     captured: list[object] = []
@@ -476,7 +498,9 @@ async def test_email_no_ack_link_when_no_token() -> None:
         urgency="high",
         status="new",
         location_hint=None,
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     captured: list[object] = []
@@ -678,7 +702,9 @@ async def test_signal_message_includes_map_link() -> None:
         urgency="high",
         status="new",
         location_hint="Near stage",
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
         location_lat=52.0416,
         location_lon=-2.3770,
     )
@@ -687,14 +713,17 @@ async def test_signal_message_includes_map_link() -> None:
 
     class FakeResp:
         status_code = 201
+
         def json(self) -> dict[str, object]:
             return {"timestamp": 1234567890}
 
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
+
         async def post(self, url: str, json: dict[str, object]) -> FakeResp:
             captured.append(json)
             return FakeResp()
@@ -725,21 +754,26 @@ async def test_signal_message_no_map_link_when_no_coords() -> None:
         urgency="medium",
         status="new",
         location_hint="Stage area",
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     captured: list[dict[str, object]] = []
 
     class FakeResp:
         status_code = 201
+
         def json(self) -> dict[str, object]:
             return {"timestamp": 1111}
 
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
+
         async def post(self, url: str, json: dict[str, object]) -> FakeResp:
             captured.append(json)
             return FakeResp()
@@ -772,21 +806,26 @@ async def test_signal_ack_confirmation_includes_acked_by() -> None:
         urgency="high",
         status="new",
         location_hint=None,
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     captured: list[dict[str, object]] = []
 
     class FakeResp:
         status_code = 200
+
         def json(self) -> dict[str, object]:
             return {}
 
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
+
         async def post(self, url: str, json: dict[str, object]) -> FakeResp:
             captured.append(json)
             return FakeResp()
@@ -819,7 +858,9 @@ async def test_signal_also_sent_via() -> None:
         urgency="high",
         status="new",
         location_hint=None,
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
         also_sent_via=["email", "mattermost"],
     )
 
@@ -827,14 +868,17 @@ async def test_signal_also_sent_via() -> None:
 
     class FakeResp:
         status_code = 201
+
         def json(self) -> dict[str, object]:
             return {"timestamp": 9999}
 
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
+
         async def post(self, url: str, json: dict[str, object]) -> FakeResp:
             captured.append(json)
             return FakeResp()
@@ -867,7 +911,9 @@ async def test_email_also_sent_via_in_body() -> None:
         urgency="high",
         status="new",
         location_hint=None,
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
         also_sent_via=["signal", "mattermost"],
     )
 
@@ -907,22 +953,29 @@ async def test_mattermost_posts_api_send() -> None:
         urgency="urgent",
         status="new",
         location_hint="Stage",
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     captured_requests: list[dict[str, object]] = []
 
     class FakeResp:
         status_code = 201
+
         def json(self) -> dict[str, object]:
             return {"id": "post_abc123"}
 
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
-        async def post(self, url: str, json: dict[str, object], headers: dict[str, str]) -> FakeResp:
+
+        async def post(
+            self, url: str, json: dict[str, object], headers: dict[str, str]
+        ) -> FakeResp:
             captured_requests.append({"url": url, "body": json})
             return FakeResp()
 
@@ -952,22 +1005,29 @@ async def test_mattermost_ack_updates_post() -> None:
         urgency="urgent",
         status="new",
         location_hint=None,
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     captured_requests: list[dict[str, object]] = []
 
     class FakeResp:
         status_code = 200
+
         def json(self) -> dict[str, object]:
             return {}
 
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
-        async def put(self, url: str, json: dict[str, object], headers: dict[str, str]) -> FakeResp:
+
+        async def put(
+            self, url: str, json: dict[str, object], headers: dict[str, str]
+        ) -> FakeResp:
             captured_requests.append({"url": url, "body": json})
             return FakeResp()
 
@@ -997,19 +1057,24 @@ async def test_mattermost_falls_back_to_webhook() -> None:
         urgency="low",
         status="new",
         location_hint=None,
-        created_at=__import__("datetime").datetime.now(tz=__import__("datetime").timezone.utc),
+        created_at=__import__("datetime").datetime.now(
+            tz=__import__("datetime").timezone.utc
+        ),
     )
 
     class FakeResp:
         status_code = 200
+
         def json(self) -> dict[str, object]:
             return {}
 
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
+
         async def post(self, url: str, json: dict[str, object]) -> FakeResp:
             return FakeResp()
 
@@ -1063,6 +1128,7 @@ async def test_jambonz_auto_call_always_mode(
         patch("asyncio.create_task") as mock_task,
     ):
         from emf_shared.phase import Phase
+
         mock_phase.return_value = Phase.EVENT_TIME
         await router.route(sample_alert, mock_session)
 
@@ -1118,6 +1184,7 @@ async def test_jambonz_auto_call_high_priority_only(
         patch("asyncio.create_task") as mock_task,
     ):
         from emf_shared.phase import Phase
+
         mock_phase.return_value = Phase.EVENT_TIME
         await router.route(low_alert, mock_session)
 
@@ -1163,6 +1230,7 @@ async def test_jambonz_disabled(
         patch("asyncio.create_task") as mock_task,
     ):
         from emf_shared.phase import Phase
+
         mock_phase.return_value = Phase.EVENT_TIME
         await router.route(sample_alert, mock_session)
 
@@ -1183,6 +1251,7 @@ async def test_mattermost_webhook_action_endpoint_acks() -> None:
     case_id = str(uuid.uuid4())
 
     import datetime
+
     mock_alert = CaseAlert(
         case_id=case_id,
         friendly_id="a-b-c-d",
@@ -1206,7 +1275,9 @@ async def test_mattermost_webhook_action_endpoint_acks() -> None:
     app.dependency_overrides[get_settings] = lambda: mock_settings
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             resp = await client.post(
                 "/webhook/mattermost/action",
                 json={
@@ -1244,7 +1315,9 @@ async def test_mattermost_webhook_action_endpoint_rejects_bad_secret() -> None:
     app.dependency_overrides[get_settings] = lambda: mock_settings
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             resp = await client.post(
                 "/webhook/mattermost/action",
                 json={
@@ -1324,9 +1397,12 @@ async def test_also_sent_via_each_channel_sees_others(
 
     with (
         patch("router.alert_router.current_phase") as mock_phase,
-        patch("asyncio.create_task", side_effect=lambda c: asyncio.ensure_future(c)) as _,
+        patch(
+            "asyncio.create_task", side_effect=lambda c: asyncio.ensure_future(c)
+        ) as _,
     ):
         from emf_shared.phase import Phase
+
         mock_phase.return_value = Phase.EVENT_TIME
         await router.route(sample_alert, mock_session)
         await asyncio.sleep(0)

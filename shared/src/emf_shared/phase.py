@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 
 from .config import AppConfig, EventConfig
@@ -13,7 +13,7 @@ class Phase(StrEnum):
 
 
 def current_phase(config: AppConfig, at: datetime | None = None) -> Phase:
-    today: date = (at or datetime.now(tz=timezone.utc)).date()
+    today: date = (at or datetime.now(tz=UTC)).date()
 
     for event in sorted(config.events, key=lambda e: e.start_date, reverse=True):
         if event.start_date <= today <= event.end_date:
@@ -27,7 +27,7 @@ def current_phase(config: AppConfig, at: datetime | None = None) -> Phase:
 
 
 def is_active_routing_window(config: AppConfig, at: datetime | None = None) -> bool:
-    today: date = (at or datetime.now(tz=timezone.utc)).date()
+    today: date = (at or datetime.now(tz=UTC)).date()
 
     for event in config.events:
         padding = event.signal_padding

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import AsyncClient
 
-from emf_panel.dispatcher import _revoked, create_dispatcher_token, revoke_token
+from emf_panel.dispatcher import _revoked, revoke_token
 
 
 @pytest.mark.asyncio
@@ -23,14 +22,16 @@ async def test_non_conduct_user_gets_403(
     settings: object,
     regular_user: dict[str, object],
 ) -> None:
-    from emf_panel.main import app
     from emf_shared.db import get_session
-    from emf_panel.settings import get_settings
-    from emf_panel.auth import require_conduct_team
     from httpx import ASGITransport, AsyncClient
+
+    from emf_panel.auth import require_conduct_team
+    from emf_panel.main import app
+    from emf_panel.settings import get_settings
 
     async def bad_auth() -> dict[str, object]:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=403)
 
     app.dependency_overrides[get_session] = lambda: mock_session
@@ -82,9 +83,7 @@ async def test_invalid_transition_new_to_in_progress(
 
 
 @pytest.mark.asyncio
-async def test_closed_to_any_rejected(
-    authed_client: AsyncClient, mock_session: AsyncMock
-) -> None:
+async def test_closed_to_any_rejected(authed_client: AsyncClient, mock_session: AsyncMock) -> None:
     closed_case = MagicMock()
     closed_case.id = uuid.uuid4()
     closed_case.status = "closed"
@@ -118,9 +117,7 @@ async def test_create_dispatcher_session(authed_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_expired_dispatcher_token_rejected(
-    client: AsyncClient, expired_token: str
-) -> None:
+async def test_expired_dispatcher_token_rejected(client: AsyncClient, expired_token: str) -> None:
     resp = await client.get(f"/dispatcher?token={expired_token}", follow_redirects=False)
     assert resp.status_code == 401
 
@@ -130,7 +127,7 @@ async def test_revoked_dispatcher_token_rejected(
     client: AsyncClient, valid_token: str, settings: object
 ) -> None:
     from jose import jwt as jose_jwt
-    from emf_panel.settings import Settings
+
     s = settings  # type: ignore[assignment]
     payload = jose_jwt.decode(valid_token, s.secret_key, algorithms=["HS256"])  # type: ignore[attr-defined]
     jti = str(payload["jti"])
@@ -174,6 +171,7 @@ async def test_urgency_update_creates_history_row(
     mock_session.add.assert_called_once()
     history_row = mock_session.add.call_args.args[0]
     from emf_panel.models import CaseHistory
+
     assert isinstance(history_row, CaseHistory)
     assert history_row.field == "urgency"
     assert history_row.old_value == "low"

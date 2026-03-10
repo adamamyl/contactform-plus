@@ -119,9 +119,7 @@ class AlertRouter:
             )
 
     async def _route_off_event(self, alert: CaseAlert, session: AsyncSession) -> None:
-        asyncio.create_task(
-            self._send_with_retry(alert, "email", self._email)
-        )
+        asyncio.create_task(self._send_with_retry(alert, "email", self._email))
 
     async def _signal_phone_available(self) -> bool:
         if self._phone is None:
@@ -141,7 +139,9 @@ class AlertRouter:
         from router.ack.tokens import create_ack_token
 
         if self._session_factory is None:
-            log.error("No session factory — cannot persist notification for %s", channel_name)
+            log.error(
+                "No session factory — cannot persist notification for %s", channel_name
+            )
             return
 
         notif_id = uuid.uuid4()
@@ -175,6 +175,7 @@ class AlertRouter:
 
             if channel_name == "email" and ack_token:
                 from router.channels.email import EmailAdapter
+
                 if isinstance(adapter, EmailAdapter):
                     message_id = await adapter.send(alert, ack_token=ack_token)
                 else:

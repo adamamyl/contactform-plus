@@ -7,7 +7,6 @@ import asyncpg  # type: ignore[import-untyped]
 
 from emf_shared.db import get_session
 from router.alert_router import AlertRouter
-from router.models import CaseAlert
 
 log = logging.getLogger(__name__)
 

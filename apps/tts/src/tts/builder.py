@@ -8,8 +8,7 @@ URGENCY_WORDS: dict[str, str] = {
 }
 
 DTMF_PROMPTS = (
-    "Press 1 to acknowledge this case. "
-    "Press 2 to pass to the next responder."
+    "Press 1 to acknowledge this case. Press 2 to pass to the next responder."
 )
 
 

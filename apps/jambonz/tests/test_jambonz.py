@@ -48,8 +48,10 @@ async def test_is_available_returns_true_on_200() -> None:
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
+
         async def get(self, url: str, headers: dict[str, str]) -> FakeResp:
             return FakeResp()
 
@@ -72,11 +74,13 @@ async def test_send_calls_tts_then_jambonz() -> None:
 
     class FakeTtsResp:
         status_code = 200
+
         def json(self) -> dict[str, str]:
             return {"audio_url": "/audio/tok123"}
 
     class FakeCallResp:
         status_code = 201
+
         def json(self) -> dict[str, str]:
             return {"sid": "call-sid-abc"}
 
@@ -85,9 +89,13 @@ async def test_send_calls_tts_then_jambonz() -> None:
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
-        async def post(self, url: str, json: object, headers: dict[str, str] | None = None) -> object:
+
+        async def post(
+            self, url: str, json: object, headers: dict[str, str] | None = None
+        ) -> object:
             if "synthesise" in url:
                 call_count["tts"] += 1
                 return FakeTtsResp()
@@ -109,14 +117,17 @@ async def test_send_returns_none_when_tts_fails() -> None:
 
     class FakeTtsResp:
         status_code = 500
+
         def json(self) -> dict[str, object]:
             return {}
 
     class FakeClient:
         async def __aenter__(self) -> "FakeClient":
             return self
+
         async def __aexit__(self, *a: object) -> None:
             pass
+
         async def post(self, url: str, json: object, **kwargs: object) -> FakeTtsResp:
             return FakeTtsResp()
 
@@ -139,7 +150,9 @@ def mock_adapter() -> JambonzAdapter:
 @pytest_asyncio.fixture
 async def client(mock_adapter: JambonzAdapter) -> AsyncClient:
     app.dependency_overrides[get_adapter] = lambda: mock_adapter
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         yield ac
     app.dependency_overrides.clear()
 
@@ -238,7 +251,7 @@ async def test_escalation_stops_on_ack() -> None:
 
 @pytest.mark.asyncio
 async def test_escalation_tries_all_on_no_ack() -> None:
-    from jambonz.escalation import escalating_call, wait_for_ack
+    from jambonz.escalation import escalating_call
 
     adapter = _make_adapter()
     alert = _make_alert()

@@ -8,22 +8,20 @@ from typing import Annotated, cast
 
 import httpx
 import redis.asyncio as aioredis
-
 from authlib.integrations.base_client.errors import MismatchingStateError
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, status
+from emf_shared.config import EventConfig
+from emf_shared.db import get_session
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sqlalchemy import case as sa_case, exists, func, select, text, update
+from sqlalchemy import case as sa_case
+from sqlalchemy import exists, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from emf_shared.config import EventConfig
-from emf_shared.db import get_session
 
 from .auth import oauth, require_conduct_team
 from .dispatcher import (
     create_dispatcher_token,
-    get_active_device_count,
     revoke_token,
     validate_dispatcher_token,
 )
@@ -129,8 +127,8 @@ async def case_list(
     request: Request,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    status_filter: Annotated[list[str], Query(alias="status")] = [],
-    urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],
+    status_filter: Annotated[list[str], Query(alias="status")] = [],  # noqa: B006
+    urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],  # noqa: B006
     assignee: str | None = None,
     tag: str | None = None,
     sort: str = "submitted",
@@ -153,6 +151,7 @@ async def case_list(
     def make_sort_url(col: str) -> str:
         new_order = "desc" if sort == col and order == "asc" else "asc"
         return str(request.url.include_query_params(sort=col, order=new_order))
+
     result = await session.execute(stmt)
     cases = result.scalars().all()
     map_urls: dict[uuid.UUID, str] = {}
@@ -182,7 +181,10 @@ async def case_list(
             .group_by(Notification.case_id)
         )
         notif_states = {row.case_id: row.notif_state for row in notif_rows}
-    return templates.TemplateResponse(request, "cases.html", {
+    return templates.TemplateResponse(
+        request,
+        "cases.html",
+        {
             "request": request,
             "cases": cases,
             "user": user,
@@ -221,10 +223,14 @@ async def case_detail(
     attachments: list[str] = []
     if attach_dir.is_dir():
         attachments = [
-            f.name for f in sorted(attach_dir.iterdir())
+            f.name
+            for f in sorted(attach_dir.iterdir())
             if f.suffix.lower() in {".jpg", ".png", ".gif", ".webp"}
         ]
-    return templates.TemplateResponse(request, "case_detail.html", {
+    return templates.TemplateResponse(
+        request,
+        "case_detail.html",
+        {
             "request": request,
             "case": case,
             "history": history,
@@ -405,9 +411,7 @@ async def list_tags(
     return [row[0] for row in result.fetchall()]
 
 
-async def _notify_router_ack(
-    case_id: uuid.UUID, acked_by: str, settings: Settings
-) -> None:
+async def _notify_router_ack(case_id: uuid.UUID, acked_by: str, settings: Settings) -> None:
     if not settings.router_internal_url:
         return
     headers: dict[str, str] = {}
@@ -440,9 +444,7 @@ async def admin_ack(
         .values(state="acked", acked_at=now, acked_by=username)
     )
     await session.execute(
-        update(Case)
-        .where(Case.id == case_id)
-        .values(assignee=username, updated_at=now)
+        update(Case).where(Case.id == case_id).values(assignee=username, updated_at=now)
     )
     await session.commit()
     await redis.sadd(_ASSIGNEES_KEY, username)
@@ -496,7 +498,10 @@ async def dispatcher_share_page(
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> HTMLResponse:
-    return templates.TemplateResponse(request, "dispatcher_share.html", {"request": request, "user": user, "settings": settings},
+    return templates.TemplateResponse(
+        request,
+        "dispatcher_share.html",
+        {"request": request, "user": user, "settings": settings},
     )
 
 

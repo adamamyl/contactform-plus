@@ -5,12 +5,11 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from emf_shared.db import init_db
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.sessions import SessionMiddleware
-
-from emf_shared.db import init_db
 
 from .auth import configure_oauth
 from .routes import router

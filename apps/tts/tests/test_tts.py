@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from tts.builder import build_tts_message
-from tts.main import PIPER_BIN, PIPER_MODEL, _sanitise, app
+from tts.main import _sanitise, app
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +77,9 @@ async def client(fake_wav: bytes) -> AsyncClient:  # type: ignore[misc]
         return fake_wav
 
     with patch("tts.main._run_piper", side_effect=fake_piper):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as ac:
             yield ac
 
 
@@ -132,7 +132,9 @@ async def test_synthesise_with_friendly_id_and_urgency(client: AsyncClient) -> N
 
 @pytest.mark.asyncio
 async def test_health_degraded_when_model_absent() -> None:
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         resp = await ac.get("/health")
     assert resp.status_code == 200
     data = resp.json()

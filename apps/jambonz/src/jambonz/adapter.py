@@ -56,7 +56,9 @@ class JambonzAdapter:
         }
         try:
             async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.post(f"{self._tts_url}/synthesise/file", json=payload)
+                resp = await client.post(
+                    f"{self._tts_url}/synthesise/file", json=payload
+                )
             if resp.status_code == 200:
                 rel_url: str = resp.json()["audio_url"]
                 return f"{self._tts_url}{rel_url}"
@@ -90,7 +92,9 @@ class JambonzAdapter:
             if resp.status_code == 201:
                 return str(resp.json().get("sid", ""))
             log.warning(
-                "Jambonz Calls API returned %s for case %s", resp.status_code, alert.case_id
+                "Jambonz Calls API returned %s for case %s",
+                resp.status_code,
+                alert.case_id,
             )
             return None
         except Exception:

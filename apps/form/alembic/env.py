@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
-from sqlalchemy.ext.asyncio import create_async_engine
-
 from form.models import Base
 from form.settings import get_settings
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from alembic import context
 
 config = context.config
 if config.config_file_name is not None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
@@ -128,7 +128,7 @@ class CaseSubmission(BaseModel):
     @field_validator("incident_date")
     @classmethod
     def not_in_future(cls, v: date) -> date:
-        today = datetime.now(tz=timezone.utc).date()
+        today = datetime.now(tz=UTC).date()
         if v > today:
             raise ValueError("incident date cannot be in the future")
         return v

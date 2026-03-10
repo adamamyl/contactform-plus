@@ -20,7 +20,6 @@ from emf_panel.dispatcher import create_dispatcher_token
 from emf_panel.main import app
 from emf_panel.settings import Settings
 
-
 TEST_SECRET = "test-secret-key-for-panel-tests-0000"
 TEST_CASE_ID = uuid.uuid4()
 
@@ -108,14 +107,13 @@ async def client(
     settings: Settings,
 ) -> AsyncGenerator[AsyncClient, None]:
     from emf_shared.db import get_session
+
     from emf_panel.settings import get_settings
 
     app.dependency_overrides[get_session] = lambda: mock_session
     app.dependency_overrides[get_settings] = lambda: settings
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://testserver"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as ac:
         yield ac
 
     app.dependency_overrides.clear()
@@ -128,16 +126,15 @@ async def authed_client(
     conduct_user: dict[str, object],
 ) -> AsyncGenerator[AsyncClient, None]:
     from emf_shared.db import get_session
-    from emf_panel.settings import get_settings
+
     from emf_panel.auth import require_conduct_team
+    from emf_panel.settings import get_settings
 
     app.dependency_overrides[get_session] = lambda: mock_session
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[require_conduct_team] = lambda: conduct_user
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://testserver"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as ac:
         yield ac
 
     app.dependency_overrides.clear()

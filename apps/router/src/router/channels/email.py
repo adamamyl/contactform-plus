@@ -76,7 +76,9 @@ class EmailAdapter(ChannelAdapter):
         except Exception:
             return False
 
-    async def _send_via_resend(self, subject: str, body: str, reply_to_mid: str | None = None) -> str | None:
+    async def _send_via_resend(
+        self, subject: str, body: str, reply_to_mid: str | None = None
+    ) -> str | None:
         mid = make_msgid(domain=self._domain)
         headers: dict[str, str] = {"Message-ID": mid}
         if reply_to_mid:
@@ -120,7 +122,9 @@ class EmailAdapter(ChannelAdapter):
             return f"{alert.location_lat:.5f}, {alert.location_lon:.5f} (map pin)"
         return "not specified"
 
-    def _build_body(self, alert: CaseAlert, ack_token: str | None = None) -> tuple[str, str]:
+    def _build_body(
+        self, alert: CaseAlert, ack_token: str | None = None
+    ) -> tuple[str, str]:
         emoji = URGENCY_EMOJI.get(alert.urgency, "🔔")
         colour = URGENCY_COLOUR.get(alert.urgency, "#607d8b")
         location = self._location_str(alert)
@@ -148,7 +152,11 @@ class EmailAdapter(ChannelAdapter):
                 f'padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold;">'
                 f"✅ Acknowledge</a></p>"
             )
-        also_row = f"<tr><td style='color:#666'>Also via</td><td>{also}</td></tr>" if also else ""
+        also_row = (
+            f"<tr><td style='color:#666'>Also via</td><td>{also}</td></tr>"
+            if also
+            else ""
+        )
         html = f"""<div style="font-family:sans-serif;max-width:600px">
   <div style="background:{colour};color:#fff;padding:12px 16px;border-radius:4px 4px 0 0">
     <strong>{emoji} New {alert.urgency} case: {alert.friendly_id}</strong>
@@ -231,7 +239,9 @@ class EmailAdapter(ChannelAdapter):
             try:
                 resend.Emails.send(params)
             except Exception:
-                log.exception("Resend ACK confirmation failed for case %s", alert.case_id)
+                log.exception(
+                    "Resend ACK confirmation failed for case %s", alert.case_id
+                )
             return
 
         msg = EmailMessage()
@@ -255,4 +265,6 @@ class EmailAdapter(ChannelAdapter):
                 timeout=10,
             )
         except Exception:
-            log.exception("EmailAdapter.send_ack_confirmation failed for case %s", alert.case_id)
+            log.exception(
+                "EmailAdapter.send_ack_confirmation failed for case %s", alert.case_id
+            )

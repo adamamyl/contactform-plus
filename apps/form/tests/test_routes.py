@@ -88,9 +88,7 @@ async def test_what_happened_too_long_returns_422(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_returns_ok(
-    mock_session: AsyncSession, client: AsyncClient
-) -> None:
+async def test_health_returns_ok(mock_session: AsyncSession, client: AsyncClient) -> None:
     execute_result = MagicMock()
     mock_session.execute = AsyncMock(return_value=execute_result)  # type: ignore[method-assign]
     response = await client.get("/health")
@@ -103,9 +101,7 @@ async def test_health_returns_ok(
 
 @pytest.mark.asyncio
 async def test_location_no_fields_returns_422(client: AsyncClient) -> None:
-    payload = make_valid_payload(
-        location={"text": None, "lat": None, "lon": None}
-    )
+    payload = make_valid_payload(location={"text": None, "lat": None, "lon": None})
     response = await client.post("/api/submit", json=payload)
     assert response.status_code == 422
 

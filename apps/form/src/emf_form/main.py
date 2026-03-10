@@ -54,9 +54,13 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     _log.warning("422 on %s: %s", request.url.path, exc.errors())
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
 app.add_middleware(SlowAPIMiddleware)
 app.include_router(router)
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")

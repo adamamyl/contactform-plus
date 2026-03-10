@@ -19,9 +19,7 @@ from tts.builder import build_tts_message
 
 MAX_TEXT_LEN = 500
 AUDIO_TTL_SECONDS = 300
-PIPER_MODEL = os.environ.get(
-    "PIPER_MODEL", "/app/models/en_GB-alan-medium.onnx"
-)
+PIPER_MODEL = os.environ.get("PIPER_MODEL", "/app/models/en_GB-alan-medium.onnx")
 PIPER_BIN = os.environ.get("PIPER_BIN", "/app/piper/piper")
 AUDIO_DIR = Path(os.environ.get("AUDIO_DIR", "/app/audio"))
 
@@ -40,7 +38,8 @@ def _sanitise(text: str) -> str:
 def _purge_expired() -> None:
     now = time.monotonic()
     expired = [
-        t for t, (_, created, persistent) in _audio_files.items()
+        t
+        for t, (_, created, persistent) in _audio_files.items()
         if not persistent and now - created > AUDIO_TTL_SECONDS
     ]
     for t in expired:

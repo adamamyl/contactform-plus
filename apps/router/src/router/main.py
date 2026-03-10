@@ -7,17 +7,17 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, status
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import HTMLResponse
 from jose import JWTError
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from emf_shared.db import get_session, get_session_factory, init_db
-from router.ack.tokens import create_ack_token, decode_ack_token
+from router.ack.tokens import decode_ack_token
 from router.alert_router import AlertRouter
 from router.channels.email import EmailAdapter
 from router.channels.mattermost import MattermostAdapter
@@ -25,7 +25,7 @@ from router.channels.signal import SignalAdapter
 from router.channels.slack import SlackAdapter
 from router.channels.telephony import TelephonyAdapter
 from router.listener import listen_for_cases
-from router.models import Notification, NotifState
+from router.models import Notification
 from router.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -91,10 +91,17 @@ async def _poll_signal_reactions(
                     if notif is None:
                         continue
                     acked_by = str(env.get("source") or "signal")
-                    alert, others = await alert_router.mark_acked(notif.id, acked_by, session)
+                    alert, others = await alert_router.mark_acked(
+                        notif.id, acked_by, session
+                    )
                     if alert:
-                        await alert_router.send_ack_to_all_channels(alert, acked_by, others, session)
-                        log.info("Signal reaction ACK processed for case %s", alert.friendly_id)
+                        await alert_router.send_ack_to_all_channels(
+                            alert, acked_by, others, session
+                        )
+                        log.info(
+                            "Signal reaction ACK processed for case %s",
+                            alert.friendly_id,
+                        )
             except Exception:
                 log.exception("Error processing Signal reaction")
 
@@ -136,7 +143,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         else None
     )
     mattermost_adapter: MattermostAdapter | None = None
-    if cfg.mattermost_webhook or (cfg.mattermost_url and cfg.mattermost_channel_id and settings.mattermost_token):
+    if cfg.mattermost_webhook or (
+        cfg.mattermost_url and cfg.mattermost_channel_id and settings.mattermost_token
+    ):
         mattermost_adapter = MattermostAdapter(
             webhook_url=cfg.mattermost_webhook,
             panel_url=cfg.panel_base_url,
@@ -204,7 +213,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         local_dev=settings.local_dev,
     )
 
-    task = asyncio.create_task(listen_for_cases(settings.database_url, _router_instance))
+    task = asyncio.create_task(
+        listen_for_cases(settings.database_url, _router_instance)
+    )
     poll_task: asyncio.Task[None] | None = None
     if signal_adapter and settings.signal_api_url and settings.signal_sender:
         poll_task = asyncio.create_task(
@@ -266,9 +277,13 @@ async def signal_webhook(
         return {"ok": True}
 
     acked_by = str(body.envelope.source or "signal")
-    alert, other_notifications = await alert_router.mark_acked(notif.id, acked_by, session)
+    alert, other_notifications = await alert_router.mark_acked(
+        notif.id, acked_by, session
+    )
     if alert:
-        await alert_router.send_ack_to_all_channels(alert, acked_by, other_notifications, session)
+        await alert_router.send_ack_to_all_channels(
+            alert, acked_by, other_notifications, session
+        )
 
     return {"ok": True}
 
@@ -288,16 +303,22 @@ async def email_ack(
     try:
         notification_id = decode_ack_token(token, settings.secret_key)
     except (JWTError, ValueError):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
+        )
 
-    alert, other_notifications = await alert_router.mark_acked(notification_id, "email_link", session)
+    alert, other_notifications = await alert_router.mark_acked(
+        notification_id, "email_link", session
+    )
     if alert is None:
         return HTMLResponse(
             content="<p>This case is already acknowledged or the link has expired.</p>",
             status_code=200,
         )
 
-    await alert_router.send_ack_to_all_channels(alert, "email_link", other_notifications, session)
+    await alert_router.send_ack_to_all_channels(
+        alert, "email_link", other_notifications, session
+    )
 
     html = (
         f"<h1>✅ Acknowledged</h1>"
@@ -329,8 +350,13 @@ async def mattermost_action(
     alert_router: Annotated[AlertRouter, Depends(get_alert_router)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, object]:
-    if settings.mattermost_webhook_secret and body.context.secret != settings.mattermost_webhook_secret:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid secret")
+    if (
+        settings.mattermost_webhook_secret
+        and body.context.secret != settings.mattermost_webhook_secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid secret"
+        )
 
     if body.context.action != "ack":
         return {"update": {"message": "Unknown action"}}
@@ -338,22 +364,29 @@ async def mattermost_action(
     try:
         case_id = uuid.UUID(body.context.case_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid case_id")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid case_id"
+        )
 
     acked_by = body.user_name or "mattermost"
 
     # Find the mattermost notification for this case and mark it acked
     result = await session.execute(
-        select(Notification)
-        .where(Notification.case_id == case_id, Notification.channel == "mattermost")
+        select(Notification).where(
+            Notification.case_id == case_id, Notification.channel == "mattermost"
+        )
     )
     notif = result.scalar_one_or_none()
     if notif is None:
         return {"update": {"message": "Case not found"}}
 
-    alert, other_notifications = await alert_router.mark_acked(notif.id, acked_by, session)
+    alert, other_notifications = await alert_router.mark_acked(
+        notif.id, acked_by, session
+    )
     if alert:
-        await alert_router.send_ack_to_all_channels(alert, acked_by, other_notifications, session)
+        await alert_router.send_ack_to_all_channels(
+            alert, acked_by, other_notifications, session
+        )
 
     return {"update": {"message": "✅ Acknowledged"}}
 
@@ -372,7 +405,10 @@ def _check_internal_secret(
     x_internal_secret: Annotated[str, Header()] = "",
     settings: Settings = Depends(get_settings),
 ) -> None:
-    if settings.router_internal_secret and x_internal_secret != settings.router_internal_secret:
+    if (
+        settings.router_internal_secret
+        and x_internal_secret != settings.router_internal_secret
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
@@ -388,7 +424,10 @@ async def internal_ack(
         try:
             notification_id = uuid.UUID(body.notification_id)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid notification_id")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid notification_id",
+            )
 
         alert, other_notifications = await alert_router.mark_acked(
             notification_id, body.acked_by, session
@@ -399,7 +438,9 @@ async def internal_ack(
             )
         acked_count = 1 if alert else 0
     else:
-        notifications = await alert_router.load_sent_notifications(str(case_id), session)
+        notifications = await alert_router.load_sent_notifications(
+            str(case_id), session
+        )
         alert = await alert_router.load_alert_from_db(str(case_id), session)
         if notifications and alert:
             await alert_router.mark_acked(notifications[0].id, body.acked_by, session)

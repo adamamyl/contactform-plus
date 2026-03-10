@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Annotated
 
 from emf_shared.db import get_session
@@ -33,7 +32,7 @@ async def get_form(
     active = settings.local_dev or is_active_routing_window(config)
     events = events_for_form(config)
     current_event_name = events[0].name if events else ""
-    today = datetime.now(tz=timezone.utc).date().isoformat()
+    today = datetime.now(tz=UTC).date().isoformat()
     return templates.TemplateResponse(
         request,
         "form.html",
@@ -191,8 +190,12 @@ async def upload_attachment(
         )
     case_dir = settings.attachment_dir / str(case_id)
     case_dir.mkdir(parents=True, exist_ok=True)
-    existing = list(case_dir.glob("*.jpg")) + list(case_dir.glob("*.png")) + \
-        list(case_dir.glob("*.gif")) + list(case_dir.glob("*.webp"))
+    existing = (
+        list(case_dir.glob("*.jpg"))
+        + list(case_dir.glob("*.png"))
+        + list(case_dir.glob("*.gif"))
+        + list(case_dir.glob("*.webp"))
+    )
     if len(existing) >= cfg.attachment_max_per_case:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

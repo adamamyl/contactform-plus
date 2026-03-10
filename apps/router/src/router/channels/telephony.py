@@ -62,7 +62,9 @@ class TelephonyAdapter(ChannelAdapter):
         }
         try:
             async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.post(f"{self._tts_url}/synthesise/file", json=payload)
+                resp = await client.post(
+                    f"{self._tts_url}/synthesise/file", json=payload
+                )
             if resp.status_code == 200:
                 rel_url: str = resp.json()["audio_url"]
                 return f"{self._tts_audio_base_url}{rel_url}"
@@ -105,10 +107,14 @@ class TelephonyAdapter(ChannelAdapter):
                                 json={"audio_url": audio_url, "case_id": alert.case_id},
                             )
                     except Exception:
-                        log.warning("Failed to register call %s with jambonz-adapter", call_sid)
+                        log.warning(
+                            "Failed to register call %s with jambonz-adapter", call_sid
+                        )
                 return call_sid or "telephony"
             log.warning(
-                "Jambonz Calls API returned %s for case %s", resp.status_code, alert.case_id
+                "Jambonz Calls API returned %s for case %s",
+                resp.status_code,
+                alert.case_id,
             )
             return None
         except Exception:

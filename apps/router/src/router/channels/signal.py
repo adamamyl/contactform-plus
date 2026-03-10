@@ -20,7 +20,9 @@ MAP_BASE_URL = "https://map.emfcamp.org"
 
 
 class SignalAdapter(ChannelAdapter):
-    def __init__(self, api_url: str, sender: str, group_id: str, panel_base_url: str = "") -> None:
+    def __init__(
+        self, api_url: str, sender: str, group_id: str, panel_base_url: str = ""
+    ) -> None:
         self._api_url = api_url.rstrip("/")
         self._sender = sender
         self._group_id = group_id
@@ -73,7 +75,9 @@ class SignalAdapter(ChannelAdapter):
                     ts = str(data.get("timestamp", ""))
                     return ts or "sent"
                 log.warning(
-                    "SignalAdapter.send got %s for case %s", resp.status_code, alert.case_id
+                    "SignalAdapter.send got %s for case %s",
+                    resp.status_code,
+                    alert.case_id,
                 )
                 return None
         except Exception:

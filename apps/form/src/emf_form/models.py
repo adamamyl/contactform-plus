@@ -16,12 +16,8 @@ class Case(Base):
     __tablename__ = "cases"
     __table_args__ = {"schema": "forms"}
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    friendly_id: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False, index=True
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    friendly_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     event_name: Mapped[str] = mapped_column(String(64), nullable=False)
     urgency: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")
     phase: Mapped[str] = mapped_column(String(16), nullable=False)

@@ -17,7 +17,9 @@ log = logging.getLogger(__name__)
 
 ROUTER_INTERNAL_URL = os.environ.get("ROUTER_INTERNAL_URL", "http://msg-router:8002")
 ROUTER_INTERNAL_SECRET = os.environ.get("ROUTER_INTERNAL_SECRET", "")
-WEBHOOK_BASE_URL = os.environ.get("JAMBONZ_WEBHOOK_BASE_URL", "https://panel.emf-forms.internal")
+WEBHOOK_BASE_URL = os.environ.get(
+    "JAMBONZ_WEBHOOK_BASE_URL", "https://panel.emf-forms.internal"
+)
 TTS_INTERNAL_URL = os.environ.get("TTS_SERVICE_URL", "http://tts:8003")
 
 # call_sid → {audio_url, case_id}
@@ -106,20 +108,38 @@ async def jambonz_call_webhook(
     registered = _call_registry.get(body.call_sid, {})
     effective_case_id = case_id or registered.get("case_id", "")
     effective_audio_url = audio_url or registered.get("audio_url", "")
-    log.info("CALL sid=%s status=%s audio=%s case=%s", body.call_sid, body.call_status, effective_audio_url, effective_case_id)
+    log.info(
+        "CALL sid=%s status=%s audio=%s case=%s",
+        body.call_sid,
+        body.call_status,
+        effective_audio_url,
+        effective_case_id,
+    )
 
     if pressed:
         if pressed.startswith("1") and effective_case_id:
-            log.info("DTMF ACK: case %s acknowledged via call %s", effective_case_id, body.call_sid)
+            log.info(
+                "DTMF ACK: case %s acknowledged via call %s",
+                effective_case_id,
+                body.call_sid,
+            )
             await _call_router_ack(effective_case_id, "jambonz_dtmf")
         return {}
 
     if effective_audio_url and effective_case_id:
-        params = urllib.parse.urlencode({"case_id": effective_case_id, "audio_url": effective_audio_url})
+        params = urllib.parse.urlencode(
+            {"case_id": effective_case_id, "audio_url": effective_audio_url}
+        )
         action_url = f"{WEBHOOK_BASE_URL.rstrip('/')}/webhook/jambonz/call?{params}"
         return [
             {"verb": "play", "url": effective_audio_url},
-            {"verb": "gather", "input": ["digits"], "numDigits": 1, "timeout": 30, "actionHook": action_url},
+            {
+                "verb": "gather",
+                "input": ["digits"],
+                "numDigits": 1,
+                "timeout": 30,
+                "actionHook": action_url,
+            },
         ]
 
     return {}
@@ -170,7 +190,9 @@ async def proxy_audio(filename: str) -> Response:
 
 
 @api.get("/health")
-async def health(adapter: Annotated[JambonzAdapter, Depends(get_adapter)]) -> dict[str, object]:
+async def health(
+    adapter: Annotated[JambonzAdapter, Depends(get_adapter)],
+) -> dict[str, object]:
     available = await adapter.is_available()
     return {
         "status": "ok" if available else "degraded",

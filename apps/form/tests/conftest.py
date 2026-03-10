@@ -74,9 +74,7 @@ async def client(
     app.dependency_overrides[get_settings] = lambda: mock_settings
     app.dependency_overrides[get_session] = override_session
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
     app.dependency_overrides.clear()

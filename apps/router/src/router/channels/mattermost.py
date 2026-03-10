@@ -69,11 +69,19 @@ class MattermostAdapter(ChannelAdapter):
         colour = URGENCY_COLOUR.get(alert.urgency, "#607d8b")
         fields: list[dict[str, object]] = [
             {"title": "Event", "value": alert.event_name, "short": True},
-            {"title": "Location", "value": alert.location_hint or "not specified", "short": True},
+            {
+                "title": "Location",
+                "value": alert.location_hint or "not specified",
+                "short": True,
+            },
         ]
         if alert.also_sent_via:
             fields.append(
-                {"title": "Also sent via", "value": ", ".join(alert.also_sent_via), "short": True}
+                {
+                    "title": "Also sent via",
+                    "value": ", ".join(alert.also_sent_via),
+                    "short": True,
+                }
             )
 
         actions: list[dict[str, object]] = []
@@ -123,7 +131,9 @@ class MattermostAdapter(ChannelAdapter):
                 alert.case_id,
             )
         except Exception:
-            log.exception("MattermostAdapter._send_posts_api failed for case %s", alert.case_id)
+            log.exception(
+                "MattermostAdapter._send_posts_api failed for case %s", alert.case_id
+            )
 
         if self._webhook_url:
             log.info("Falling back to webhook for case %s", alert.case_id)
@@ -145,11 +155,15 @@ class MattermostAdapter(ChannelAdapter):
                 if resp.status_code == 200:
                     return "mattermost"
                 log.warning(
-                    "MattermostAdapter webhook got %s for case %s", resp.status_code, alert.case_id
+                    "MattermostAdapter webhook got %s for case %s",
+                    resp.status_code,
+                    alert.case_id,
                 )
                 return None
         except Exception:
-            log.exception("MattermostAdapter._send_webhook failed for case %s", alert.case_id)
+            log.exception(
+                "MattermostAdapter._send_webhook failed for case %s", alert.case_id
+            )
             return None
 
     async def send_ack_confirmation(
@@ -167,7 +181,9 @@ class MattermostAdapter(ChannelAdapter):
         emoji = URGENCY_EMOJI.get(alert.urgency, "⚪")
         channel_id = self._channel_id or ""
         if not channel_id:
-            log.warning("MattermostAdapter: no channel_id configured, cannot post ACK reply")
+            log.warning(
+                "MattermostAdapter: no channel_id configured, cannot post ACK reply"
+            )
             return
 
         body: dict[str, object] = {

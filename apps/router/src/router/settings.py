@@ -14,7 +14,9 @@ class Settings(SharedSettings):
     jambonz_from_number: str = ""
     tts_service_url: str = "http://tts:8003"
     tts_audio_base_url: str = ""  # public base URL for Jambonz to fetch audio files; defaults to tts_service_url
-    jambonz_webhook_base_url: str = ""  # public base URL for per-call call_hook override
+    jambonz_webhook_base_url: str = (
+        ""  # public base URL for per-call call_hook override
+    )
     mattermost_token: str = ""
     mattermost_webhook_secret: str = ""
     router_internal_secret: str = ""

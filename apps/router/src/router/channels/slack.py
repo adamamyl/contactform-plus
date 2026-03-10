@@ -38,7 +38,9 @@ class SlackAdapter(ChannelAdapter):
                 if resp.status_code == 200:
                     return "slack"
                 log.warning(
-                    "SlackAdapter.send got %s for case %s", resp.status_code, alert.case_id
+                    "SlackAdapter.send got %s for case %s",
+                    resp.status_code,
+                    alert.case_id,
                 )
                 return None
         except Exception:

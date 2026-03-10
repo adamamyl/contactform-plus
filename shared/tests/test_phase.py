@@ -1,6 +1,4 @@
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from emf_shared.config import AppConfig, EventConfig, SignalPadding, SmtpConfig
 from emf_shared.phase import Phase, current_phase, events_for_form, is_active_routing_window
@@ -18,9 +16,7 @@ def _make_config(
             name="emfcamp2026",
             start_date=start,  # type: ignore[arg-type]
             end_date=end,  # type: ignore[arg-type]
-            signal_padding=SignalPadding(
-                before_event_days=before_pad, after_event_days=after_pad
-            ),
+            signal_padding=SignalPadding(before_event_days=before_pad, after_event_days=after_pad),
         )
     ]
     if extra:
@@ -34,7 +30,7 @@ def _make_config(
 
 
 def _at(iso: str) -> datetime:
-    return datetime.fromisoformat(iso).replace(tzinfo=timezone.utc)
+    return datetime.fromisoformat(iso).replace(tzinfo=UTC)
 
 
 class TestCurrentPhase:
