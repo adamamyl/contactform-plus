@@ -100,8 +100,6 @@ services:
     build:
       context: ..
       dockerfile: apps/tts/Dockerfile
-    volumes:
-      - tts_audio:/app/audio
     networks:
       - contactform
 
@@ -112,7 +110,6 @@ services:
     env_file: ../.env
     environment:
       CONFIG_PATH: /app/config.json
-      JAMBONZ_WEBHOOK_BASE_URL: ${JAMBONZ_WEBHOOK_BASE_URL:-https://panel.emf-forms.internal}
     ports:
       - "${JAMBONZ_ADAPTER_PORT:-8004}:8004"
     volumes:

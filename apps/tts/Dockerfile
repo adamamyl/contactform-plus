@@ -25,6 +25,7 @@ RUN PIPER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64")
 COPY --from=builder /app/.venv /app/.venv
 COPY apps/tts/src/ ./src/
 COPY shared/src/ ./src/
+RUN mkdir -p /app/audio && chown appuser:appuser /app/audio
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH=/app/src
 ENV PIPER_BIN=/app/piper/piper

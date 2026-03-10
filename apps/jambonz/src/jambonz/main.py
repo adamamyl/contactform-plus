@@ -20,6 +20,9 @@ ROUTER_INTERNAL_SECRET = os.environ.get("ROUTER_INTERNAL_SECRET", "")
 WEBHOOK_BASE_URL = os.environ.get("JAMBONZ_WEBHOOK_BASE_URL", "https://panel.emf-forms.internal")
 TTS_INTERNAL_URL = os.environ.get("TTS_SERVICE_URL", "http://tts:8003")
 
+# call_sid → {audio_url, case_id}
+_call_registry: dict[str, dict[str, str]] = {}
+
 _adapter_instance: JambonzAdapter | None = None
 
 
@@ -67,13 +70,15 @@ async def _call_router_ack(case_id: str, acked_by: str) -> None:
         log.warning("Failed to notify router of DTMF ACK for case %s", case_id)
 
 
-# ---------------------------------------------------------------------------
-# Unified Jambonz webhook
-# Handles three cases:
-#   1. digits present  → DTMF gather result; press 1 to ACK
-#   2. tag.audio_url   → Initial calling webhook; return play+gather verbs
-#   3. otherwise       → Call status update; return {}
-# ---------------------------------------------------------------------------
+class RegisterBody(BaseModel):
+    audio_url: str
+    case_id: str
+
+
+@api.post("/internal/register/{call_sid}")
+async def register_call(call_sid: str, body: RegisterBody) -> dict[str, bool]:
+    _call_registry[call_sid] = {"audio_url": body.audio_url, "case_id": body.case_id}
+    return {"ok": True}
 
 
 class JambonzWebhookBody(BaseModel):
@@ -83,15 +88,25 @@ class JambonzWebhookBody(BaseModel):
     tag: dict[str, str] = {}
 
 
-@api.post("/webhook/jambonz")
-async def jambonz_webhook(
+# ---------------------------------------------------------------------------
+# Calling webhook — Jambonz fires this once when the call needs instructions.
+# Set as the application "Calling webhook" in the Jambonz console.
+# ---------------------------------------------------------------------------
+
+
+@api.post("/webhook/jambonz/call")
+async def jambonz_call_webhook(
     body: JambonzWebhookBody,
     case_id: str = Query(default=""),
+    audio_url: str = Query(default=""),
 ) -> object:
+    import urllib.parse
+
     pressed = body.digits.strip()
-    tag_case_id = body.tag.get("case_id", "")
-    audio_url = body.tag.get("audio_url", "")
-    effective_case_id = case_id or tag_case_id
+    registered = _call_registry.get(body.call_sid, {})
+    effective_case_id = case_id or registered.get("case_id", "")
+    effective_audio_url = audio_url or registered.get("audio_url", "")
+    print(f"CALL sid={body.call_sid!r} status={body.call_status!r} audio={effective_audio_url!r} case={effective_case_id!r}", flush=True)
 
     if pressed:
         if pressed.startswith("1") and effective_case_id:
@@ -99,19 +114,38 @@ async def jambonz_webhook(
             await _call_router_ack(effective_case_id, "jambonz_dtmf")
         return {}
 
-    if audio_url and effective_case_id:
-        action_url = f"{WEBHOOK_BASE_URL.rstrip('/')}/webhook/jambonz?case_id={effective_case_id}"
+    if effective_audio_url and effective_case_id:
+        params = urllib.parse.urlencode({"case_id": effective_case_id, "audio_url": effective_audio_url})
+        action_url = f"{WEBHOOK_BASE_URL.rstrip('/')}/webhook/jambonz/call?{params}"
         return [
-            {"verb": "play", "url": audio_url},
-            {"verb": "gather", "input": ["digits"], "numDigits": 1, "timeout": 30, "action": action_url},
+            {"verb": "play", "url": effective_audio_url},
+            {"verb": "gather", "input": ["digits"], "numDigits": 1, "timeout": 30, "actionHook": action_url},
         ]
 
     return {}
 
 
 # ---------------------------------------------------------------------------
+# Status webhook — Jambonz fires this for every call state change.
+# Set as the application "Call status webhook" in the Jambonz console.
+# Must always return {} — returning verbs here causes call termination.
+# ---------------------------------------------------------------------------
+
+
+@api.post("/webhook/jambonz/status")
+async def jambonz_status_webhook(body: JambonzWebhookBody) -> dict[str, object]:
+    log.info("STATUS sid=%s status=%s", body.call_sid, body.call_status)
+    return {}
+
+
+# ---------------------------------------------------------------------------
 # Audio proxy — lets Jambonz (cloud) fetch TTS files via this public adapter
 # ---------------------------------------------------------------------------
+
+
+@api.head("/audio/{filename}")
+async def proxy_audio_head(filename: str) -> Response:
+    return Response(status_code=200, media_type="audio/wav")
 
 
 @api.get("/audio/{filename}")

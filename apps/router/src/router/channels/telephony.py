@@ -23,6 +23,8 @@ class TelephonyAdapter(ChannelAdapter):
         from_number: str,
         to_number: str | None = None,
         tts_audio_base_url: str = "",
+        webhook_base_url: str = "",
+        jambonz_adapter_url: str = "http://jambonz-adapter:8004",
     ) -> None:
         self._api_url = api_url.rstrip("/")
         self._api_key = api_key
@@ -32,6 +34,8 @@ class TelephonyAdapter(ChannelAdapter):
         self._tts_audio_base_url = (tts_audio_base_url or tts_service_url).rstrip("/")
         self._from_number = from_number
         self._to_number = to_number or from_number
+        self._webhook_base_url = webhook_base_url.rstrip("/")
+        self._jambonz_adapter_url = jambonz_adapter_url.rstrip("/")
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"}
@@ -83,10 +87,6 @@ class TelephonyAdapter(ChannelAdapter):
             "application_sid": self._application_sid,
             "to": to_field,
             "from": self._from_number,
-            "tag": {
-                "case_id": alert.case_id,
-                "audio_url": audio_url,
-            },
         }
         try:
             async with httpx.AsyncClient(timeout=30) as client:
@@ -97,6 +97,15 @@ class TelephonyAdapter(ChannelAdapter):
                 )
             if resp.status_code == 201:
                 call_sid: str = resp.json().get("sid", "")
+                if call_sid:
+                    try:
+                        async with httpx.AsyncClient(timeout=5) as client:
+                            await client.post(
+                                f"{self._jambonz_adapter_url}/internal/register/{call_sid}",
+                                json={"audio_url": audio_url, "case_id": alert.case_id},
+                            )
+                    except Exception:
+                        log.warning("Failed to register call %s with jambonz-adapter", call_sid)
                 return call_sid or "telephony"
             log.warning(
                 "Jambonz Calls API returned %s for case %s", resp.status_code, alert.case_id
