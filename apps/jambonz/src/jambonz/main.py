@@ -106,7 +106,7 @@ async def jambonz_call_webhook(
     registered = _call_registry.get(body.call_sid, {})
     effective_case_id = case_id or registered.get("case_id", "")
     effective_audio_url = audio_url or registered.get("audio_url", "")
-    print(f"CALL sid={body.call_sid!r} status={body.call_status!r} audio={effective_audio_url!r} case={effective_case_id!r}", flush=True)
+    log.info("CALL sid=%s status=%s audio=%s case=%s", body.call_sid, body.call_status, effective_audio_url, effective_case_id)
 
     if pressed:
         if pressed.startswith("1") and effective_case_id:

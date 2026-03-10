@@ -400,7 +400,8 @@ async def internal_ack(
     else:
         notifications = await alert_router.load_sent_notifications(str(case_id), session)
         alert = await alert_router.load_alert_from_db(str(case_id), session)
-        if alert and notifications:
+        if notifications and alert:
+            await alert_router.mark_acked(notifications[0].id, body.acked_by, session)
             await alert_router.send_ack_to_all_channels(
                 alert, body.acked_by, notifications, session
             )

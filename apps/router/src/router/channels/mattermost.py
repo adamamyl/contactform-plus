@@ -165,32 +165,26 @@ class MattermostAdapter(ChannelAdapter):
         self, alert: CaseAlert, acked_by: str, post_id: str
     ) -> None:
         emoji = URGENCY_EMOJI.get(alert.urgency, "⚪")
+        channel_id = self._channel_id or ""
+        if not channel_id:
+            log.warning("MattermostAdapter: no channel_id configured, cannot post ACK reply")
+            return
+
         body: dict[str, object] = {
-            "id": post_id,
+            "channel_id": channel_id,
+            "root_id": post_id,
             "message": f"✅ {emoji} Case {alert.friendly_id} acknowledged by {acked_by}",
-            "props": {
-                "attachments": [
-                    {
-                        "color": "#2e7d32",
-                        "title": f"✅ {emoji} Case {alert.friendly_id}",
-                        "title_link": f"{self._panel_url}/cases/{alert.case_id}",
-                        "fields": [
-                            {"title": "Acknowledged by", "value": f"@{acked_by}", "short": True},
-                        ],
-                    }
-                ]
-            },
         }
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.put(
-                    f"{self._api_url}/api/v4/posts/{post_id}",
+                resp = await client.post(
+                    f"{self._api_url}/api/v4/posts",
                     json=body,
                     headers=self._auth_headers(),
                 )
-            if resp.status_code not in (200, 404):
+            if resp.status_code not in (200, 201):
                 log.warning(
-                    "MattermostAdapter PUT post returned %s for case %s",
+                    "MattermostAdapter reply post returned %s for case %s",
                     resp.status_code,
                     alert.case_id,
                 )
