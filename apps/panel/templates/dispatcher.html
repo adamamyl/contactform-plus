@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dispatcher — EMF Conduct</title>
+  <link rel="stylesheet" href="/static/panel.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="top-nav">
+      <span class="home-link">EMF Conduct — Dispatcher</span>
+      <button id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode">🌙</button>
+    </nav>
+  </header>
+  <main class="main-content" id="dispatcher-main" data-token="{{ token }}">
+    <h1>Active cases{% if active_event %} — {{ active_event }}{% endif %}</h1>
+    {% if not active_event %}
+    <div class="alert alert--warning" role="alert" style="background:#5c3c00;color:#ffe082;padding:0.75rem 1rem;border-radius:4px;margin-bottom:1rem;">
+      No active event. Cases from all events are shown.
+    </div>
+    {% endif %}
+    <p class="hint">
+      Showing unassigned{% if not show_acked %}, unacknowledged{% endif %} cases.
+      {% if show_acked %}
+      <a href="?token={{ token }}">Hide ACK'd</a>
+      {% else %}
+      <a href="?token={{ token }}&show_acked=true">Show ACK'd</a>
+      {% endif %}
+      · <a href="?token={{ token }}&all=true">Show all</a>
+    </p>
+
+    <table class="cases-table">
+      <thead>
+        <tr>
+          <th>Urgency</th>
+          <th>Case ID</th>
+          <th>Status</th>
+          <th>Location</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for case in cases %}
+        {% set loc = case.form_data.get('location') if case.form_data else None %}
+        {% set has_loc = loc and loc.lat is not none and loc.lon is not none %}
+        <tr>
+          <td><span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span></td>
+          <td><code>{{ case.friendly_id }}</code></td>
+          <td><span class="chip">{{ case.status | replace('_',' ') }}</span></td>
+          <td>
+            {% if has_loc %}
+            <a href="https://map.emf-forms.internal/?marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}" target="_blank" rel="noopener">📍 {{ case.location_hint or 'View on map' }}</a>
+            {% else %}
+            {{ case.location_hint or '—' }}
+            {% endif %}
+          </td>
+          <td>
+            <button class="btn btn--small btn--ack" data-case-id="{{ case.id }}" data-action="ack">ACK</button>
+            <button class="btn btn--small btn--trigger" data-case-id="{{ case.id }}" data-action="trigger">Trigger call</button>
+          </td>
+        </tr>
+        {% if has_loc %}
+        <tr>
+          <td colspan="5" style="padding:0;">
+            <details>
+              <summary style="padding:0.3rem 0.75rem;cursor:pointer;font-size:0.85rem;color:var(--color-hint);">🗺 Show map</summary>
+              <div class="case-map-container" style="margin:0;border-radius:0;border-left:0;border-right:0;">
+                <iframe
+                  src="https://map.emf-forms.internal/?embed=true&readonly=true&marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}"
+                  style="width:100%;height:300px;border:0;display:block;"
+                  title="Case location" loading="lazy"></iframe>
+                <p class="hint" style="padding:0.25rem 0.75rem;">Zoom in/out to find the pin — it won't move.</p>
+              </div>
+            </details>
+          </td>
+        </tr>
+        {% endif %}
+        {% else %}
+        <tr><td colspan="5" class="empty">No unassigned cases.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </main>
+  {% include "footer.html" %}
+  <script src="/static/panel.js"></script>
+</body>
+</html>

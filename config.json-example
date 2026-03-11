@@ -1,0 +1,73 @@
+{
+  "events": [
+    {
+      "name": "EMF 2026",
+      "start_date": "2026-07-12",
+      "end_date": "2026-07-20",
+      "signal_padding": {
+        "before_event_days": 2,
+        "after_event_days": 2
+      },
+      "signal_group_id": null,
+      "signal_mode": "fallback_only",
+      "dispatcher_emails": ["event-dispatcher@emfcamp.org"],
+      "dispatcher_session_ttl_hours": 8,
+      "dispatcher_session_max_devices": 2
+    },
+    {
+      "name": "EMF 2024",
+      "start_date": "2024-05-30",
+      "end_date": "2024-06-02"
+    },
+    {
+      "name": "EMF 2022",
+      "start_date": "2022-06-02",
+      "end_date": "2022-06-05"
+    },
+    {
+      "name": "EMF 2018",
+      "start_date": "2018-08-31",
+      "end_date": "2018-09-02"
+    },
+    {
+      "name": "EMF 2016",
+      "start_date": "2016-08-05",
+      "end_date": "2016-08-07"
+    },
+    {
+      "name": "EMF 2014",
+      "start_date": "2014-08-29",
+      "end_date": "2014-08-31"
+    },
+    {
+      "name": "EMF 2012",
+      "start_date": "2012-08-31",
+      "end_date": "2012-09-02"
+    }
+  ],
+  "conduct_emails": ["conduct@emfcamp.org"],
+  "urgency_levels": ["low", "medium", "high", "urgent"],
+  "pronouns": [
+    "Ze/Zir/Zirs",
+    "Xe/Xem/Xyrs",
+    "Fae/Faer/Faerself",
+    "Fur/Furs/Furself",
+    "He/Him/His",
+    "She/Her/Hers",
+    "They/Them/Theirs"
+  ],
+  "smtp": {
+    "host": "host.docker.internal",
+    "port": 587,
+    "from_addr": "conduct@emfcamp.org",
+    "use_tls": true,
+    "username": "conduct@emfcamp.org"
+  },
+  "_comment_smtp": "smtp_password goes in .env as SMTP_PASSWORD — never in config.json",
+  "panel_base_url": "https://panel.emfcamp.org",
+  "mattermost_webhook": null,
+  "slack_webhook": null,
+  "attachment_backend": "local",
+  "rate_limit_per_minute": 5,
+  "rate_limit_per_hour": 20
+}

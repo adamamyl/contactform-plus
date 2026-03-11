@@ -1,0 +1,68 @@
+name: Security scan
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"  # Monday 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  gitleaks:
+    name: gitleaks full history scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  zap:
+    name: OWASP ZAP scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Start application stack
+        run: docker compose -f infra/docker-compose.yml --profile local up -d
+        env:
+          ADMIN_DB_PASSWORD: ci-test-password
+          FORM_DB_PASSWORD: ci-test-password
+          TEAM_MEMBER_DB_PASSWORD: ci-test-password
+          ROUTER_DB_PASSWORD: ci-test-password
+          OIDC_ISSUER: http://mock-oidc:8080/default
+          OIDC_CLIENT_ID: panel
+          OIDC_CLIENT_SECRET: ci-test-secret
+          REDIS_PASSWORD: ci-test-password
+      - name: Wait for form service
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && break
+            sleep 2
+          done
+      - name: Run ZAP scan
+        run: uv run scripts/run_zap.py
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: reports/zap/
+
+  pip-audit:
+    name: pip-audit all services
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [shared, apps/form, apps/panel, apps/router, apps/tts, apps/jambonz]
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run pip-audit

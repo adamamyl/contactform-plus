@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Dispatcher URL — EMF Conduct Panel{% endblock %}
+{% block content %}
+<h1>Generate dispatcher URL</h1>
+<p>Create a time-limited session URL for a dispatcher. Valid for up to 2 devices simultaneously.</p>
+
+<form id="session-form">
+  <label for="send_to">Email to (optional)</label>
+  <input type="email" id="send_to" name="send_to" placeholder="dispatcher@emfcamp.org" autocomplete="email" inputmode="email">
+  <button type="button" id="generate-session-btn" class="btn btn--primary">Generate URL</button>
+</form>
+
+<div id="result" class="result-box" hidden>
+  <label for="session-url">Session URL (share securely)</label>
+  <input type="text" id="session-url" readonly onclick="this.select()">
+  <button type="button" id="copy-url-btn">Copy</button>
+  <p class="hint" id="expiry-note"></p>
+</div>
+
+<div id="gen-error" style="color:var(--color-error,#c00);margin-top:0.5rem;" hidden></div>
+{% endblock %}

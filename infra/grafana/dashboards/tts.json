@@ -1,0 +1,49 @@
+{
+  "title": "EMF TTS Service",
+  "uid": "emf-tts",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Synthesis Request Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"emf-tts\",handler=~\"/synthesise.*\"}[5m])",
+          "legendFormat": "{{handler}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Synthesis Latency p50/p99",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"emf-tts\",handler=~\"/synthesise.*\"}[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"emf-tts\",handler=~\"/synthesise.*\"}[5m]))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Health Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "up{job=\"emf-tts\"}",
+          "legendFormat": "TTS up"
+        }
+      ]
+    }
+  ]
+}

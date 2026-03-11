@@ -1,0 +1,2 @@
+# Allow test fixture config — no secrets in this file
+!config.json

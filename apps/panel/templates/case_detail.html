@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}{{ case.friendly_id }} — EMF Conduct Panel{% endblock %}
+{% block content %}
+<a href="/" class="back-link">← All cases</a>
+<h1>Case: <code>{{ case.friendly_id }}</code></h1>
+
+<div class="case-meta">
+  <span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span>
+  <details class="status-chip-details">
+    <summary><span class="chip chip--{{ case.status }}">{{ status_emoji[case.status] }} {{ case.status | replace('_',' ') }}</span></summary>
+    <div class="status-chip-dropdown">
+      {% for next_status in valid_next_statuses %}
+      <form class="status-form" data-case-id="{{ case.id }}">
+        <input type="hidden" name="status" value="{{ next_status }}">
+        <button type="submit" class="btn btn--small chip--{{ next_status }}">{{ status_emoji[next_status] }} → {{ next_status | replace('_',' ') }}</button>
+      </form>
+      {% else %}
+      <span class="hint">No further transitions</span>
+      {% endfor %}
+    </div>
+  </details>
+  <span class="meta-item">Submitted <time class="relative-time" datetime="{{ case.created_at.isoformat() }}">{{ case.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</time></span>
+  {% set loc = case.form_data.get('location') if case.form_data else None %}
+  {% if loc and loc.lat is not none and loc.lon is not none %}
+  <a class="meta-item" href="https://map.emf-forms.internal/?marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}" target="_blank" rel="noopener">📍 {{ case.location_hint or 'View on map' }}</a>
+  {% elif case.location_hint %}
+  <span class="meta-item">📍 {{ case.location_hint }}</span>
+  {% endif %}
+</div>
+
+{% set loc = case.form_data.get('location') if case.form_data else None %}
+{% if loc and loc.lat is not none and loc.lon is not none %}
+<div class="case-map-container">
+  <iframe
+    src="https://map.emf-forms.internal/?embed=true&readonly=true&marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}"
+    style="width:100%;height:300px;border:0;display:block;"
+    title="Case location"></iframe>
+  <p class="hint" style="padding:0.25rem 0.75rem;">Zoom in/out to find the pin — it won't move.</p>
+</div>
+{% endif %}
+
+<section class="case-section">
+  <h2>Report details</h2>
+  {% set d = case.form_data %}
+  {% if d.what_happened %}<p><strong>What happened:</strong> {{ d.what_happened }}</p>{% endif %}
+  {% if d.incident_date %}<p><strong>When:</strong> {{ d.incident_date }} {{ d.incident_time or '' }}</p>{% endif %}
+  {% if d.reporter %}
+    {% set r = d.reporter %}
+    <p><strong>Reporter:</strong>
+      {% if r.name %}👤 {{ r.name }}{% else %}👤 anonymous{% endif %}
+      {% if r.pronouns %}&nbsp;·&nbsp;🏷️ {{ r.pronouns }}{% endif %}
+      {% if r.email %}&nbsp;·&nbsp;✉️ <a href="mailto:{{ r.email }}">{{ r.email }}</a>{% endif %}
+      {% if r.phone %}&nbsp;·&nbsp;📞 {{ r.phone }}{% endif %}
+    </p>
+  {% endif %}
+  {% if d.others_involved %}<p><strong>Others involved:</strong> {{ d.others_involved }}</p>{% endif %}
+  {% if d.why_it_happened %}<p><strong>Why:</strong> {{ d.why_it_happened }}</p>{% endif %}
+  {% if d.additional_info %}<p><strong>Additional info:</strong> {{ d.additional_info }}</p>{% endif %}
+  {% if d.support_needed %}<p><strong>Support needed:</strong> {{ d.support_needed }}</p>{% endif %}
+  {% if d.anything_else %}<p><strong>Anything else:</strong> {{ d.anything_else }}</p>{% endif %}
+  {% if d.media_links %}
+  <p><strong>Media links:</strong></p>
+  <ul>
+    {% for link in d.media_links %}
+    <li><a href="{{ link }}" target="_blank" rel="noopener noreferrer">{{ link }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="case-section">
+  <h2>Actions</h2>
+  <form class="inline-form" id="urgency-form" data-case-id="{{ case.id }}">
+    <label for="urgency">Urgency</label>
+    <select id="urgency" name="urgency">
+      {% for level in urgency_levels %}
+      <option value="{{ level }}" {% if level == case.urgency %}selected{% endif %}>{{ level }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn--small">Save</button>
+  </form>
+
+  <form class="inline-form" id="assignee-form" data-case-id="{{ case.id }}">
+    <label for="assignee">Assignee</label>
+    <input type="text" id="assignee" name="assignee" value="{{ case.assignee or '' }}"
+           placeholder="Username" list="assignee-options" autocomplete="off">
+    <datalist id="assignee-options"></datalist>
+    <button type="submit" class="btn btn--small">Save</button>
+  </form>
+
+  <form class="inline-form" id="tags-form" data-case-id="{{ case.id }}">
+    <label for="tags">Tags (comma-separated)</label>
+    <input type="text" id="tags" name="tags" value="{{ case.tags | join(', ') }}"
+           list="existing-tags" placeholder="tag1, tag2">
+    <button type="submit" class="btn btn--small">Save</button>
+  </form>
+
+  <div class="dispatcher-actions" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <button class="btn btn--small btn--ack" data-action="admin-ack"
+            data-case-id="{{ case.id }}">ACK notification</button>
+    <button class="btn btn--small btn--trigger" data-action="admin-trigger"
+            data-case-id="{{ case.id }}">Trigger call</button>
+  </div>
+
+</section>
+<section class="case-section">
+  <h2>Attachments</h2>
+  {% if attachments %}
+  <div class="attachments">
+    {% for filename in attachments %}
+    <a href="/cases/{{ case.id }}/attachments/{{ filename }}" target="_blank" rel="noopener">
+      <img src="/cases/{{ case.id }}/attachments/{{ filename }}"
+           alt="{{ filename }}" class="attachment-thumb"
+           loading="lazy" width="120" height="90">
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="hint">No attachments.</p>
+  {% endif %}
+</section>
+
+<section class="case-section">
+  <h2>History</h2>
+  <ol class="history-timeline">
+    {% for h in history %}
+    <li>
+      <time>{{ h.changed_at.strftime('%Y-%m-%d %H:%M UTC') }}</time>
+      <strong>{{ h.changed_by }}</strong> changed <em>{{ h.field }}</em>:
+      {{ h.old_value or '—' }} → {{ h.new_value or '—' }}
+    </li>
+    {% else %}
+    <li>No history yet.</li>
+    {% endfor %}
+  </ol>
+</section>
+{% endblock %}

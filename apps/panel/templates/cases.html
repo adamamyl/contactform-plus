@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Cases — EMF Conduct Panel{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Cases</h1>
+  <a href="/dispatcher-share" class="btn btn--secondary">Generate dispatcher URL</a>
+</div>
+
+<form class="filter-form" method="get" action="/">
+  <details class="filter-details"{% if selected_statuses or selected_urgencies or request.query_params.get('assignee') %} open{% endif %}>
+    <summary class="filter-summary">
+      Filters
+      {% if selected_statuses or selected_urgencies or request.query_params.get('assignee') %}
+      <span class="filter-active-hint">
+        {% if selected_statuses %}{{ selected_statuses | join(', ') | replace('_',' ') }}{% endif %}
+        {% if selected_urgencies %} · {{ selected_urgencies | join(', ') }}{% endif %}
+        {% if request.query_params.get('assignee') %} · {{ request.query_params.get('assignee') }}{% endif %}
+      </span>
+      {% endif %}
+    </summary>
+    <div class="filter-body">
+      <div class="filter-group">
+        <span class="filter-label">Status</span>
+        {% for s in ["new","assigned","in_progress","action_needed","decision_needed","closed"] %}
+        <label class="filter-check">
+          <input type="checkbox" name="status" value="{{ s }}"
+            {% if s in selected_statuses %}checked{% endif %}>
+          <span class="chip chip--{{ s }}">{{ status_emoji[s] }} {{ s | replace('_',' ') }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Urgency</span>
+        {% for u in ["urgent","high","medium","low"] %}
+        <label class="filter-check">
+          <input type="checkbox" name="urgency" value="{{ u }}"
+            {% if u in selected_urgencies %}checked{% endif %}>
+          <span class="badge badge--{{ u }}">{{ u }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="filter-group filter-group--actions">
+        <input type="text" name="assignee" placeholder="Assignee"
+               value="{{ request.query_params.get('assignee', '') }}" aria-label="Filter by assignee"
+               class="filter-assignee-input">
+        <button type="submit" class="btn btn--small">Filter</button>
+        <a href="/?assignee=me" class="btn btn--small btn--outline">Assigned to me</a>
+        <a href="/" class="btn btn--small btn--outline">Clear</a>
+      </div>
+    </div>
+  </details>
+</form>
+
+<table class="cases-table">
+  <thead>
+    {% macro sort_th(col, label) %}
+    <th class="sortable{% if sort == col %} sort-active{% endif %}">
+      <a href="{{ make_sort_url(col) }}">{{ label }}
+        {% if sort == col %}{{ '↑' if order == 'asc' else '↓' }}{% endif %}
+      </a>
+    </th>
+    {% endmacro %}
+    <tr>
+      {{ sort_th('id', 'ID') }}
+      {{ sort_th('urgency', 'Urgency') }}
+      {{ sort_th('status', 'Status') }}
+      <th>Notif</th>
+      {{ sort_th('assignee', 'Assignee') }}
+      <th>Location</th>
+      {{ sort_th('submitted', 'Submitted') }}
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for case in cases %}
+    <tr>
+      <td><a href="/cases/{{ case.id }}">{{ case.friendly_id }}</a></td>
+      <td><span class="badge badge--{{ case.urgency }}">{{ case.urgency }}</span></td>
+      <td><span class="chip chip--{{ case.status }}">{{ status_emoji[case.status] }} {{ case.status | replace('_',' ') }}</span></td>
+      <td>
+        {% if case.id in notif_states %}
+          {% if notif_states[case.id] == 'nack' %}
+          <span class="badge badge--nack">NACK</span>
+          {% else %}
+          <span class="badge badge--acked">ACK</span>
+          {% endif %}
+        {% else %}—{% endif %}
+      </td>
+      <td>{{ case.assignee or '—' }}</td>
+      <td>
+        {{ case.location_hint or '—' }}
+        {% if case.id in map_urls %}
+        <a href="{{ map_urls[case.id] }}" target="_blank" rel="noopener" title="Open on map">&#x1F4CD;</a>
+        {% endif %}
+      </td>
+      <td>{{ case.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td class="row-actions">
+        <button class="btn btn--small btn--ack" data-action="admin-ack"
+                data-case-id="{{ case.id }}">ACK</button>
+        <button class="btn btn--small btn--trigger" data-action="admin-trigger"
+                data-case-id="{{ case.id }}">Call</button>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="empty">No cases found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

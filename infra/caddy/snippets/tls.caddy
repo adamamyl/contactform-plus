@@ -1,0 +1,8 @@
+(tls_policy) {
+	tls_connection_policies {
+		min_version tls1.3
+	}
+	servers {
+		protocols h2
+	}
+}

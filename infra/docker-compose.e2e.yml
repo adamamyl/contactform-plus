@@ -1,0 +1,38 @@
+# docker-compose.e2e.yml — override for isolated e2e test runs.
+# Use with: docker compose -f infra/docker-compose.yml -f infra/docker-compose.e2e.yml
+#
+# Changes from the base compose:
+#  - Fresh ephemeral postgres volume (pg_e2e_data) so each run starts clean
+#  - POSTGRES_HOST_AUTH_METHOD=trust — no passwords needed for test roles
+#  - e2e init SQL (no psql variable syntax) replaces the production init
+#  - Port bindings added to form, panel, and postgres so tests can reach them directly
+#  - mock-oidc profile removed so it always starts (needed for panel auth tests)
+
+services:
+  postgres:
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - pg_e2e_data:/var/lib/postgresql/data
+      - ./postgres/e2e:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -d emf_forms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  form:
+    ports:
+      - "8000:8000"
+
+  panel:
+    ports:
+      - "8001:8001"
+
+  mock-oidc:
+    profiles: []
+
+volumes:
+  pg_e2e_data:

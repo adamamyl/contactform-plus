@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Report Submitted — EMF Conduct{% endblock %}
+{% block content %}
+<div class="container">
+  {% if already_submitted %}
+  <h1>Report already submitted</h1>
+  <p class="lead">
+    This report has already been received. Your reference number is below.
+  </p>
+  {% else %}
+  <h1>Thank you for your report</h1>
+  <p class="lead">
+    We have received your report and the conduct team will review it.
+  </p>
+  {% endif %}
+
+  {% if friendly_id %}
+  <div class="reference-box" aria-label="Your reference number">
+    <p class="reference-label">Your reference number</p>
+    <p class="reference-id" aria-live="polite">{{ friendly_id }}</p>
+    <p class="reference-hint">Please note this down if you need to follow up with us.</p>
+  </div>
+  {% endif %}
+
+  <div class="next-steps">
+    <h2>What happens next?</h2>
+    <ul>
+      <li>The conduct team will review your report.</li>
+      <li>If you provided contact details, we may reach out to you.</li>
+      <li>All reports are treated confidentially.</li>
+    </ul>
+  </div>
+
+  <a href="/" class="btn btn--primary">Submit another report</a>
+</div>
+{% endblock %}

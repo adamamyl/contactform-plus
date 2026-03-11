@@ -1,0 +1,43 @@
+## Swagger
+- [ ] Fix the swagger so every endpoint talks to the right container
+- [x] On the form 'submitted' page, include the reference.
+- [ ] Rename sysadmin API to text-to-speech
+- [ ] Fix http://localhost:8080/ to make /dispatch work and /all work (use the hostnames)
+
+## Docker
+- [ ] Before assigning a port, check it's available and not used by another container / forwarding. If it is, randomly choose a new port and ensure that's plumbed in everywhere (via variable/something in .env/config.json).
+
+## Form
+- [x] FORM: Add "other" option to dropdown on pronouns, and if selected add a small text entry box on form.
+
+## Admin Panel
+- [x] Add filter for assigned to 'me' (or <string>) on admin panel
+- [x] Add ACK | Call from dispatcher to admin panel too.
+- [x] Make statuses checkboxes, e.g. to see high + closed+assigned, or new+assigned+urgent
+- [x] Make locations in admin panel open at the right place on the map -- drop a pin to find it if needing to zoom/centre.
+- [x] Make dispatcher URL generator work.
+- [x] Add dark mode toggle (and default to dark mode), ideally store this as a preference for the logged in user
+- [x] Add emoji + colour to status chips
+- [x] Clicking status chip shows transitions inline (no separate section)
+- [x] ACK button on case detail was returning Error -- fixed (missing UPDATE grant on notifications)
+- [x] Embed map in case detail (read-only pin, pan/zoom works)
+- [x] Embed map in dispatcher (collapsible per-row)
+- [ ] Urgency/priority editable by team members (with audit log) -- see plan.md Phase 20
+
+## Dispatcher
+- [x] Only show from current event
+- [x] Option to hide things already ACK'd (default view)
+- [x] Dark mode toggle
+- [x] ACK button works (fixed DB permissions)
+
+## Infrastructure
+- [ ] Postgres SSL cert ownership -- certs owned by root, postgres can't read them; fix in install.py or entrypoint script
+- [ ] CURRENT_EVENT_OVERRIDE missing from .env-example
+- [ ] ClamAV: wire up scan in attachment upload pipeline (container exists, clamd socket not connected)
+
+## Tests
+- [ ] Attachment tests: MIME rejection, ClamAV positive -> 400, max 3 files, max 10 MB, unauthenticated -> 403
+- [x] e2e location pin coords updated to EMF site (~52.041, -2.377)
+
+## Known Issues / Bugs
+- Map iframe in form requires one user click to activate WebGL (Chrome cross-origin iframe throttle -- accepted as known limitation)

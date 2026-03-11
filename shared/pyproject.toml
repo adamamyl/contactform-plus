@@ -1,0 +1,51 @@
+[project]
+name = "emf-shared"
+version = "0.1.0"
+description = "Shared models, config, auth helpers, and DB utilities for the EMF conduct system"
+requires-python = ">=3.12"
+dependencies = [
+    "asyncpg>=0.30",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/emf_shared"]
+
+[dependency-groups]
+dev = [
+    "bandit[toml]>=1.8",
+    "mypy>=1.13",
+    "pip-audit>=2.7",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "types-jsonschema>=4.23",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "S", "B", "A", "C4", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.bandit]
+skips = []
+targets = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
