@@ -4,7 +4,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
-from jose import JWTError, jwt
+import jwt
 
 _revoked: set[str] = set()
 _active_sessions: dict[str, list[str]] = {}
@@ -27,7 +27,7 @@ def create_dispatcher_token(secret_key: str, ttl_hours: int) -> str:
 def validate_dispatcher_token(token: str, device_id: str, secret_key: str) -> dict[str, object]:
     try:
         payload: dict[str, object] = jwt.decode(token, secret_key, algorithms=["HS256"])
-    except JWTError as err:
+    except jwt.PyJWTError as err:
         raise HTTPException(status_code=401, detail="Invalid or expired session token") from err
 
     jti = str(payload.get("jti", ""))

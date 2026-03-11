@@ -126,10 +126,10 @@ async def test_expired_dispatcher_token_rejected(client: AsyncClient, expired_to
 async def test_revoked_dispatcher_token_rejected(
     client: AsyncClient, valid_token: str, settings: object
 ) -> None:
-    from jose import jwt as jose_jwt
+    import jwt as pyjwt
 
     s = settings  # type: ignore[assignment]
-    payload = jose_jwt.decode(valid_token, s.secret_key, algorithms=["HS256"])  # type: ignore[attr-defined]
+    payload = pyjwt.decode(valid_token, s.secret_key, algorithms=["HS256"])  # type: ignore[attr-defined]
     jti = str(payload["jti"])
     revoke_token(jti)
     resp = await client.get(f"/dispatcher?token={valid_token}", follow_redirects=False)

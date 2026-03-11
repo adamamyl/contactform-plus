@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, status
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import HTMLResponse
-from jose import JWTError
+import jwt
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -302,7 +302,7 @@ async def email_ack(
 ) -> HTMLResponse:
     try:
         notification_id = decode_ack_token(token, settings.secret_key)
-    except (JWTError, ValueError):
+    except (jwt.PyJWTError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
         )
