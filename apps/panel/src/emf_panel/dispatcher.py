@@ -3,8 +3,8 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import HTTPException
 import jwt
+from fastapi import HTTPException
 
 _revoked: set[str] = set()
 _active_sessions: dict[str, list[str]] = {}
