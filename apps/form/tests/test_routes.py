@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncGenerator
+from datetime import date
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from httpx import AsyncClient
+import pytest_asyncio
+from emf_shared.config import AppConfig, EventConfig, SmtpConfig
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from emf_form.models import Case, IdempotencyToken
@@ -127,7 +132,7 @@ async def test_dect_number_accepted(client: AsyncClient) -> None:
         reporter={
             "name": "Test",
             "pronouns": None,
-            "email": None,
+            "email": "test@example.com",
             "phone": "1234",
             "camping_with": None,
         }
@@ -142,7 +147,7 @@ async def test_t9_letters_accepted(client: AsyncClient) -> None:
         reporter={
             "name": "Test",
             "pronouns": None,
-            "email": None,
+            "email": "test@example.com",
             "phone": "ADAM",
             "camping_with": None,
         }
@@ -157,7 +162,7 @@ async def test_international_phone_accepted(client: AsyncClient) -> None:
         reporter={
             "name": "Test",
             "pronouns": None,
-            "email": None,
+            "email": "test@example.com",
             "phone": "+44 7700 900000",
             "camping_with": None,
         }
@@ -169,13 +174,14 @@ async def test_international_phone_accepted(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_accented_name_accepted(client: AsyncClient) -> None:
     payload = make_valid_payload(
+        can_contact=False,
         reporter={
             "name": "Héloïse Müller",
             "pronouns": "sie/ihr",
             "email": None,
             "phone": None,
             "camping_with": "São Paulo crew",
-        }
+        },
     )
     response = await client.post("/api/submit", json=payload)
     assert response.status_code == 201
@@ -199,3 +205,148 @@ async def test_accented_location_text_accepted(client: AsyncClient) -> None:
     )
     response = await client.post("/api/submit", json=payload)
     assert response.status_code == 201
+
+
+# --- Contact-method validation ---
+
+
+@pytest.mark.asyncio
+async def test_can_contact_yes_no_email_outside_event_returns_422(client: AsyncClient) -> None:
+    payload = make_valid_payload(
+        can_contact=True,
+        reporter={
+            "name": "Test",
+            "pronouns": None,
+            "email": None,
+            "phone": None,
+            "camping_with": None,
+        },
+    )
+    response = await client.post("/api/submit", json=payload)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_can_contact_yes_phone_only_outside_event_returns_422(client: AsyncClient) -> None:
+    payload = make_valid_payload(
+        can_contact=True,
+        reporter={
+            "name": "Test",
+            "pronouns": None,
+            "email": None,
+            "phone": "07700900000",
+            "camping_with": None,
+        },
+    )
+    response = await client.post("/api/submit", json=payload)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_can_contact_yes_with_email_outside_event_returns_201(client: AsyncClient) -> None:
+    payload = make_valid_payload(
+        can_contact=True,
+        reporter={
+            "name": "Test",
+            "pronouns": None,
+            "email": "reporter@example.com",
+            "phone": None,
+            "camping_with": None,
+        },
+    )
+    response = await client.post("/api/submit", json=payload)
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_can_contact_no_no_email_returns_201(client: AsyncClient) -> None:
+    payload = make_valid_payload(
+        can_contact=False,
+        reporter={
+            "name": "Test",
+            "pronouns": None,
+            "email": None,
+            "phone": None,
+            "camping_with": None,
+        },
+    )
+    response = await client.post("/api/submit", json=payload)
+    assert response.status_code == 201
+
+
+@pytest_asyncio.fixture()
+async def event_time_client(mock_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    from emf_shared.db import get_session
+
+    from emf_form.main import app
+    from emf_form.settings import Settings, get_settings
+
+    today = date.today()
+    event_time_config = AppConfig(
+        events=[
+            EventConfig(
+                name="EMF 2026",
+                start_date=today,
+                end_date=today,
+            )
+        ],
+        conduct_emails=["conduct@emfcamp.org"],
+        smtp=SmtpConfig(
+            host="localhost",
+            port=587,
+            from_addr="conduct@emfcamp.org",
+            use_tls=False,
+        ),
+        panel_base_url="http://localhost:8001",
+    )
+    settings = MagicMock(spec=Settings)
+    settings.database_url = "postgresql+asyncpg://test:test@localhost/test"
+    settings.app_config = event_time_config
+    settings.local_dev = False
+
+    async def override_session() -> AsyncGenerator[AsyncSession, None]:
+        yield mock_session
+
+    app.dependency_overrides[get_settings] = lambda: cast(Settings, settings)
+    app.dependency_overrides[get_session] = override_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        yield ac
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_can_contact_yes_phone_only_during_event_returns_201(
+    event_time_client: AsyncClient,
+) -> None:
+    payload = make_valid_payload(
+        can_contact=True,
+        reporter={
+            "name": "Test",
+            "pronouns": None,
+            "email": None,
+            "phone": "1234",
+            "camping_with": None,
+        },
+    )
+    response = await event_time_client.post("/api/submit", json=payload)
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_can_contact_yes_no_contact_during_event_returns_422(
+    event_time_client: AsyncClient,
+) -> None:
+    payload = make_valid_payload(
+        can_contact=True,
+        reporter={
+            "name": "Test",
+            "pronouns": None,
+            "email": None,
+            "phone": None,
+            "camping_with": None,
+        },
+    )
+    response = await event_time_client.post("/api/submit", json=payload)
+    assert response.status_code == 422

@@ -6,7 +6,7 @@ from typing import Annotated
 
 from emf_shared.db import get_session
 from emf_shared.friendly_id import generate_unique
-from emf_shared.phase import current_phase, events_for_form, is_active_routing_window
+from emf_shared.phase import Phase, current_phase, events_for_form, is_active_routing_window
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -41,6 +41,7 @@ async def get_form(
             "config": config,
             "events": events,
             "is_active_routing_window": active,
+            "is_event_time": phase == Phase.EVENT_TIME,
             "current_event_name": current_event_name,
             "today": today,
         },
@@ -63,6 +64,8 @@ async def submit_form(
         )
 
     config = settings.app_config
+    phase = current_phase(config)
+
     valid_events = {e.name for e in config.events}
     if submission.event_name not in valid_events:
         raise HTTPException(
@@ -75,6 +78,22 @@ async def submit_form(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid urgency: {submission.urgency}",
         )
+
+    if submission.can_contact:
+        has_email = bool(submission.reporter.email)
+        has_phone = bool(submission.reporter.phone)
+        if phase == Phase.EVENT_TIME:
+            if not has_email and not has_phone:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="An email address or phone number is required when you have agreed to be contacted.",  # noqa: E501
+                )
+        else:
+            if not has_email:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="An email address is required when you have agreed to be contacted.",
+                )
 
     if x_idempotency_key:
         existing_token = await session.get(IdempotencyToken, x_idempotency_key)
@@ -89,7 +108,6 @@ async def submit_form(
     existing_ids_result = await session.execute(select(Case.friendly_id))
     existing_ids: set[str] = set(existing_ids_result.scalars().all())
 
-    phase = current_phase(config)
     case_id = uuid.uuid4()
     friendly_id = generate_unique(existing_ids, str(case_id))
 
