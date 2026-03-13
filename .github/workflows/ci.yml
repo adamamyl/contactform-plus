@@ -8,7 +8,7 @@ on:
 
 jobs:
   shared:
-    name: shared lib
+    name: test-shared
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,7 +27,7 @@ jobs:
       - run: uv run pip-audit
 
   form:
-    name: form app
+    name: test-form
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -46,7 +46,7 @@ jobs:
       - run: uv run pip-audit
 
   panel:
-    name: panel app
+    name: test-panel
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -65,7 +65,7 @@ jobs:
       - run: uv run pip-audit
 
   router:
-    name: router app
+    name: test-router
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -84,7 +84,7 @@ jobs:
       - run: uv run pip-audit
 
   tts:
-    name: tts app
+    name: test-tts
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -103,7 +103,7 @@ jobs:
       - run: uv run pip-audit
 
   jambonz:
-    name: jambonz app
+    name: test-jambonz
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -122,7 +122,7 @@ jobs:
       - run: uv run pip-audit
 
   security:
-    name: security tests
+    name: security
     runs-on: ubuntu-latest
     defaults:
       run:
