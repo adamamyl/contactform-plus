@@ -5,6 +5,7 @@
   const MIN_WHAT_HAPPENED = 10;
   const PHONE_RE = /^[\d\s+\-.()\sA-Z]+$/i;
   const STORAGE_KEY = "emf_conduct_form_state";
+  const formConfig = (window.__formConfig) || { isEventTime: false };
 
   function getById(id) {
     return document.getElementById(id);
@@ -230,6 +231,20 @@
     };
   }
 
+  function updateContactHint() {
+    const hintEl = getById("contact-required-hint");
+    if (!hintEl) return;
+    const checked = document.querySelector("input[name=\"can_contact\"]:checked");
+    if (!checked || /** @type {HTMLInputElement} */ (checked).value !== "true") {
+      hintEl.hidden = true;
+      return;
+    }
+    hintEl.hidden = false;
+    hintEl.textContent = formConfig.isEventTime
+      ? "Please provide an email address or phone number above so the conduct team can reach you."
+      : "Please provide an email address above so the conduct team can reach you.";
+  }
+
   function validateForm() {
     let valid = true;
 
@@ -240,6 +255,25 @@
       valid = false;
     } else {
       clearError("reporter_phone");
+    }
+
+    const canContactCheckedForContact = document.querySelector("input[name=\"can_contact\"]:checked");
+    if (canContactCheckedForContact && /** @type {HTMLInputElement} */ (canContactCheckedForContact).value === "true") {
+      const email = (getById("reporter_email") || {}).value || "";
+      const phoneVal = (getById("reporter_phone") || {}).value || "";
+      const hasEmail = email.trim().length > 0;
+      const hasPhone = phoneVal.trim().length > 0;
+      const contactOk = formConfig.isEventTime ? (hasEmail || hasPhone) : hasEmail;
+      if (!contactOk) {
+        setError("reporter_email", formConfig.isEventTime
+          ? "An email address or phone number is required when you have agreed to be contacted."
+          : "An email address is required when you have agreed to be contacted.");
+        valid = false;
+      } else {
+        clearError("reporter_email");
+      }
+    } else {
+      clearError("reporter_email");
     }
 
     const whatHappened = (getById("what_happened") || {}).value || "";
@@ -420,6 +454,11 @@
     if (form) {
       form.addEventListener("submit", handleSubmit);
     }
+
+    document.querySelectorAll("input[name=\"can_contact\"]").forEach(function (el) {
+      el.addEventListener("change", updateContactHint);
+    });
+    updateContactHint();
 
     const phoneInput = getById("reporter_phone");
     if (phoneInput) {

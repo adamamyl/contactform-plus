@@ -6,6 +6,9 @@
 window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lon }}, zoom: {{ config.site_map.zoom }}};
 </script>
 {% endif %}
+<script>
+window.__formConfig = {isEventTime: {{ 'true' if is_event_time else 'false' }}};
+</script>
 {% endblock %}
 {% block content %}
 <div class="container">
@@ -68,8 +71,8 @@ window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lo
       <div class="form-group">
         <label for="reporter_email" class="form-label">Your email address</label>
         <input type="email" id="reporter_email" name="reporter_email" class="form-control"
-               inputmode="email" autocomplete="email" aria-describedby="reporter_email-hint">
-        <div class="field-hint" id="reporter_email-hint">Optional. Only used to follow up with you if needed.</div>
+               inputmode="email" autocomplete="email" aria-describedby="reporter_email-hint reporter_email-error">
+        <div class="field-hint" id="reporter_email-hint">Only used to follow up with you if needed.</div>
         <div class="field-error" id="reporter_email-error" role="alert" aria-live="polite"></div>
       </div>
 
@@ -214,6 +217,7 @@ window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lo
             <input type="radio" name="can_contact" value="false"> No
           </label>
         </div>
+        <div id="contact-required-hint" class="field-hint" aria-live="polite" hidden></div>
         <div class="field-error" id="can_contact-error" role="alert" aria-live="polite"></div>
       </fieldset>
 
@@ -241,5 +245,5 @@ window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lo
     </div>
   </form>
 </div>
-<script src="/static/form.js?v=6" defer></script>
+<script src="/static/form.js?v=7" defer></script>
 {% endblock %}

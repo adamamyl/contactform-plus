@@ -87,7 +87,7 @@ def make_valid_payload(**overrides: object) -> dict[str, object]:
         "reporter": {
             "name": "Test Person",
             "pronouns": "They/Them/Theirs",
-            "email": None,
+            "email": "test@example.com",
             "phone": None,
             "camping_with": None,
         },
