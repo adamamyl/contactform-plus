@@ -12,7 +12,7 @@ window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lo
   {% if phase == "event_time" %}
   <div class="alert alert--event" role="alert">
     <strong>EMF is happening now.</strong>
-    If you need immediate help, please find a ranger or go to the welfare tent.
+    If you need immediate help, please find someone in EMF hi-vis or go to the Info desk.
   </div>
   {% endif %}
 
@@ -227,7 +227,7 @@ window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lo
         <label for="media_links" class="form-label">Links to photos or videos</label>
         <textarea id="media_links" name="media_links" class="form-control" rows="3"
                   aria-describedby="media_links-hint"></textarea>
-        <div class="field-hint" id="media_links-hint">Paste one link per line (e.g. Google Drive, Dropbox, YouTube). Optional.</div>
+        <div class="field-hint" id="media_links-hint">Paste one link per line (e.g. Google Drive, Dropbox, YouTube).</div>
         <div class="field-error" id="media_links-error" role="alert" aria-live="polite"></div>
       </div>
     </fieldset>
