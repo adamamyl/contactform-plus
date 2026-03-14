@@ -199,11 +199,11 @@ def generate_caddyfile(proxy: str, tls_method: str, dry_run: bool = False) -> No
     if proxy != "caddy":
         print(f"  Proxy '{proxy}' selected — configure manually")
         return
-    src = REPO_ROOT / "infra" / "caddy" / "Caddyfile.prod"
-    if dry_run:
-        print(f"  [dry-run] Would use {src}")
-    else:
-        print(f"  Using {src} — set PROJECT_NAME in .env")
+    out = REPO_ROOT / "infra" / "caddy" / "Caddyfile.wolfcraig"
+    script = REPO_ROOT / "scripts" / "generate_caddyfile.py"
+    _run([sys.executable, str(script), "--output", str(out)], dry_run=dry_run)
+    if not dry_run:
+        print(f"  Restart Caddy to apply: docker compose ... restart caddy")
 
 
 def signal_setup_walkthrough() -> None:
