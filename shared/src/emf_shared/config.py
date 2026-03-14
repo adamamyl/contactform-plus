@@ -48,6 +48,8 @@ class Domains(BaseModel):
     panel: str
     map: str | None = None
     auth: str | None = None
+    swagger: str | None = None
+    mattermost: str | None = None
 
 
 class SiteMap(BaseModel):

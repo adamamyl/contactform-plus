@@ -50,3 +50,11 @@ map.emf.thisparish.org {
 	}
 	reverse_proxy emf-map:8080
 }
+
+swagger.emf.thisparish.org {
+	reverse_proxy swagger:8080
+}
+
+mattermost.emf.thisparish.org {
+	reverse_proxy mattermost:8065
+}

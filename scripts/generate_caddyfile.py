@@ -121,11 +121,25 @@ def _map_block(map_domain: str, report: str, panel: str) -> str:
 }}"""
 
 
+def _swagger_block(swagger: str) -> str:
+    return f"""{swagger} {{
+\treverse_proxy swagger:8080
+}}"""
+
+
+def _mattermost_block(mattermost: str) -> str:
+    return f"""{mattermost} {{
+\treverse_proxy mattermost:8065
+}}"""
+
+
 def generate(domains: dict[str, str | None]) -> str:
     report = domains["report"]
     panel = domains["panel"]
     map_domain = domains.get("map") or None
     auth_domain = domains.get("auth") or None
+    swagger_domain = domains.get("swagger") or None
+    mattermost_domain = domains.get("mattermost") or None
 
     blocks: list[str] = [
         "# EMF Conduct vhosts.",
@@ -143,6 +157,12 @@ def generate(domains: dict[str, str | None]) -> str:
 
     if map_domain:
         blocks += ["", _map_block(map_domain, report, panel)]
+
+    if swagger_domain:
+        blocks += ["", _swagger_block(swagger_domain)]
+
+    if mattermost_domain:
+        blocks += ["", _mattermost_block(mattermost_domain)]
 
     return "\n".join(blocks) + "\n"
 
