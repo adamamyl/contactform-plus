@@ -27,6 +27,8 @@ All four subdomains are CNAME/A records pointing to `wolfcraig.amyl.org.uk`. Cer
 | `panel.emf.thisparish.org` | Conduct team case management panel |
 | `auth.emf.thisparish.org` | Mock OIDC provider (staging only) |
 | `map.emf.thisparish.org` | EMF site map (embedded in report form) |
+| `swagger.emf.thisparish.org` | OpenAPI docs for all services |
+| `mattermost.emf.thisparish.org` | Mattermost team chat (optional notifications) |
 
 ## Repositories
 
@@ -49,13 +51,17 @@ cd /opt/emf-conduct
 uv run scripts/generate_secrets.py   # writes .env
 cp config.json-example config.json   # then edit domains, events, etc.
 
-# 4. Generate the Caddyfile from config.json
+# 4. Create the Mattermost database (once only)
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.wolfcraig.yml up -d postgres
+docker exec infra-postgres-1 psql -U emf_forms_admin -d emf_forms -c "CREATE DATABASE mattermost;"
+
+# 5. Generate the Caddyfile from config.json
 uv run scripts/generate_caddyfile.py
 
-# 5. Start the conduct stack
+# 6. Start the conduct stack
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.wolfcraig.yml up -d
 
-# 6. Restart ghost-docker's Caddy to pick up the new vhosts
+# 7. Restart ghost-docker's Caddy to pick up the new vhosts
 docker compose -f /opt/ghost-docker/compose.yml \
                -f /opt/ghost-docker/compose.wolfcraig.yml restart caddy
 ```
