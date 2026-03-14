@@ -20,6 +20,11 @@ services:
 
   panel:
     container_name: emf-panel
+    environment:
+      OIDC_ISSUER: https://auth.emf.thisparish.org/default
+      OIDC_CLIENT_ID: emf-forms
+      OIDC_CLIENT_SECRET: secret
+      BASE_URL: https://panel.emf.thisparish.org
     networks:
       - contactform
       - caddy-proxy
