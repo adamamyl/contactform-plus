@@ -33,14 +33,14 @@ _MAP_EXTERNAL_CONNECT = " ".join([
 _MAP_EXTERNAL_FONT = "https://map.emfcamp.org"
 
 
-def load_domains(config_path: Path) -> dict[str, str | None]:
+def load_domains(config_path: Path) -> dict[str, str]:
     cfg = json.loads(config_path.read_text())
-    domains: dict[str, str | None] = cfg.get("domains") or {}
+    raw: dict[str, object] = cfg.get("domains") or {}
     for required in ("report", "panel"):
-        if not domains.get(required):
+        if not raw.get(required):
             print(f"ERROR: config.json missing domains.{required}", file=sys.stderr)
             sys.exit(1)
-    return domains
+    return {k: str(v) for k, v in raw.items() if v}
 
 
 def _hsts() -> str:
@@ -133,13 +133,13 @@ def _mattermost_block(mattermost: str) -> str:
 }}"""
 
 
-def generate(domains: dict[str, str | None]) -> str:
+def generate(domains: dict[str, str]) -> str:
     report = domains["report"]
     panel = domains["panel"]
-    map_domain = domains.get("map") or None
-    auth_domain = domains.get("auth") or None
-    swagger_domain = domains.get("swagger") or None
-    mattermost_domain = domains.get("mattermost") or None
+    map_domain: str | None = domains.get("map")
+    auth_domain: str | None = domains.get("auth")
+    swagger_domain: str | None = domains.get("swagger")
+    mattermost_domain: str | None = domains.get("mattermost")
 
     blocks: list[str] = [
         "# EMF Conduct vhosts.",
