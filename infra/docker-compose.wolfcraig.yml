@@ -1,8 +1,10 @@
 # wolfcraig deployment override.
 # Ghost's Caddy handles TLS termination for all virtual hosts — conduct's built-in Caddy is disabled.
 #
-# Pre-requisite (once, on wolfcraig):
+# Pre-requisites (once, on wolfcraig):
 #   docker network create caddy-proxy
+#   ln -s ../.env infra/.env   # lets compose interpolate ${VAR:-default} from the real .env
+#   docker exec infra-postgres-1 psql -U emf_forms_admin -c "CREATE DATABASE mattermost;"
 #
 # Usage:
 #   docker compose -f infra/docker-compose.yml -f infra/docker-compose.wolfcraig.yml up -d
@@ -12,20 +14,63 @@ services:
     profiles:
       - _disabled
 
+  postgres:
+    ports: !reset []
+
   form:
     container_name: emf-form
+    ports: !reset []
     networks:
       - contactform
       - caddy-proxy
 
   panel:
     container_name: emf-panel
+    environment:
+      OIDC_ISSUER: https://auth.emf.thisparish.org/default
+      OIDC_CLIENT_ID: emf-forms
+      OIDC_CLIENT_SECRET: secret
+      BASE_URL: https://panel.emf.thisparish.org
     networks:
       - contactform
       - caddy-proxy
 
   jambonz-adapter:
     container_name: emf-jambonz
+    ports: !reset []
+    networks:
+      - contactform
+      - caddy-proxy
+
+  signal-api:
+    ports: !reset []
+
+  mock-oidc:
+    profiles: !reset []
+    environment:
+      JSON_CONFIG: '{"interactiveLogin":true,"httpServer":"NettyWrapper","tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"client_id","match":"emf-forms","claims":{"groups":["team_conduct"]}}]}]}'
+    networks:
+      - contactform
+      - caddy-proxy
+
+  emf-map:
+    networks:
+      - contactform
+      - caddy-proxy
+
+  swagger:
+    profiles: !reset []
+    ports: !reset []
+    networks:
+      - contactform
+      - caddy-proxy
+
+  mattermost:
+    profiles: !reset []
+    ports: !reset []
+    environment:
+      MM_SERVICESETTINGS_SITEURL: https://mattermost.emf.thisparish.org
+      MM_SQLSETTINGS_DATASOURCE: postgres://emf_forms_admin:${ADMIN_DB_PASSWORD}@postgres/mattermost?sslmode=disable
     networks:
       - contactform
       - caddy-proxy

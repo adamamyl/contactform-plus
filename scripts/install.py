@@ -13,7 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
+import datetime
 import os
 import random
 import socket
@@ -61,7 +61,7 @@ def _run(cmd: list[str], dry_run: bool = False, capture: bool = False) -> str:
     if dry_run:
         print(f"  [dry-run] {' '.join(cmd)}")
         return ""
-    result = subprocess.run(cmd, capture_output=capture, text=True)
+    result = subprocess.run(cmd, capture_output=capture, text=True)  # noqa: S603
     if result.returncode != 0:
         print(f"ERROR: command failed: {' '.join(cmd)}", file=sys.stderr)
         if capture and result.stderr:
@@ -145,7 +145,6 @@ def generate_postgres_tls_cert(dry_run: bool = False) -> None:
         from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import rsa
         from cryptography.x509.oid import NameOID
-        import datetime
 
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         subject = issuer = x509.Name([
@@ -157,9 +156,9 @@ def generate_postgres_tls_cert(dry_run: bool = False) -> None:
             .issuer_name(issuer)
             .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
             .not_valid_after(
-                datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650)
+                datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=3650)
             )
             .add_extension(x509.SubjectAlternativeName([x509.DNSName("postgres")]), critical=False)
             .sign(key, hashes.SHA256())
@@ -199,11 +198,11 @@ def generate_caddyfile(proxy: str, tls_method: str, dry_run: bool = False) -> No
     if proxy != "caddy":
         print(f"  Proxy '{proxy}' selected — configure manually")
         return
-    src = REPO_ROOT / "infra" / "caddy" / "Caddyfile.prod"
-    if dry_run:
-        print(f"  [dry-run] Would use {src}")
-    else:
-        print(f"  Using {src} — set PROJECT_NAME in .env")
+    out = REPO_ROOT / "infra" / "caddy" / "Caddyfile.wolfcraig"
+    script = REPO_ROOT / "scripts" / "generate_caddyfile.py"
+    _run([sys.executable, str(script), "--output", str(out)], dry_run=dry_run)
+    if not dry_run:
+        print("  Restart Caddy to apply: docker compose ... restart caddy")
 
 
 def signal_setup_walkthrough() -> None:
@@ -266,7 +265,6 @@ def start_stack(dry_run: bool = False) -> None:
 
 def main() -> None:
     args = parse_args()
-    verbose = args.verbose or args.debug
     quiet = args.quiet
     dry_run = args.dry_run
 

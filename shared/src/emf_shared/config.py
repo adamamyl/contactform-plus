@@ -43,10 +43,20 @@ class SmtpConfig(BaseModel):
     username: str | None = None
 
 
+class Domains(BaseModel):
+    report: str
+    panel: str
+    map: str | None = None
+    auth: str | None = None
+    swagger: str | None = None
+    mattermost: str | None = None
+
+
 class SiteMap(BaseModel):
     lat: float
     lon: float
     zoom: float = 16
+    map_url: str = "https://map.emf-forms.internal"
 
 
 class AppConfig(BaseModel):
@@ -63,6 +73,7 @@ class AppConfig(BaseModel):
         "They/Them/Theirs",
     ]
     smtp: SmtpConfig
+    domains: Domains | None = None
     site_map: SiteMap | None = None
     panel_base_url: str
     mattermost_webhook: str | None = None

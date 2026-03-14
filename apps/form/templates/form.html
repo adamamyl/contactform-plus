@@ -144,7 +144,7 @@ window.__formConfig = {isEventTime: {{ 'true' if is_event_time else 'false' }}};
         <p class="map-instruction">Click anywhere on the map to activate it, then click to pin a location.</p>
         <iframe
           id="location-map"
-          data-src="https://map.emf-forms.internal/?embed=true#{{ config.site_map.zoom }}/{{ config.site_map.lat }}/{{ config.site_map.lon }}"
+          data-src="{{ config.site_map.map_url }}/?embed=true#{{ config.site_map.zoom }}/{{ config.site_map.lat }}/{{ config.site_map.lon }}"
           style="width: 100%; height: 600px; border: 0; display: block;"
           title="Site map — click to set a location pin"
         ></iframe>

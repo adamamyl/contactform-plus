@@ -1,6 +1,8 @@
 # Secrets and local config — never commit these
-.env
+/.env
 config.json
+# infra/.env is a symlink to ../.env (machine-local, committed so compose finds it)
+# The symlink itself is safe; the real .env is excluded by /.env above.
 infra/secrets/
 
 # Python
