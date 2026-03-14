@@ -30,6 +30,19 @@ services:
       - contactform
       - caddy-proxy
 
+  mock-oidc:
+    profiles: []
+    environment:
+      JSON_CONFIG: '{"interactiveLogin":true,"httpServer":"NettyWrapper","tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"client_id","match":"emf-forms","claims":{"groups":["team_conduct"]}}]}]}'
+    networks:
+      - contactform
+      - caddy-proxy
+
+  emf-map:
+    networks:
+      - contactform
+      - caddy-proxy
+
 networks:
   caddy-proxy:
     external: true
