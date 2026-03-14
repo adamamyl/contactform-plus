@@ -1,0 +1,48 @@
+# EMF Conduct vhosts for wolfcraig.
+# This file is imported by ghost-docker's Caddy via a volume mount — do not add a global block here.
+# Container names are set in docker-compose.wolfcraig.yml.
+
+report.emf.thisparish.org {
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.tile.openstreetmap.org; font-src 'self'; connect-src 'self'; frame-src https://map.emf.thisparish.org"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+		-Server
+	}
+	encode gzip
+	reverse_proxy emf-form:8000
+}
+
+panel.emf.thisparish.org {
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+		-Server
+	}
+	encode gzip
+	handle /webhook/jambonz* {
+		reverse_proxy emf-jambonz:8004
+	}
+	handle {
+		reverse_proxy emf-panel:8001
+	}
+}
+
+# Uncomment when emf-map is enabled (docker compose --profile map up -d)
+# map.emf.thisparish.org {
+# 	header {
+# 		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+# 		X-Content-Type-Options "nosniff"
+# 		Content-Security-Policy "default-src 'self'; script-src 'self' blob:; worker-src blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' https://map.emfcamp.org; frame-ancestors https://report.emf.thisparish.org https://panel.emf.thisparish.org"
+# 		Referrer-Policy "strict-origin-when-cross-origin"
+# 		-Server
+# 	}
+# 	reverse_proxy emf-map:8080
+# }
