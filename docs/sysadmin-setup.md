@@ -32,18 +32,18 @@ This document covers deploying the EMF Conduct System on a fresh server, includi
 
 ### DNS
 
-All hostnames must resolve to the server's public IP before Caddy can obtain TLS certificates. Caddy uses Let's Encrypt by default. Required records:
+All hostnames must resolve to the server's public IP before Caddy can obtain TLS certificates. Caddy uses Let's Encrypt by default. Required records (substitute your actual domain):
 
 | Hostname | Notes |
 |----------|-------|
-| `report.emfcamp.org` | Public incident report form |
-| `panel.emfcamp.org` | Conduct team case management |
+| `report.example.org` | Public incident report form |
+| `panel.example.org` | Conduct team case management |
 
 If running the EMF site map service, also add:
 
 | Hostname | Notes |
 |----------|-------|
-| `map.emfcamp.org` | (or wherever the map is hosted) |
+| `map.example.org` | EMF site map (embedded in report form) |
 
 ### Domain email
 
@@ -227,9 +227,22 @@ Key fields to update:
     "use_tls": true,
     "username": "resend"
   },
-  "panel_base_url": "https://panel.emfcamp.org"
+  "domains": {
+    "report": "report.emfcamp.org",
+    "panel": "panel.emfcamp.org",
+    "map": "map.emfcamp.org"
+  },
+  "panel_base_url": "https://panel.emfcamp.org",
+  "site_map": {
+    "lat": 52.0393,
+    "lon": -2.3778,
+    "zoom": 16,
+    "map_url": "https://map.emfcamp.org"
+  }
 }
 ```
+
+The `domains` section drives CSP header generation — see [§4 Caddy setup](#4-caddy-setup-and-csp-generation) below.
 
 > `smtp_password` is never stored in `config.json` — it lives in `.env` as `SMTP_PASSWORD`.
 
@@ -292,17 +305,33 @@ All should return `{"status": "ok", ...}`.
 
 ---
 
-## 9. DNS and TLS
+## 9. DNS, TLS, and Caddyfile generation
 
-Caddy obtains Let's Encrypt certificates automatically when the DNS records are in place and ports 80/443 are reachable. Check the Caddy logs if certificates aren't issued:
+### DNS
+
+Caddy obtains Let's Encrypt certificates automatically when DNS records are in place and ports 80/443 are reachable. Check the Caddy logs if certificates aren't issued:
 
 ```bash
 docker compose -f infra/docker-compose.yml logs caddy
 ```
 
-The production `Caddyfile.prod` is used by default. It expects the environment variable `$PROJECT_NAME` to match the Docker Compose project name (default: `emf-conduct`).
+### Generating the Caddyfile
 
-**If using custom TLS certificates** (e.g. internal CA): mount them into the Caddy container and adjust `Caddyfile.prod` to reference them using the `tls /path/to/cert /path/to/key` directive.
+The Caddyfile includes Content-Security-Policy headers that reference your deployment's hostnames (e.g. `frame-src`, `frame-ancestors`). Rather than editing these by hand, generate them from the `domains` section of `config.json`:
+
+```bash
+uv run scripts/generate_caddyfile.py
+```
+
+This writes `infra/caddy/Caddyfile.wolfcraig`. Re-run whenever you change `config.json domains`, then restart Caddy to apply:
+
+```bash
+docker compose -f infra/docker-compose.yml restart caddy
+```
+
+> **Note**: For wolfcraig (staging), a Caddy *restart* (not just `reload`) is required because `Caddyfile.wolfcraig` is bind-mounted — Caddy does not re-read bind-mount changes on reload.
+
+**If using custom TLS certificates** (e.g. internal CA): mount them into the Caddy container and add a `tls /path/to/cert /path/to/key` directive to the generated Caddyfile.
 
 ---
 
@@ -324,7 +353,10 @@ in the claims field to simulate a conduct team member.
 
 Work through this list after the first deployment:
 
+Replace `report.emfcamp.org` / `panel.emfcamp.org` with your actual hostnames from `config.json domains`.
+
 - [ ] `https://report.emfcamp.org` loads the report form
+- [ ] Site map iframe loads inside the report form (check browser console for CSP errors)
 - [ ] Submit a test report; confirm it appears in the panel at `https://panel.emfcamp.org`
 - [ ] Panel login works via OIDC; non-`team_conduct` users are rejected
 - [ ] Notification email arrives (check spam folder; check Resend dashboard for delivery status)
