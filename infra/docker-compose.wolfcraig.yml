@@ -1,8 +1,9 @@
 # wolfcraig deployment override.
 # Ghost's Caddy handles TLS termination for all virtual hosts — conduct's built-in Caddy is disabled.
 #
-# Pre-requisite (once, on wolfcraig):
+# Pre-requisites (once, on wolfcraig):
 #   docker network create caddy-proxy
+#   ln -s ../.env infra/.env   # lets compose interpolate ${VAR:-default} from the real .env
 #
 # Usage:
 #   docker compose -f infra/docker-compose.yml -f infra/docker-compose.wolfcraig.yml up -d
