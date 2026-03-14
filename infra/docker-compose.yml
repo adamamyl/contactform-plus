@@ -122,8 +122,11 @@ services:
 
   emf-map:
     build:
-      context: ../../emf/map/web
+      context: ${EMF_MAP_PATH:-../../emf/map/web}
       dockerfile: Dockerfile
+    profiles:
+      - map
+      - local
     networks:
       - contactform
 

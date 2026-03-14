@@ -236,6 +236,26 @@ def validate_config(dry_run: bool = False) -> None:
         print("  [dry-run] Would check .env for placeholder values")
 
 
+def check_emf_map(dry_run: bool = False) -> None:
+    env_file = REPO_ROOT / ".env"
+    emf_map_path_str: str | None = None
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            if line.startswith("EMF_MAP_PATH="):
+                emf_map_path_str = line.split("=", 1)[1].strip()
+                break
+
+    if emf_map_path_str:
+        emf_map_path = Path(emf_map_path_str)
+    else:
+        emf_map_path = REPO_ROOT / "infra" / Path("../../emf/map/web")
+
+    if not emf_map_path.exists():
+        print("  ⚠  emf-map build context not found:", emf_map_path)
+        print("     The map service will be skipped (profiles: map, local).")
+        print("     To enable it, clone the EMF map repo and set EMF_MAP_PATH in .env.")
+
+
 def start_stack(dry_run: bool = False) -> None:
     compose_file = REPO_ROOT / "infra" / "docker-compose.yml"
     _run(
@@ -280,6 +300,7 @@ def main() -> None:
 
     _say("[5/6] Validating configuration...", quiet=quiet)
     validate_config(dry_run=dry_run)
+    check_emf_map(dry_run=dry_run)
 
     _say("[6/6] Starting services...", quiet=quiet)
     start_stack(dry_run=dry_run)
