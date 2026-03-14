@@ -47,6 +47,7 @@ class SiteMap(BaseModel):
     lat: float
     lon: float
     zoom: float = 16
+    map_url: str = "https://map.emf-forms.internal"
 
 
 class AppConfig(BaseModel):
