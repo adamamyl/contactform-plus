@@ -1,4 +1,5 @@
 repos:
+  # ── Ruff: lint + format (auto-fix on commit) ─────────────────────────────
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.0
     hooks:
@@ -6,22 +7,170 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.0
-    hooks:
-      - id: bandit
-        args: ["-c", "pyproject.toml"]
-
+  # ── Secret scanning ───────────────────────────────────────────────────────
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.0
     hooks:
       - id: gitleaks
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
+  # ── General file checks ───────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
     hooks:
-      - id: mypy
-        additional_dependencies:
-          - "pydantic>=2.9"
-          - "sqlalchemy>=2.0"
-          - "types-jsonschema"
+      - id: check-json
+        files: ^config\.json-example$
+      - id: check-yaml
+        # --unsafe allows custom tags (e.g. docker-compose !reset)
+        args: [--unsafe]
+        files: \.(yml|yaml)$
+      - id: end-of-file-fixer
+        exclude: \.(svg|png|jpg|ico)$
+      - id: trailing-whitespace
+        exclude: \.(md|rst)$
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # ── YAML linting (docker-compose, github workflows) ───────────────────────
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        files: \.(yml|yaml)$
+        args:
+          - -d
+          - |
+            extends: relaxed
+            rules:
+              line-length:
+                max: 120
+              truthy: disable
+              comments:
+                min-spaces-from-content: 1
+
+  # ── Bandit: security lint ─────────────────────────────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        name: bandit (shared)
+        files: ^shared/src/
+        args: [-ll]
+      - id: bandit
+        name: bandit (form)
+        files: ^apps/form/src/
+        args: [-ll]
+      - id: bandit
+        name: bandit (panel)
+        files: ^apps/panel/src/
+        args: [-ll]
+      - id: bandit
+        name: bandit (router)
+        files: ^apps/router/src/
+        args: [-ll]
+      - id: bandit
+        name: bandit (tts)
+        files: ^apps/tts/src/
+        args: [-ll]
+      - id: bandit
+        name: bandit (jambonz)
+        files: ^apps/jambonz/src/
+        args: [-ll]
+
+  # ── Mypy + pytest + pip-audit (push stage — matches CI exactly) ───────────
+  - repo: local
+    hooks:
+      - id: mypy-shared
+        name: mypy (shared)
+        entry: bash -c 'cd shared && uv run python -m mypy src/ --strict'
+        language: system
+        files: ^shared/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: mypy-form
+        name: mypy (form)
+        entry: bash -c 'cd apps/form && uv run python -m mypy src/ --strict'
+        language: system
+        files: ^apps/form/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: mypy-panel
+        name: mypy (panel)
+        entry: bash -c 'cd apps/panel && uv run python -m mypy src/ --strict'
+        language: system
+        files: ^(apps/panel/|shared/)
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: mypy-router
+        name: mypy (router)
+        entry: bash -c 'cd apps/router && uv run python -m mypy src/ --strict'
+        language: system
+        files: ^(apps/router/|shared/)
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: mypy-tts
+        name: mypy (tts)
+        entry: bash -c 'cd apps/tts && uv run python -m mypy src/ --strict'
+        language: system
+        files: ^apps/tts/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: mypy-jambonz
+        name: mypy (jambonz)
+        entry: bash -c 'cd apps/jambonz && uv run python -m mypy src/ --strict'
+        language: system
+        files: ^apps/jambonz/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pytest-shared
+        name: pytest (shared)
+        entry: bash -c 'cd shared && uv run pytest tests/ -q'
+        language: system
+        files: ^shared/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pytest-form
+        name: pytest (form)
+        entry: bash -c 'cd apps/form && uv run pytest tests/ -q'
+        language: system
+        files: ^(apps/form/|shared/)
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pytest-panel
+        name: pytest (panel)
+        entry: bash -c 'cd apps/panel && uv run pytest tests/ -q'
+        language: system
+        files: ^(apps/panel/|shared/)
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pytest-router
+        name: pytest (router)
+        entry: bash -c 'cd apps/router && uv run pytest tests/ -q'
+        language: system
+        files: ^(apps/router/|shared/)
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pytest-tts
+        name: pytest (tts)
+        entry: bash -c 'cd apps/tts && uv run pytest tests/ -q'
+        language: system
+        files: ^apps/tts/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pytest-jambonz
+        name: pytest (jambonz)
+        entry: bash -c 'cd apps/jambonz && uv run pytest tests/ -q'
+        language: system
+        files: ^apps/jambonz/
+        pass_filenames: false
+        stages: [pre-push]
