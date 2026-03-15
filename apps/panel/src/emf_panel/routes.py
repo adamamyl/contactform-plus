@@ -136,6 +136,7 @@ async def case_list(
     request: Request,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
     status_filter: Annotated[list[str], Query(alias="status")] = [],  # noqa: B006
     urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],  # noqa: B006
     assignee: str | None = None,
