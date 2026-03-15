@@ -16,6 +16,7 @@ URGENCY_EMOJI: dict[str, str] = {
     "urgent": "🚨",
 }
 
+
 class SignalAdapter(ChannelAdapter):
     def __init__(
         self,
@@ -45,9 +46,7 @@ class SignalAdapter(ChannelAdapter):
         location_text = alert.location_hint or "not specified"
         map_line = ""
         if alert.location_lat is not None and alert.location_lon is not None:
-            map_line = (
-                f"\nMap: {self._map_base_url}/#15/{alert.location_lat}/{alert.location_lon}"
-            )
+            map_line = f"\nMap: {self._map_base_url}/#15/{alert.location_lat}/{alert.location_lon}"
 
         also_line = ""
         if alert.also_sent_via:
