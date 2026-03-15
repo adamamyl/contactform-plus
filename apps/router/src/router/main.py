@@ -131,11 +131,18 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     signal_adapter: SignalAdapter | None = None
     if settings.signal_api_url and ev and ev.signal_group_id:
+        if cfg.site_map:
+            map_base_url = cfg.site_map.map_url.rstrip("/")
+        elif cfg.domains and cfg.domains.map:
+            map_base_url = f"https://{cfg.domains.map}"
+        else:
+            map_base_url = "https://map.emfcamp.org"
         signal_adapter = SignalAdapter(
             api_url=settings.signal_api_url,
             sender=settings.signal_sender,
             group_id=ev.signal_group_id,
             panel_base_url=router_base_url,
+            map_base_url=map_base_url,
         )
     mattermost_action_url = (
         f"{settings.router_self_url}/webhook/mattermost/action"
