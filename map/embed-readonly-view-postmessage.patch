@@ -1,0 +1,82 @@
+From 93291ea8245e469af9057f15d72643ebec2f57a0 Mon Sep 17 00:00:00 2001
+From: Adam McGreggor <adam@adamamyl.com>
+Date: Sat, 7 Mar 2026 20:23:18 +0000
+Subject: [PATCH] feat(embed): add readonly mode and view postMessage for embed
+
+- ?readonly=true in embed mode suppresses click-to-pin so the marker
+  stays fixed (used by panel case detail and dispatcher views)
+- postMessage emf-view event sent on map load/moveend so parent frames
+  can display current zoom/centre in a status bar
+- ?marker=lat,lon query param pre-sets pin on load via setURLString()
+- map.on('load') calls resize() to fix WebGL green-box in embed mode
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ web/src/index.ts  | 23 +++++++++++++++++++++++
+ web/src/marker.ts |  4 ++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/web/src/index.ts b/web/src/index.ts
+index fe3d398..252c49f 100644
+--- a/web/src/index.ts
++++ b/web/src/index.ts
+@@ -118,6 +118,7 @@ class EventMap {
+ 
+         const url = new URL(window.location.href)
+         const embed = url.searchParams.get('embed') == 'true'
++        const readonly = url.searchParams.get('readonly') == 'true'
+ 
+         if (!embed) {
+             this.map.addControl(new maplibregl.NavigationControl(), 'top-right')
+@@ -149,11 +150,33 @@ class EventMap {
+             }
+         } else {
+             document.querySelector('header')!.style.display = 'none'
++            this.map.on('load', () => {
++                this.map!.resize()
++            })
++            if (!readonly) {
++                this.map.on('click', (e: maplibregl.MapMouseEvent) => {
++                    this.marker!.setLocation(e.lngLat)
++                })
++            }
++            const sendView = () => {
++                const c = this.map!.getCenter()
++                window.parent.postMessage(
++                    { type: 'emf-view', zoom: this.map!.getZoom(), lat: c.lat, lon: c.lng },
++                    '*',
++                )
++            }
++            this.map.on('moveend', sendView)
++            this.map.on('load', sendView)
+         }
+ 
+         this.map.addControl(this.layer_switcher, 'top-right')
+         this.url_hash.enable(this.map)
+ 
++        const markerParam = url.searchParams.get('marker')
++        if (markerParam) {
++            this.marker!.setURLString(markerParam)
++        }
++
+         this.map.addControl(this.marker, 'top-right')
+ 
+         const contextMenu = new ContextMenu(this.map)
+diff --git a/web/src/marker.ts b/web/src/marker.ts
+index 4ad4472..decde32 100644
+--- a/web/src/marker.ts
++++ b/web/src/marker.ts
+@@ -58,6 +58,10 @@ class Marker implements maplibregl.IControl {
+         }
+         this.updateLocation()
+         this.urlHash.setParameter('m', this.getURLString())
++        window.parent.postMessage(
++            { type: 'emf-marker', lat: this.location ? this.location[1] : null, lon: this.location ? this.location[0] : null },
++            '*',
++        )
+     }
+ 
+     updateLocation() {
+-- 
+2.50.1 (Apple Git-155)
+
