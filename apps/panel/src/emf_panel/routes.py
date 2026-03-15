@@ -20,6 +20,15 @@ from sqlalchemy import exists, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import oauth, require_conduct_team
+
+
+def _map_base_url(settings: Settings) -> str:
+    cfg = settings.app_config
+    if cfg.site_map:
+        return cfg.site_map.map_url.rstrip("/")
+    if cfg.domains and cfg.domains.map:
+        return f"https://{cfg.domains.map}"
+    return "https://map.emf-forms.internal"
 from .dispatcher import (
     create_dispatcher_token,
     revoke_token,
@@ -165,7 +174,7 @@ async def case_list(
         lat = loc.get("lat")
         lon = loc.get("lon")
         if lat is not None and lon is not None:
-            map_urls[c.id] = f"https://map.emf-forms.internal/?marker={lat},{lon}#16/{lat}/{lon}"
+            map_urls[c.id] = f"{_map_base_url(settings)}/?marker={lat},{lon}#16/{lat}/{lon}"
     case_ids = [c.id for c in cases]
     notif_states: dict[uuid.UUID, str] = {}
     if case_ids:
@@ -239,6 +248,7 @@ async def case_detail(
             "attachments": attachments,
             "status_emoji": STATUS_EMOJI,
             "urgency_levels": settings.app_config.urgency_levels,
+            "map_base_url": _map_base_url(settings),
         },
     )
 
@@ -558,6 +568,7 @@ async def dispatcher_view(
             "token": token,
             "active_event": active_event,
             "show_acked": show_acked,
+            "map_base_url": _map_base_url(settings),
         },
     )
     response.set_cookie("device_id", dev_id, httponly=True, samesite="strict")

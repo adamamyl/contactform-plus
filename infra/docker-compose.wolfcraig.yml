@@ -54,6 +54,7 @@ services:
       - caddy-proxy
 
   emf-map:
+    profiles: !reset []
     networks:
       - contactform
       - caddy-proxy
