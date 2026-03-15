@@ -69,10 +69,11 @@ def _report_block(report: str, map_domain: str | None) -> str:
 }}"""
 
 
-def _panel_block(panel: str) -> str:
+def _panel_block(panel: str, map_domain: str | None) -> str:
+    frame_src = f"; frame-src https://{map_domain}" if map_domain else ""
     csp = (
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; font-src 'self'"
+        f"img-src 'self' data:; font-src 'self'{frame_src}"
     )
     return f"""{panel} {{
 \theader {{
@@ -149,7 +150,7 @@ def generate(domains: dict[str, str]) -> str:
         "",
         _report_block(report, map_domain),
         "",
-        _panel_block(panel),
+        _panel_block(panel, map_domain),
     ]
 
     if auth_domain:

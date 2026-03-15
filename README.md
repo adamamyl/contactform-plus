@@ -175,6 +175,49 @@ uv run scripts/run_zap.py
 
 ---
 
+## Map
+
+The EMF site map ([emf/map](https://github.com/emfcamp/map)) is a separate repository cloned alongside this one. The conduct system embeds it in the report form (click-to-pin) and in the panel case detail and dispatcher views (read-only marker).
+
+### Embed integration patch
+
+The map app requires a small patch to send `postMessage` events back to parent frames — enabling the form's pin-drop workflow and the panel's location display. The patch lives in `map/embed-readonly-view-postmessage.patch` in this repo and should **not** be committed to the map repo.
+
+The patch adds:
+- `emf-marker` postMessage from `marker.ts` when a pin is set or cleared
+- `emf-view` postMessage on `moveend` and `load` so parent frames can display zoom/centre
+- `?readonly=true` embed mode — suppresses click-to-pin (used by panel iframes)
+- `?marker=lat,lon` query param to pre-set a pin on load
+- `resize()` on map load to fix a WebGL green-box glitch in iframes
+
+### Applying the patch
+
+After cloning the map repo (or after pulling upstream changes):
+
+```bash
+cd /path/to/emf/map
+git restore web/src/index.ts web/src/marker.ts   # revert any previous apply
+git apply /path/to/emf-conduct/map/embed-readonly-view-postmessage.patch
+```
+
+Then rebuild the emf-map container:
+
+```bash
+cd /path/to/emf-conduct
+docker compose -f infra/docker-compose.yml [-f infra/docker-compose.wolfcraig.yml] \
+  up -d --build --force-recreate emf-map
+```
+
+If the patch no longer applies cleanly after a map repo update, re-create it:
+
+```bash
+cd /path/to/emf/map
+# make the changes manually to web/src/index.ts and web/src/marker.ts
+git diff web/src/ > /path/to/emf-conduct/map/embed-readonly-view-postmessage.patch
+```
+
+---
+
 ## Configuration
 
 | File | Purpose |

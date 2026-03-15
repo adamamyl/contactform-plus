@@ -30,6 +30,16 @@ from .settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
 
+
+def _map_base_url(settings: Settings) -> str:
+    cfg = settings.app_config
+    if cfg.site_map:
+        return cfg.site_map.map_url.rstrip("/")
+    if cfg.domains and cfg.domains.map:
+        return f"https://{cfg.domains.map}"
+    return "https://map.emf-forms.internal"
+
+
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
@@ -127,6 +137,7 @@ async def case_list(
     request: Request,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
     status_filter: Annotated[list[str], Query(alias="status")] = [],  # noqa: B006
     urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],  # noqa: B006
     assignee: str | None = None,
@@ -165,7 +176,7 @@ async def case_list(
         lat = loc.get("lat")
         lon = loc.get("lon")
         if lat is not None and lon is not None:
-            map_urls[c.id] = f"https://map.emf-forms.internal/?marker={lat},{lon}#16/{lat}/{lon}"
+            map_urls[c.id] = f"{_map_base_url(settings)}/?marker={lat},{lon}#16/{lat}/{lon}"
     case_ids = [c.id for c in cases]
     notif_states: dict[uuid.UUID, str] = {}
     if case_ids:
@@ -239,6 +250,7 @@ async def case_detail(
             "attachments": attachments,
             "status_emoji": STATUS_EMOJI,
             "urgency_levels": settings.app_config.urgency_levels,
+            "map_base_url": _map_base_url(settings),
         },
     )
 
@@ -558,6 +570,7 @@ async def dispatcher_view(
             "token": token,
             "active_event": active_event,
             "show_acked": show_acked,
+            "map_base_url": _map_base_url(settings),
         },
     )
     response.set_cookie("device_id", dev_id, httponly=True, samesite="strict")

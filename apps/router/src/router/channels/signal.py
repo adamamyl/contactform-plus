@@ -16,17 +16,21 @@ URGENCY_EMOJI: dict[str, str] = {
     "urgent": "🚨",
 }
 
-MAP_BASE_URL = "https://map.emfcamp.org"
-
 
 class SignalAdapter(ChannelAdapter):
     def __init__(
-        self, api_url: str, sender: str, group_id: str, panel_base_url: str = ""
+        self,
+        api_url: str,
+        sender: str,
+        group_id: str,
+        panel_base_url: str = "",
+        map_base_url: str = "https://map.emfcamp.org",
     ) -> None:
         self._api_url = api_url.rstrip("/")
         self._sender = sender
         self._group_id = group_id
         self._panel_base_url = panel_base_url.rstrip("/")
+        self._map_base_url = map_base_url.rstrip("/")
 
     async def is_available(self) -> bool:
         try:
@@ -42,9 +46,7 @@ class SignalAdapter(ChannelAdapter):
         location_text = alert.location_hint or "not specified"
         map_line = ""
         if alert.location_lat is not None and alert.location_lon is not None:
-            map_line = (
-                f"\nMap: {MAP_BASE_URL}/#15/{alert.location_lat}/{alert.location_lon}"
-            )
+            map_line = f"\nMap: {self._map_base_url}/#15/{alert.location_lat}/{alert.location_lon}"
 
         also_line = ""
         if alert.also_sent_via:
@@ -75,9 +77,10 @@ class SignalAdapter(ChannelAdapter):
                     ts = str(data.get("timestamp", ""))
                     return ts or "sent"
                 log.warning(
-                    "SignalAdapter.send got %s for case %s",
+                    "SignalAdapter.send got %s for case %s: %s",
                     resp.status_code,
                     alert.case_id,
+                    resp.text,
                 )
                 return None
         except Exception:
