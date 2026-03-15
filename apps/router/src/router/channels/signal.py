@@ -78,9 +78,10 @@ class SignalAdapter(ChannelAdapter):
                     ts = str(data.get("timestamp", ""))
                     return ts or "sent"
                 log.warning(
-                    "SignalAdapter.send got %s for case %s",
+                    "SignalAdapter.send got %s for case %s: %s",
                     resp.status_code,
                     alert.case_id,
+                    resp.text,
                 )
                 return None
         except Exception:

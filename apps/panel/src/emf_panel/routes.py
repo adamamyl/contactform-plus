@@ -20,15 +20,6 @@ from sqlalchemy import exists, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import oauth, require_conduct_team
-
-
-def _map_base_url(settings: Settings) -> str:
-    cfg = settings.app_config
-    if cfg.site_map:
-        return cfg.site_map.map_url.rstrip("/")
-    if cfg.domains and cfg.domains.map:
-        return f"https://{cfg.domains.map}"
-    return "https://map.emf-forms.internal"
 from .dispatcher import (
     create_dispatcher_token,
     revoke_token,
@@ -38,6 +29,16 @@ from .models import Case, CaseHistory, Notification
 from .settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
+
+
+def _map_base_url(settings: Settings) -> str:
+    cfg = settings.app_config
+    if cfg.site_map:
+        return cfg.site_map.map_url.rstrip("/")
+    if cfg.domains and cfg.domains.map:
+        return f"https://{cfg.domains.map}"
+    return "https://map.emf-forms.internal"
+
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
