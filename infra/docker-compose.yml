@@ -203,7 +203,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - signal_data:/root/.local/share/signal-cli
+      - signal_data:/home/.local/share/signal-cli
     networks:
       - contactform
 
