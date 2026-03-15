@@ -58,7 +58,7 @@ def _make_serializable(obj: object) -> object:
         return {k: _make_serializable(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_make_serializable(v) for v in obj]
-    if isinstance(obj, (str, int, float, bool, type(None))):
+    if isinstance(obj, str | int | float | bool | type(None)):
         return obj
     return str(obj)
 

@@ -10,7 +10,8 @@ if not _FORM_URL:
 
 import schemathesis  # noqa: E402
 import schemathesis.openapi  # noqa: E402
-from hypothesis import HealthCheck, settings as h_settings  # noqa: E402
+from hypothesis import HealthCheck  # noqa: E402
+from hypothesis import settings as h_settings  # noqa: E402
 
 schema = schemathesis.openapi.from_url(f"{_FORM_URL}/openapi.json")
 
