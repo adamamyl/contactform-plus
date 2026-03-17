@@ -10,9 +10,13 @@
       },
       "signal_group_id": null,
       "signal_mode": "fallback_only",
-      "dispatcher_emails": ["event-dispatcher@emfcamp.org"],
+      "dispatcher_emails": [
+        "event-dispatcher@emfcamp.org"
+      ],
       "dispatcher_session_ttl_hours": 8,
-      "dispatcher_session_max_devices": 2
+      "dispatcher_session_max_devices": 2,
+      "jambonz_mode": "always",
+      "call_group_number": "user@ABCDE.sip.jambonz.cloud"
     },
     {
       "name": "EMF 2024",
@@ -45,8 +49,15 @@
       "end_date": "2012-09-02"
     }
   ],
-  "conduct_emails": ["conduct@emfcamp.org"],
-  "urgency_levels": ["low", "medium", "high", "urgent"],
+  "conduct_emails": [
+    "conduct@emfcamp.org"
+  ],
+  "urgency_levels": [
+      "low",
+      "medium",
+      "high",
+      "urgent"
+  ],
   "pronouns": [
     "Ze/Zir/Zirs",
     "Xe/Xem/Xyrs",
@@ -54,8 +65,14 @@
     "Fur/Furs/Furself",
     "He/Him/His",
     "She/Her/Hers",
-    "They/Them/Theirs"
+    "They/Them/Theirs",
+    "It/Its"
   ],
+  "site_map": {
+    "lat": 52.04166,
+    "lon": -2.37767,
+    "zoom": 15.63
+  },
   "smtp": {
     "host": "host.docker.internal",
     "port": 587,
@@ -65,9 +82,13 @@
   },
   "_comment_smtp": "smtp_password goes in .env as SMTP_PASSWORD — never in config.json",
   "panel_base_url": "https://panel.emfcamp.org",
+  "mattermost_url": "http://mattermost:8065",
+  "mattermost_channel_id": "changeme",
   "mattermost_webhook": null,
   "slack_webhook": null,
   "attachment_backend": "local",
+  "attachment_max_bytes": 10485760,
+  "attachment_max_per_case": 3,
   "rate_limit_per_minute": 5,
   "rate_limit_per_hour": 20
 }
