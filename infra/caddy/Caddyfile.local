@@ -14,6 +14,9 @@ panel.emf-forms.internal {
 	handle /webhook/jambonz* {
 		reverse_proxy jambonz-adapter:8004
 	}
+	handle /audio/* {
+		reverse_proxy jambonz-adapter:8004
+	}
 	handle {
 		reverse_proxy panel:8001
 	}

@@ -10,5 +10,13 @@ report.emfcamp.org {
 
 panel.emfcamp.org {
 	import snippets/headers.caddy
-	reverse_proxy {$PROJECT_NAME}-panel:8000
+	handle /webhook/jambonz* {
+		reverse_proxy {$PROJECT_NAME}-jambonz-adapter:8004
+	}
+	handle /audio/* {
+		reverse_proxy {$PROJECT_NAME}-jambonz-adapter:8004
+	}
+	handle {
+		reverse_proxy {$PROJECT_NAME}-panel:8000
+	}
 }

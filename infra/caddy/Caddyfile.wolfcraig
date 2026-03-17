@@ -31,6 +31,9 @@ panel.emf.thisparish.org {
 	handle /webhook/jambonz* {
 		reverse_proxy emf-jambonz:8004
 	}
+	handle /audio/* {
+		reverse_proxy emf-jambonz:8004
+	}
 	handle {
 		reverse_proxy emf-panel:8001
 	}

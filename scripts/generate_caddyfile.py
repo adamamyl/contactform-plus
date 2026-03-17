@@ -13,6 +13,7 @@ Usage:
     uv run scripts/generate_caddyfile.py --output -          # stdout
     uv run scripts/generate_caddyfile.py --config /path/to/config.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,12 +25,14 @@ REPO_ROOT = Path(__file__).parent.parent.resolve()
 DEFAULT_OUTPUT = REPO_ROOT / "infra" / "caddy" / "Caddyfile.wolfcraig"
 
 # External tile/data services the map app needs to reach — not deployment-specific.
-_MAP_EXTERNAL_CONNECT = " ".join([
-    "https://map.emfcamp.org",
-    "https://www.emfcamp.org",
-    "https://tracking.tfemf.uk",
-    "https://geojson.thinkl33t.co.uk",
-])
+_MAP_EXTERNAL_CONNECT = " ".join(
+    [
+        "https://map.emfcamp.org",
+        "https://www.emfcamp.org",
+        "https://tracking.tfemf.uk",
+        "https://geojson.thinkl33t.co.uk",
+    ]
+)
 _MAP_EXTERNAL_FONT = "https://map.emfcamp.org"
 
 
@@ -87,6 +90,9 @@ def _panel_block(panel: str, map_domain: str | None) -> str:
 \t}}
 \tencode gzip
 \thandle /webhook/jambonz* {{
+\t\treverse_proxy emf-jambonz:8004
+\t}}
+\thandle /audio/* {{
 \t\treverse_proxy emf-jambonz:8004
 \t}}
 \thandle {{
