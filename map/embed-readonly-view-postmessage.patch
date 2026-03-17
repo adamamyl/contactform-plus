@@ -21,11 +21,11 @@ index fe3d398..252c49f 100644
 --- a/web/src/index.ts
 +++ b/web/src/index.ts
 @@ -118,6 +118,7 @@ class EventMap {
- 
+
          const url = new URL(window.location.href)
          const embed = url.searchParams.get('embed') == 'true'
 +        const readonly = url.searchParams.get('readonly') == 'true'
- 
+
          if (!embed) {
              this.map.addControl(new maplibregl.NavigationControl(), 'top-right')
 @@ -149,11 +150,33 @@ class EventMap {
@@ -50,17 +50,17 @@ index fe3d398..252c49f 100644
 +            this.map.on('moveend', sendView)
 +            this.map.on('load', sendView)
          }
- 
+
          this.map.addControl(this.layer_switcher, 'top-right')
          this.url_hash.enable(this.map)
- 
+
 +        const markerParam = url.searchParams.get('marker')
 +        if (markerParam) {
 +            this.marker!.setURLString(markerParam)
 +        }
 +
          this.map.addControl(this.marker, 'top-right')
- 
+
          const contextMenu = new ContextMenu(this.map)
 diff --git a/web/src/marker.ts b/web/src/marker.ts
 index 4ad4472..decde32 100644
@@ -75,8 +75,7 @@ index 4ad4472..decde32 100644
 +            '*',
 +        )
      }
- 
-     updateLocation() {
--- 
-2.50.1 (Apple Git-155)
 
+     updateLocation() {
+--
+2.50.1 (Apple Git-155)

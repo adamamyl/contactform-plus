@@ -476,6 +476,7 @@ async def test_email_ack_link_in_body() -> None:
 
     assert captured
     from email.message import EmailMessage
+
     msg = captured[0]
     assert isinstance(msg, EmailMessage)
     plain_part = msg.get_body(preferencelist=("plain",))
@@ -518,6 +519,7 @@ async def test_email_no_ack_link_when_no_token() -> None:
 
     assert captured
     from email.message import EmailMessage
+
     msg = captured[0]
     assert isinstance(msg, EmailMessage)
     plain_part = msg.get_body(preferencelist=("plain",))
@@ -937,6 +939,7 @@ async def test_email_also_sent_via_in_body() -> None:
 
     assert captured
     from email.message import EmailMessage
+
     msg = captured[0]
     assert isinstance(msg, EmailMessage)
     plain_part = msg.get_body(preferencelist=("plain",))

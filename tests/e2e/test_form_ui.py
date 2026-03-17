@@ -20,14 +20,10 @@ def test_form_has_required_fields(page: Page, form_base_url: str) -> None:
 @pytest.mark.e2e
 def test_form_submit_valid_shows_success(page: Page, form_base_url: str) -> None:
     page.goto(form_base_url)
-    what_happened = page.locator(
-        "textarea[name=what_happened], #what_happened, [id*=what]"
-    ).first
+    what_happened = page.locator("textarea[name=what_happened], #what_happened, [id*=what]").first
     if not what_happened.is_visible():
         pytest.skip("Form textarea not found — check template field names")
-    what_happened.fill(
-        "Something happened at the event during end-to-end playwright testing."
-    )
+    what_happened.fill("Something happened at the event during end-to-end playwright testing.")
     page.locator("button[type=submit], input[type=submit]").first.click()
     page.wait_for_url(f"{form_base_url}/success**", timeout=10_000)
     expect(page.locator("body")).to_contain_text("submitted")
@@ -60,6 +56,10 @@ def test_keyboard_navigation_reaches_all_fields(page: Page, form_base_url: str) 
     page.goto(form_base_url)
     page.keyboard.press("Tab")
     focused = page.evaluate("() => document.activeElement?.tagName")
-    assert focused in ("INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"), (
-        f"Tab key did not move focus to a form element, got: {focused}"
-    )
+    assert focused in (
+        "INPUT",
+        "TEXTAREA",
+        "SELECT",
+        "BUTTON",
+        "A",
+    ), f"Tab key did not move focus to a form element, got: {focused}"
