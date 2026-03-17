@@ -76,6 +76,7 @@ async def client(fake_wav: bytes) -> AsyncClient:  # type: ignore[misc]
         os.environ["AUDIO_DIR"] = tmp_dir
 
         import tts.main as tts_main
+
         tts_main.AUDIO_DIR = Path(tmp_dir)
 
         async def fake_piper(text: str, output_path: str | None = None) -> bytes:

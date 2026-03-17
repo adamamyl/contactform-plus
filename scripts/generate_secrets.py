@@ -14,7 +14,9 @@ from pathlib import Path
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate .env secrets from .env-example")
+    parser = argparse.ArgumentParser(
+        description="Generate .env secrets from .env-example"
+    )
     parser.add_argument(
         "--env-file",
         default=".env",

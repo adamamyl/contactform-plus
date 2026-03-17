@@ -274,9 +274,7 @@ def test_urgency_and_event_stored(
     )
     assert row is not None, f"Case {case_id} not found in DB"
     assert row["urgency"] == urgency, f"urgency: {row['urgency']!r} != {urgency!r}"
-    assert row["event_name"] == event_name, (
-        f"event_name: {row['event_name']!r} != {event_name!r}"
-    )
+    assert row["event_name"] == event_name, f"event_name: {row['event_name']!r} != {event_name!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -361,37 +359,37 @@ def test_form_fields_stored_in_db(
     for key in ("name", "pronouns", "email", "camping_with"):
         field_key = f"reporter_{key}"
         if field_key in fields:
-            assert reporter.get(key) == fields[field_key], (
-                f"reporter.{key} mismatch: {reporter.get(key)!r} != {fields[field_key]!r}"
-            )
+            assert (
+                reporter.get(key) == fields[field_key]
+            ), f"reporter.{key} mismatch: {reporter.get(key)!r} != {fields[field_key]!r}"
     if "reporter_phone" in fields:
-        assert reporter.get("phone") == fields["reporter_phone"].strip().upper(), (
-            f"reporter.phone mismatch: {reporter.get('phone')!r}"
-        )
+        assert (
+            reporter.get("phone") == fields["reporter_phone"].strip().upper()
+        ), f"reporter.phone mismatch: {reporter.get('phone')!r}"
 
     # location
     loc = form_data.get("location")
     if "location_text" in fields:
-        assert row["location_hint"] == fields["location_text"].strip(), (
-            f"location_hint mismatch: {row['location_hint']!r}"
-        )
+        assert (
+            row["location_hint"] == fields["location_text"].strip()
+        ), f"location_hint mismatch: {row['location_hint']!r}"
         assert loc is not None and loc.get("text") == fields["location_text"].strip()
     if "location_lat" in fields:
         assert loc is not None
-        assert abs(loc["lat"] - fields["location_lat"]) < 1e-6, (
-            f"location.lat mismatch: {loc['lat']!r} != {fields['location_lat']!r}"
-        )
-        assert abs(loc["lon"] - fields["location_lon"]) < 1e-6, (
-            f"location.lon mismatch: {loc['lon']!r} != {fields['location_lon']!r}"
-        )
+        assert (
+            abs(loc["lat"] - fields["location_lat"]) < 1e-6
+        ), f"location.lat mismatch: {loc['lat']!r} != {fields['location_lat']!r}"
+        assert (
+            abs(loc["lon"] - fields["location_lon"]) < 1e-6
+        ), f"location.lon mismatch: {loc['lon']!r} != {fields['location_lon']!r}"
     if "location_text" not in fields and "location_lat" not in fields:
         assert loc is None, f"Expected no location, got: {loc}"
 
     # urgency
     expected_urgency = fields.get("urgency", "medium")
-    assert row["urgency"] == expected_urgency, (
-        f"urgency mismatch: {row['urgency']!r} != {expected_urgency!r}"
-    )
+    assert (
+        row["urgency"] == expected_urgency
+    ), f"urgency mismatch: {row['urgency']!r} != {expected_urgency!r}"
 
     # narrative optional fields
     for key in (
@@ -408,6 +406,6 @@ def test_form_fields_stored_in_db(
 
     # can_contact
     expected_contact = fields["can_contact"] == "true"
-    assert form_data.get("can_contact") == expected_contact, (
-        f"can_contact mismatch: {form_data.get('can_contact')!r} != {expected_contact!r}"
-    )
+    assert (
+        form_data.get("can_contact") == expected_contact
+    ), f"can_contact mismatch: {form_data.get('can_contact')!r} != {expected_contact!r}"

@@ -10,6 +10,7 @@ Usage:
 
 Output file format: emf_forms-<ISO8601>.dump.zst.age
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,28 +47,34 @@ def parse_args() -> argparse.Namespace:
         epilog=__doc__,
     )
     parser.add_argument(
-        "--recipient", "-r",
+        "--recipient",
+        "-r",
         help="age public key for encryption (reads AGE_RECIPIENT env var if not set)",
     )
     parser.add_argument(
-        "--database-url", "-u",
+        "--database-url",
+        "-u",
         default=os.environ.get("DATABASE_URL", ""),
         help="PostgreSQL connection URL (reads DATABASE_URL env var if not set)",
     )
     parser.add_argument(
-        "--rsync", metavar="DEST",
+        "--rsync",
+        metavar="DEST",
         help="rsync destination for the backup file (e.g. user@host:/backups/)",
     )
     parser.add_argument(
-        "--systemd", action="store_true",
+        "--systemd",
+        action="store_true",
         help="Generate systemd .service and .timer unit files",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Print actions without executing",
     )
     parser.add_argument(
-        "--output-dir", default=str(BACKUP_DIR),
+        "--output-dir",
+        default=str(BACKUP_DIR),
         help=f"Directory to write backups to (default: {BACKUP_DIR})",
     )
     return parser.parse_args()

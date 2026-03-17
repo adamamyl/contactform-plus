@@ -81,10 +81,11 @@ def _swagger_page(title: str, spec_url: str) -> HTMLResponse:
 
 
 def _swagger_multi_page(title: str, urls: list[dict[str, str]]) -> HTMLResponse:
-    urls_js = "[" + ",".join(
-        f'{{"url":"/api/specs/{u["service"]}","name":"{u["name"]}"}}'
-        for u in urls
-    ) + "]"
+    urls_js = (
+        "["
+        + ",".join(f'{{"url":"/api/specs/{u["service"]}","name":"{u["name"]}"}}' for u in urls)
+        + "]"
+    )
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,8 +113,7 @@ def _swagger_multi_page(title: str, urls: list[dict[str, str]]) -> HTMLResponse:
 async def index() -> HTMLResponse:
     all_link = '<li><a href="/all"><code>/all</code></a> — all services</li>'
     path_links = "\n".join(
-        f'<li><a href="/{path}"><code>/{path}</code></a>'
-        f' — {", ".join(svc_keys)}</li>'
+        f'<li><a href="/{path}"><code>/{path}</code></a>' f' — {", ".join(svc_keys)}</li>'
         for path, svc_keys in _PATHS.items()
     )
     html = f"""<!DOCTYPE html>

@@ -18,12 +18,12 @@ Usage:
     uv run scripts/bad_strings_test.py --url http://localhost:8000 --sample 50 --seed 42
     docker compose -f infra/docker-compose.yml -f infra/docker-compose.e2e.yml down -v
 """
+
 from __future__ import annotations
 
 import argparse
 import asyncio
 import json
-import os
 import random
 import sys
 import time
@@ -196,8 +196,13 @@ async def _run(
         with progress:
             tasks = [
                 _test_string(
-                    client, s, semaphore, progress, overall_task,
-                    slot_tasks[i % n_slots], silent,
+                    client,
+                    s,
+                    semaphore,
+                    progress,
+                    overall_task,
+                    slot_tasks[i % n_slots],
+                    silent,
                 )
                 for i, s in enumerate(strings)
             ]
@@ -242,30 +247,45 @@ def _parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--url", default="http://localhost:8000", help="Form service base URL")
     parser.add_argument(
-        "--sample", type=int, default=50, metavar="N",
+        "--url", default="http://localhost:8000", help="Form service base URL"
+    )
+    parser.add_argument(
+        "--sample",
+        type=int,
+        default=50,
+        metavar="N",
         help="Number of strings to test (default: 50)",
     )
     sampling = parser.add_mutually_exclusive_group()
     sampling.add_argument(
-        "--seed", type=int, default=None,
+        "--seed",
+        type=int,
+        default=None,
         help="Random seed for reproducible sample (mutually exclusive with --all)",
     )
     sampling.add_argument(
-        "--all", dest="use_all", action="store_true",
+        "--all",
+        dest="use_all",
+        action="store_true",
         help="Test all strings without sampling (mutually exclusive with --seed)",
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("bad_strings_results.json"),
+        "--output",
+        type=Path,
+        default=Path("bad_strings_results.json"),
         help="Output JSON file (default: bad_strings_results.json)",
     )
     parser.add_argument(
-        "--concurrency", type=int, default=3, metavar="N",
+        "--concurrency",
+        type=int,
+        default=3,
+        metavar="N",
         help="Concurrent requests (default: 3; keep well under rate limit)",
     )
     parser.add_argument(
-        "--silent", action="store_true",
+        "--silent",
+        action="store_true",
         help="Suppress progress display; print summary only",
     )
     return parser.parse_args()
@@ -291,9 +311,7 @@ def main() -> None:
             )
 
     if not args.silent:
-        CONSOLE.print(
-            f"[bold]Testing {len(strings)} strings against[/bold] {args.url}"
-        )
+        CONSOLE.print(f"[bold]Testing {len(strings)} strings against[/bold] {args.url}")
 
     exit_code = asyncio.run(
         _run(args.url, strings, args.concurrency, args.silent, args.output)

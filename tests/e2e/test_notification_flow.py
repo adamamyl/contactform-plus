@@ -9,7 +9,6 @@ If not set, the notification delivery assertions are skipped.
 
 from __future__ import annotations
 
-import json
 import os
 import time
 from typing import Any
@@ -24,9 +23,7 @@ _WHAT_HAPPENED = "Notification flow test: something happened requiring team atte
 _SKIP_WEBHOOK = not os.environ.get("MOCK_WEBHOOK_URL")
 
 
-def _submit_case(
-    page: Page, form_base_url: str, urgency: str = "urgent"
-) -> dict[str, Any]:
+def _submit_case(page: Page, form_base_url: str, urgency: str = "urgent") -> dict[str, Any]:
     result: dict[str, Any] = {}
 
     def handle_route(route: Route) -> None:
@@ -55,16 +52,12 @@ def _submit_case(
 
 
 @pytest.mark.e2e
-def test_submitted_case_appears_in_db(
-    page: Page, form_base_url: str, db: SyncDB
-) -> None:
+def test_submitted_case_appears_in_db(page: Page, form_base_url: str, db: SyncDB) -> None:
     result = _submit_case(page, form_base_url)
     assert "case_id" in result, f"No case_id in response: {result}"
     case_id = result["case_id"]
 
-    row = db.fetchrow(
-        "SELECT id, status, urgency FROM forms.cases WHERE id = $1::uuid", case_id
-    )
+    row = db.fetchrow("SELECT id, status, urgency FROM forms.cases WHERE id = $1::uuid", case_id)
     assert row is not None, f"Case {case_id} not found in DB"
     assert row["status"] == "new"
 
@@ -78,15 +71,11 @@ def test_submitted_case_visible_in_panel(
     case_id = result["case_id"]
     friendly_id = result.get("friendly_id", "")
 
-    row = db.fetchrow(
-        "SELECT friendly_id FROM forms.cases WHERE id = $1::uuid", case_id
-    )
+    row = db.fetchrow("SELECT friendly_id FROM forms.cases WHERE id = $1::uuid", case_id)
     assert row is not None
     assert friendly_id == row["friendly_id"]
 
-    panel_client = httpx.Client(
-        base_url=panel_base_url, follow_redirects=False, timeout=10.0
-    )
+    panel_client = httpx.Client(base_url=panel_base_url, follow_redirects=False, timeout=10.0)
     # Unauthenticated request should redirect to /login — confirms panel is up.
     resp = panel_client.get("/")
     assert resp.status_code in (200, 302)
@@ -95,9 +84,7 @@ def test_submitted_case_visible_in_panel(
 
 @pytest.mark.e2e
 @pytest.mark.skipif(_SKIP_WEBHOOK, reason="MOCK_WEBHOOK_URL not set")
-def test_notification_sent_to_webhook(
-    page: Page, form_base_url: str, db: SyncDB
-) -> None:
+def test_notification_sent_to_webhook(page: Page, form_base_url: str, db: SyncDB) -> None:
     result = _submit_case(page, form_base_url, urgency="urgent")
     assert "case_id" in result
     case_id = result["case_id"]

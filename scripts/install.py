@@ -10,6 +10,7 @@ Usage:
 -d / --debug    Show debug output (implies -v)
 --dry-run       Print all actions without executing
 """
+
 from __future__ import annotations
 
 import argparse
@@ -49,7 +50,9 @@ def resolve_ports() -> dict[str, int]:
     return {var: find_free_port(pref) for var, pref in _PREFERRED_PORTS.items()}
 
 
-def _say(msg: str, verbose: bool = False, quiet: bool = False, is_verbose_msg: bool = False) -> None:
+def _say(
+    msg: str, verbose: bool = False, quiet: bool = False, is_verbose_msg: bool = False
+) -> None:
     if quiet:
         return
     if is_verbose_msg and not verbose:
@@ -77,10 +80,18 @@ def parse_args() -> argparse.Namespace:
         epilog=__doc__,
     )
     verbosity = parser.add_mutually_exclusive_group()
-    verbosity.add_argument("-q", "--quiet", action="store_true", help="Suppress progress output")
-    verbosity.add_argument("-v", "--verbose", action="store_true", help="Show detailed output")
-    verbosity.add_argument("-d", "--debug", action="store_true", help="Show debug output")
-    parser.add_argument("--dry-run", action="store_true", help="Print actions without executing")
+    verbosity.add_argument(
+        "-q", "--quiet", action="store_true", help="Suppress progress output"
+    )
+    verbosity.add_argument(
+        "-v", "--verbose", action="store_true", help="Show detailed output"
+    )
+    verbosity.add_argument(
+        "-d", "--debug", action="store_true", help="Show debug output"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print actions without executing"
+    )
     return parser.parse_args()
 
 
@@ -105,10 +116,14 @@ def select_proxy() -> str:
         if choice == "1":
             return "caddy"
         if choice == "2":
-            print("  ⚠  nginx: remember to set up certbot renewal for 47-day ACME certificates")
+            print(
+                "  ⚠  nginx: remember to set up certbot renewal for 47-day ACME certificates"
+            )
             return "nginx"
         if choice == "3":
-            print("  ⚠  Traefik: remember to set up certbot renewal for 47-day ACME certificates")
+            print(
+                "  ⚠  Traefik: remember to set up certbot renewal for 47-day ACME certificates"
+            )
             return "traefik"
         print("  Invalid choice")
 
@@ -147,9 +162,11 @@ def generate_postgres_tls_cert(dry_run: bool = False) -> None:
         from cryptography.x509.oid import NameOID
 
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, "postgres"),
-        ])
+        subject = issuer = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COMMON_NAME, "postgres"),
+            ]
+        )
         cert = (
             x509.CertificateBuilder()
             .subject_name(subject)
@@ -160,7 +177,9 @@ def generate_postgres_tls_cert(dry_run: bool = False) -> None:
             .not_valid_after(
                 datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=3650)
             )
-            .add_extension(x509.SubjectAlternativeName([x509.DNSName("postgres")]), critical=False)
+            .add_extension(
+                x509.SubjectAlternativeName([x509.DNSName("postgres")]), critical=False
+            )
             .sign(key, hashes.SHA256())
         )
 
@@ -176,13 +195,25 @@ def generate_postgres_tls_cert(dry_run: bool = False) -> None:
         print(f"  Generated PostgreSQL TLS cert in {cert_dir}")
     except ImportError:
         print("  cryptography package not available; generating cert with openssl")
-        _run([
-            "openssl", "req", "-new", "-x509", "-days", "3650",
-            "-nodes", "-text",
-            "-out", str(cert_path),
-            "-keyout", str(key_path),
-            "-subj", "/CN=postgres",
-        ], dry_run=dry_run)
+        _run(
+            [
+                "openssl",
+                "req",
+                "-new",
+                "-x509",
+                "-days",
+                "3650",
+                "-nodes",
+                "-text",
+                "-out",
+                str(cert_path),
+                "-keyout",
+                str(key_path),
+                "-subj",
+                "/CN=postgres",
+            ],
+            dry_run=dry_run,
+        )
         os.chmod(key_path, 0o600)
 
 
@@ -212,13 +243,18 @@ def signal_setup_walkthrough() -> None:
     print("     docker compose exec signal-api signal-cli -a <phone> verify <code>")
     print("  2. List groups:")
     print("     docker compose exec signal-api signal-cli -a <phone> listGroups")
-    print("  3. Copy the group ID (base64) into config.json → events[0].signal_group_id")
+    print(
+        "  3. Copy the group ID (base64) into config.json → events[0].signal_group_id"
+    )
     input("  Press Enter when done (or Ctrl+C to skip)...")
 
 
 def validate_config(dry_run: bool = False) -> None:
     compose_file = REPO_ROOT / "infra" / "docker-compose.yml"
-    _run(["docker", "compose", "-f", str(compose_file), "config", "--quiet"], dry_run=dry_run)
+    _run(
+        ["docker", "compose", "-f", str(compose_file), "config", "--quiet"],
+        dry_run=dry_run,
+    )
 
     env_file = REPO_ROOT / ".env"
     if not dry_run and env_file.exists():
