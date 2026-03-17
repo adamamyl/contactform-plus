@@ -1,14 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Report an Incident — EMF Conduct{% endblock %}
 {% block head %}
-{% if config.site_map %}
-<script>
-window.__mapConfig = {lat: {{ config.site_map.lat }}, lon: {{ config.site_map.lon }}, zoom: {{ config.site_map.zoom }}};
-</script>
-{% endif %}
-<script>
-window.__formConfig = {isEventTime: {{ 'true' if is_event_time else 'false' }}};
-</script>
 {% endblock %}
 {% block content %}
 <div class="container">
@@ -25,7 +17,7 @@ window.__formConfig = {isEventTime: {{ 'true' if is_event_time else 'false' }}};
     Your report is confidential.
   </p>
 
-  <form id="conduct-form" method="post" novalidate>
+  <form id="conduct-form" method="post" novalidate data-is-event-time="{{ 'true' if is_event_time else 'false' }}">
     <div class="visually-hidden" aria-hidden="true" tabindex="-1">
       <label for="website">Leave this blank</label>
       <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
@@ -245,5 +237,5 @@ window.__formConfig = {isEventTime: {{ 'true' if is_event_time else 'false' }}};
     </div>
   </form>
 </div>
-<script src="/static/form.js?v=7" defer></script>
+<script src="/static/form.js?v=9" defer></script>
 {% endblock %}
