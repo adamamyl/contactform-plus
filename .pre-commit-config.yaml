@@ -174,3 +174,51 @@ repos:
         files: ^apps/jambonz/
         pass_filenames: false
         stages: [pre-push]
+
+      - id: pip-audit-shared
+        name: pip-audit (shared)
+        entry: bash -c 'cd shared && uv run pip-audit'
+        language: system
+        files: ^shared/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pip-audit-form
+        name: pip-audit (form)
+        entry: bash -c 'cd apps/form && uv run pip-audit'
+        language: system
+        files: ^apps/form/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pip-audit-panel
+        name: pip-audit (panel)
+        entry: bash -c 'cd apps/panel && uv run pip-audit'
+        language: system
+        files: ^apps/panel/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pip-audit-router
+        name: pip-audit (router)
+        entry: bash -c 'cd apps/router && uv run pip-audit'
+        language: system
+        files: ^apps/router/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pip-audit-tts
+        name: pip-audit (tts)
+        entry: bash -c 'cd apps/tts && uv run pip-audit'
+        language: system
+        files: ^apps/tts/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: pip-audit-jambonz
+        name: pip-audit (jambonz)
+        entry: bash -c 'cd apps/jambonz && uv run pip-audit'
+        language: system
+        files: ^apps/jambonz/
+        pass_filenames: false
+        stages: [pre-push]
