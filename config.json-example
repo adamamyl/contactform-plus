@@ -83,7 +83,7 @@
   "_comment_smtp": "smtp_password goes in .env as SMTP_PASSWORD — never in config.json",
   "panel_base_url": "https://panel.emfcamp.org",
   "mattermost_url": "http://mattermost:8065",
-  "mattermost_channel_id": "s9xu19yfdbn3xmk9m8xfqdoxha",
+  "mattermost_channel_id": "changeme",
   "mattermost_webhook": null,
   "slack_webhook": null,
   "attachment_backend": "local",
