@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 
 import asyncpg  # type: ignore[import-untyped]
+from sqlalchemy import func, select
 
 from emf_shared.db import get_session
 from router.alert_router import AlertRouter
+from router.models import Notification
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +44,12 @@ async def listen_for_cases(dsn: str, router: AlertRouter) -> None:
 async def _handle_new_case(case_id: str, router: AlertRouter) -> None:
     try:
         async for session in get_session():
+            result = await session.execute(
+                select(func.count()).where(Notification.case_id == uuid.UUID(case_id))
+            )
+            if result.scalar_one() > 0:
+                log.info("Case %s already has notifications; skipping", case_id)
+                return
             alert = await router.load_alert_from_db(case_id, session)
             if alert is None:
                 log.warning("Case %s not found in cases_router view", case_id)

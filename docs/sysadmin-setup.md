@@ -72,23 +72,33 @@ Jambonz handles outbound phone calls when a case is marked `urgent` or `high`. S
 **Option A — jambonz.cloud (for testing / small events)**
 
 1. Sign up at https://jambonz.cloud
-2. **Account SID**: Accounts → your account → note the SID
+2. **Account SID**: Accounts → your account → note the **SID** (a UUID like `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
 3. **Application**: Applications → New Application
-   - Calling Webhook: `https://panel.emfcamp.org/webhook/jambonz/call`
-   - Leave speech/recording settings blank
+   - Calling Webhook: `https://panel.<your-domain>/webhook/jambonz/call`
+   - Call status webhook: `https://panel.<your-domain>/webhook/jambonz/status`
    - Note the **Application SID**
-4. **API Key**: API Keys → Create → note the key
-5. **Phone number**: Phone Numbers → provision a DID (outbound-only, any number is fine)
-   - Note the number in E.164 format e.g. `+441234567890`
+4. **API Key**: Settings → API Keys → Create → note the key
+5. **Phone number**: Phone Numbers → provision a DID → note it in E.164 format e.g. `+441234567890`
+6. **SIP user** (for softphones): SIP Realm → Add SIP User → note `username@realm` for `call_group_number`
 
 Set in `.env`:
 ```
 JAMBONZ_API_URL=https://api.jambonz.cloud
 JAMBONZ_API_KEY=<key>
-JAMBONZ_ACCOUNT_SID=<sid>
+JAMBONZ_ACCOUNT_SID=<uuid-from-accounts-page>
 JAMBONZ_APPLICATION_SID=<app-sid>
 JAMBONZ_FROM_NUMBER=+441234567890
+TTS_AUDIO_BASE_URL=https://panel.<your-domain>
+JAMBONZ_WEBHOOK_BASE_URL=https://panel.<your-domain>
 ```
+
+Set in `config.json` under the active event:
+```json
+"jambonz_mode": "always",
+"call_group_number": "username@sip-realm-host"
+```
+
+`jambonz_mode` defaults to `"disabled"` — calls will not be made unless this is explicitly set. See [docs/jambonz-setup.md](jambonz-setup.md) for full details.
 
 **Option B — self-hosted Jambonz (for production events)**
 
