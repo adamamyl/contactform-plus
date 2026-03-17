@@ -5,7 +5,8 @@
   const MIN_WHAT_HAPPENED = 10;
   const PHONE_RE = /^[\d\s+\-.()\sA-Z]+$/i;
   const STORAGE_KEY = "emf_conduct_form_state";
-  const formConfig = (window.__formConfig) || { isEventTime: false };
+  const formEl = document.getElementById("conduct-form");
+  const formConfig = { isEventTime: formEl ? formEl.dataset.isEventTime === "true" : false };
 
   function getById(id) {
     return document.getElementById(id);
@@ -239,10 +240,17 @@
       hintEl.hidden = true;
       return;
     }
-    hintEl.hidden = false;
-    hintEl.textContent = formConfig.isEventTime
-      ? "Please provide an email address or phone number above so the conduct team can reach you."
-      : "Please provide an email address above so the conduct team can reach you.";
+    const email = (getById("reporter_email") || {}).value || "";
+    const phone = (getById("reporter_phone") || {}).value || "";
+    const hasContact = formConfig.isEventTime
+      ? (email.trim().length > 0 || phone.trim().length > 0)
+      : email.trim().length > 0;
+    hintEl.hidden = hasContact;
+    if (!hasContact) {
+      hintEl.textContent = formConfig.isEventTime
+        ? "Please provide an email address or phone number above so the conduct team can reach you."
+        : "Please provide an email address above so the conduct team can reach you.";
+    }
   }
 
   function validateForm() {
@@ -458,6 +466,14 @@
     document.querySelectorAll("input[name=\"can_contact\"]").forEach(function (el) {
       el.addEventListener("change", updateContactHint);
     });
+    const emailInput = getById("reporter_email");
+    if (emailInput) {
+      emailInput.addEventListener("input", updateContactHint);
+    }
+    const phoneInputForHint = getById("reporter_phone");
+    if (phoneInputForHint) {
+      phoneInputForHint.addEventListener("input", updateContactHint);
+    }
     updateContactHint();
 
     const phoneInput = getById("reporter_phone");
