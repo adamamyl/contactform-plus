@@ -76,6 +76,27 @@ List cases with optional filtering and pagination.
 
 ---
 
+### `GET /api/v1/cases/lookup`
+
+Resolve a friendly ID to a UUID, or a UUID to a friendly ID.
+
+**Query params (provide exactly one):**
+
+| Param | Description |
+|---|---|
+| `friendly_id` | e.g. `EMF-001` |
+| `id` | UUID of the case |
+
+**Response `200`:**
+```json
+{"id": "uuid", "friendly_id": "EMF-001"}
+```
+
+**Response `404`:** Not found.
+**Response `422`:** Neither param provided.
+
+---
+
 ### `GET /api/v1/cases/{case_id}`
 
 Full case detail including `form_data`.

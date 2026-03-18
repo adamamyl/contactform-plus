@@ -308,6 +308,25 @@ async def api_list_cases(
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
+@router.get("/api/v1/cases/lookup")
+async def api_lookup_case(  # noqa: B008
+    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    friendly_id: Annotated[str | None, Query()] = None,
+    case_uuid: Annotated[uuid.UUID | None, Query(alias="id")] = None,
+) -> dict[str, object]:
+    if friendly_id:
+        result = await session.execute(select(Case).where(Case.friendly_id == friendly_id))
+        case = result.scalars().first()
+    elif case_uuid is not None:
+        case = await session.get(Case, case_uuid)
+    else:
+        raise HTTPException(status_code=422, detail="Provide either 'friendly_id' or 'id'")
+    if not case:
+        raise HTTPException(status_code=404)
+    return {"id": str(case.id), "friendly_id": case.friendly_id}
+
+
 @router.get("/api/v1/cases/{case_id}")
 async def api_get_case(
     case_id: uuid.UUID,

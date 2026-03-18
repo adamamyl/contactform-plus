@@ -118,6 +118,46 @@ async def test_api_get_case_not_found(authed_client: AsyncClient, mock_session: 
 
 
 @pytest.mark.asyncio
+async def test_api_lookup_by_friendly_id(
+    authed_client: AsyncClient, mock_session: AsyncMock
+) -> None:
+    case_id = uuid.uuid4()
+    case = MagicMock()
+    case.id = case_id
+    case.friendly_id = "EMF-001"
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = case
+    mock_session.execute.return_value = result
+
+    resp = await authed_client.get("/api/v1/cases/lookup?friendly_id=EMF-001")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == str(case_id)
+    assert data["friendly_id"] == "EMF-001"
+
+
+@pytest.mark.asyncio
+async def test_api_lookup_by_uuid(authed_client: AsyncClient, mock_session: AsyncMock) -> None:
+    case_id = uuid.uuid4()
+    case = MagicMock()
+    case.id = case_id
+    case.friendly_id = "EMF-042"
+    mock_session.get.return_value = case
+
+    resp = await authed_client.get(f"/api/v1/cases/lookup?id={case_id}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == str(case_id)
+    assert data["friendly_id"] == "EMF-042"
+
+
+@pytest.mark.asyncio
+async def test_api_lookup_no_params_returns_422(authed_client: AsyncClient) -> None:
+    resp = await authed_client.get("/api/v1/cases/lookup")
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_api_case_history(authed_client: AsyncClient, mock_session: AsyncMock) -> None:
     from emf_panel.models import CaseHistory as CH
 
