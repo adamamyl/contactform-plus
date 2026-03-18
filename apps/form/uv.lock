@@ -294,8 +294,10 @@ dependencies = [
     { name = "asyncpg" },
     { name = "emf-shared" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "jinja2" },
     { name = "prometheus-fastapi-instrumentator" },
+    { name = "pyclamd" },
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
@@ -322,8 +324,10 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "emf-shared", editable = "../../shared" },
     { name = "fastapi", specifier = ">=0.134.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "prometheus-fastapi-instrumentator", specifier = ">=7.1.0" },
+    { name = "pyclamd", specifier = ">=0.4.0" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "python-multipart", specifier = ">=0.0.22" },
@@ -938,6 +942,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/73/21/d250cfca8ff30c2e5
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9b/bf/7595e817906a29453ba4d99394e781b6fabe55d21f3c15d240f85dd06bb1/py_serializable-2.1.0-py3-none-any.whl", hash = "sha256:b56d5d686b5a03ba4f4db5e769dc32336e142fc3bd4d68a8c25579ebb0a67304", size = 23045, upload-time = "2025-07-21T09:56:46.848Z" },
 ]
+
+[[package]]
+name = "pyclamd"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/13/73/97a0518b59f1b6aefa2ac851566038d2c9128f8a5503bcf4cd0adf8b0072/pyClamd-0.4.0.tar.gz", hash = "sha256:ddd588577e5db123760b6ddaac46b5c4b1d9044a00b5d9422de59f83a55c20fe", size = 11177, upload-time = "2017-08-27T22:06:02.757Z" }
 
 [[package]]
 name = "pydantic"

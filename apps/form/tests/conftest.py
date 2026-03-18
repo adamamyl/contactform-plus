@@ -41,6 +41,7 @@ def mock_settings(mock_config: AppConfig) -> Settings:
     settings = MagicMock(spec=Settings)
     settings.database_url = "postgresql+asyncpg://test:test@localhost/test"
     settings.app_config = mock_config
+    settings.google_safe_browsing_key = ""
     return cast(Settings, settings)
 
 

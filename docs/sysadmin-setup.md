@@ -5,7 +5,7 @@ This document covers deploying the EMF Conduct System on a fresh server, includi
 ## Table of contents
 
 1. [Prerequisites](#1-prerequisites)
-2. [Third-party service sign-ups](#2-third-party-service-sign-ups)
+2. [Third-party service sign-ups](#2-third-party-service-sign-ups) (Resend, Jambonz, Signal, Mattermost, Safe Browsing, OIDC)
 3. [Server setup](#3-server-setup)
 4. [Clone and configure](#4-clone-and-configure)
 5. [Generate secrets](#5-generate-secrets)
@@ -114,7 +114,7 @@ No sign-up needed beyond having a Signal-capable phone number. Setup is done pos
 
 ### 2d. Mattermost (team chat) — optional
 
-Delivers richly-formatted case notifications with an Acknowledge button.
+Delivers richly-formatted case notifications with an Acknowledge button. See [docs/mattermost-setup.md](mattermost-setup.md) for full details.
 
 **Option A — self-hosted (included in `--profile local`)**
 
@@ -122,11 +122,30 @@ Starts automatically with `docker compose --profile local`. Complete the setup w
 
 **Option B — existing Mattermost instance**
 
-Set `MATTERMOST_URL` in `.env` and configure the bot token — see [apps/router/README.md](../apps/router/README.md#mattermost-posts-api).
+Set `MATTERMOST_URL` in `.env` and configure the bot token — see [docs/mattermost-setup.md](mattermost-setup.md).
 
 **Skipping Mattermost**: Leave `MATTERMOST_*` vars unset. Notifications fall back to email and Signal.
 
-### 2e. OIDC provider — required for panel access
+### 2e. Google Safe Browsing (URL safety checking) — optional
+
+When configured, the form checks every URL submitted in the "links to photos or videos" field against the Google Safe Browsing API before accepting the submission. URLs matching known malware, phishing, or unwanted software lists are rejected with an error asking the submitter to remove them.
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project (or use an existing one)
+3. Enable the **Safe Browsing API**: APIs & Services → Library → search "Safe Browsing" → Enable
+4. Create an API key: APIs & Services → Credentials → Create Credentials → API Key
+5. Restrict the key to the Safe Browsing API (recommended): click the key → API restrictions → Restrict key → Safe Browsing API
+
+Set in `.env`:
+```
+GOOGLE_SAFE_BROWSING_API_KEY=<your-api-key>
+```
+
+**Skipping URL checking**: leave `GOOGLE_SAFE_BROWSING_API_KEY` unset or empty. Submissions with links will not be checked — the conduct team should treat any links with caution before clicking.
+
+> **Privacy note**: submitted URLs are sent to Google for checking. For typical evidence links (Google Drive, Dropbox, YouTube) this is acceptable, but be aware that the URL itself is shared with Google's Safe Browsing service. The API is free for non-commercial use at standard quota.
+
+### 2f. OIDC provider — required for panel access
 
 The conduct panel authenticates users via OIDC. For EMF events, this is UFFD at `auth.emfcamp.org`.
 
@@ -205,6 +224,7 @@ Then open `.env` and fill in the values that can't be auto-generated:
 | `JAMBONZ_FROM_NUMBER` | Jambonz phone number (§2b) |
 | `MATTERMOST_TOKEN` | Mattermost bot account (§2d) |
 | `MATTERMOST_CHANNEL_ID` | Mattermost channel API (§2d) |
+| `GOOGLE_SAFE_BROWSING_API_KEY` | Google Cloud Console — Safe Browsing API key (§2e, optional) |
 
 ---
 
@@ -376,6 +396,7 @@ Replace `report.emfcamp.org` / `panel.emfcamp.org` with your actual hostnames fr
 - [ ] Jambonz call is placed for an `urgent` test case (if Jambonz is configured); pressing 1 ACKs the case
 - [ ] Dispatcher page loads at `https://panel.emfcamp.org/dispatcher`
 - [ ] `docker compose ps` shows all containers as healthy (no restart loops)
+- [ ] `curl https://report.emfcamp.org/health` shows `"safe_browsing": "configured"` (if key is set) and `"clamav": "ok"` (if ClamAV profile is active)
 
 ---
 
