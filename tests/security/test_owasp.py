@@ -421,7 +421,7 @@ def test_shared_lib_has_uv_lock() -> None:
 
 @pytest.mark.asyncio
 async def test_status_transition_creates_case_history_row() -> None:
-    """PATCH /api/cases/{id}/status must produce a CaseHistory row."""
+    """PATCH /api/v1/cases/{id}/status must produce a CaseHistory row."""
     os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     os.environ.setdefault("SECRET_KEY", "test-secret-key-for-owasp-tests-000")
 
@@ -469,7 +469,7 @@ async def test_status_transition_creates_case_history_row() -> None:
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         resp = await client.patch(
-            f"/api/cases/{case_id}/status",
+            f"/api/v1/cases/{case_id}/status",
             json={"status": "assigned"},
         )
 
