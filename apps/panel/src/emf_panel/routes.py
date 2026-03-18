@@ -298,6 +298,60 @@ class AssigneeUpdate(BaseModel):
     assignee: str | None
 
 
+@router.get("/api/cases")
+async def list_cases(
+    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    status_filter: Annotated[list[str], Query(alias="status")] = [],  # noqa: B006
+    urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],  # noqa: B006
+) -> list[dict[str, object]]:
+    stmt = select(Case).order_by(Case.created_at.desc())
+    if status_filter:
+        stmt = stmt.where(Case.status.in_(status_filter))
+    if urgency_filter:
+        stmt = stmt.where(Case.urgency.in_(urgency_filter))
+    result = await session.execute(stmt)
+    return [
+        {
+            "id": str(c.id),
+            "friendly_id": c.friendly_id,
+            "event_name": c.event_name,
+            "urgency": c.urgency,
+            "status": c.status,
+            "assignee": c.assignee,
+            "tags": c.tags,
+            "location_hint": c.location_hint,
+            "created_at": c.created_at.isoformat(),
+            "updated_at": c.updated_at.isoformat(),
+        }
+        for c in result.scalars().all()
+    ]
+
+
+@router.get("/api/cases/{case_id}")
+async def get_case(
+    case_id: uuid.UUID,
+    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, object]:
+    case = await session.get(Case, case_id)
+    if not case:
+        raise HTTPException(status_code=404)
+    return {
+        "id": str(case.id),
+        "friendly_id": case.friendly_id,
+        "event_name": case.event_name,
+        "urgency": case.urgency,
+        "status": case.status,
+        "assignee": case.assignee,
+        "tags": case.tags,
+        "location_hint": case.location_hint,
+        "form_data": case.form_data,
+        "created_at": case.created_at.isoformat(),
+        "updated_at": case.updated_at.isoformat(),
+    }
+
+
 @router.get("/api/assignees")
 async def list_assignees(
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],

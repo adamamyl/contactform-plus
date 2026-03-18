@@ -65,9 +65,10 @@ services:
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://team_member:${TEAM_MEMBER_DB_PASSWORD:-localdev}@postgres/emf_forms
-      OIDC_ISSUER: ${OIDC_ISSUER:-http://oidc.emf-forms.internal/default}
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://oidc.emf-forms.internal/default}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-panel}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-secret}
+      JWKS_URI: ${JWKS_URI:-http://mock-oidc:8080/default/jwks}
       CONFIG_PATH: /app/config.json
       BASE_URL: ${PANEL_BASE_URL:-https://panel.emf-forms.internal}
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
@@ -150,7 +151,7 @@ services:
       TTS_URL: http://tts:8003
       JAMBONZ_URL: http://jambonz-adapter:8004
       CONFIG_PATH: /app/config.json
-      OIDC_ISSUER: ${OIDC_ISSUER:-http://oidc.emf-forms.internal/default}
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://oidc.emf-forms.internal/default}
     volumes:
       - ../config.json:/app/config.json:ro
     networks:
@@ -159,7 +160,7 @@ services:
   mock-oidc:
     image: ghcr.io/navikt/mock-oauth2-server:2.1.10
     environment:
-      JSON_CONFIG: '{"interactiveLogin":true,"httpServer":"NettyWrapper","tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"client_id","match":"panel","claims":{"groups":["team_conduct"]}}]}]}'
+      JSON_CONFIG: '{"interactiveLogin":true,"httpServer":"NettyWrapper","tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"grant_type","match":"client_credentials","claims":{"sub":"api-client","groups":["team_conduct"]}}]}]}'
     profiles:
       - local
     networks:

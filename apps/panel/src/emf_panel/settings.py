@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     oidc_issuer: str = "http://localhost:9090"
     oidc_client_id: str = "panel"
     oidc_client_secret: str = "secret"  # noqa: S105
+    jwks_uri: str | None = None  # overrides oidc_issuer + /jwks for bearer token validation
     base_url: str = "http://localhost:8001"
     redis_url: str = "redis://redis:6379"
     dispatcher_session_ttl_hours: int = 8
