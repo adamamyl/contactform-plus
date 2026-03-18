@@ -464,7 +464,7 @@ async def internal_ack(
 # ---------------------------------------------------------------------------
 
 
-@api.get("/health")
+@api.get("/health", tags=["ops"])
 async def health(
     session: Annotated[AsyncSession, Depends(get_session)],
     alert_router: Annotated[AlertRouter, Depends(get_alert_router)],

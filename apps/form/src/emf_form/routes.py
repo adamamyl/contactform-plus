@@ -310,7 +310,7 @@ async def upload_attachment(
     return {"id": filename, "case_id": str(case_id)}
 
 
-@router.get("/health")
+@router.get("/health", tags=["ops"])
 async def health(
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],

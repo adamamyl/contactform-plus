@@ -38,6 +38,10 @@ http://oidc.emf-forms.internal {
 	}
 }
 
+swagger.emf-forms.internal {
+	reverse_proxy swagger:8080
+}
+
 map.emf-forms.internal {
 	header {
 		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
