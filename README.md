@@ -11,7 +11,7 @@ A multi-service system for managing conduct and accessibility reports at EMF Fes
 | `msg-router` | 8002 | Notification router (email, Signal, Mattermost/Slack) |
 | `tts` | 8003 | Text-to-speech synthesis (Piper) |
 | `jambonz-adapter` | 8004 | Jambonz telephony escalation adapter |
-| `swagger` | 8080 | API docs (local/swagger profile only) |
+| `swagger` | — | API docs aggregator (local/swagger profile; served via Caddy) |
 
 ## Architecture
 
@@ -54,7 +54,7 @@ urgency selector) regardless of whether the event window is active. Remove or se
 # Core stack (form, panel, router, tts, jambonz, postgres, caddy, signal-api, redis)
 docker compose -f infra/docker-compose.yml up -d
 
-# With local extras (mock OIDC + Swagger UI on :8080)
+# With local extras (mock OIDC + Swagger UI at swagger.emf-forms.internal)
 docker compose -f infra/docker-compose.yml --profile local up -d
 
 # Swagger UI only (if stack already running)
@@ -78,7 +78,9 @@ docker compose -f infra/docker-compose.yml down -v
 | [https://panel.emf-forms.internal/](https://panel.emf-forms.internal/) | Conduct team case management panel | always |
 | [https://oidc.emf-forms.internal/default](https://oidc.emf-forms.internal/default) | Mock OIDC provider (panel login) | `local` |
 | [https://map.emf-forms.internal/](https://map.emf-forms.internal/) | EMF site map (also embedded in form) | always |
-| [http://localhost:8080](http://localhost:8080) | Swagger UI / API docs | `local`, `swagger` |
+| [https://swagger.emf-forms.internal/](https://swagger.emf-forms.internal/) | API docs index | `local`, `swagger` |
+| [https://swagger.emf-forms.internal/all](https://swagger.emf-forms.internal/all) | All APIs — merged spec with service tags | `local`, `swagger` |
+| [https://swagger.emf-forms.internal/sysadmin](https://swagger.emf-forms.internal/sysadmin) | Sysadmin — health & metrics for all services | `local`, `swagger` |
 | [http://localhost:3000](http://localhost:3000) | Grafana dashboards | `monitoring` |
 
 > Requires dnsmasq mapping `*.emf-forms.internal → 127.0.0.1` and the Caddy local CA cert trusted in your system keychain. See memory notes for setup details.
@@ -215,6 +217,26 @@ cd /path/to/emf/map
 # make the changes manually to web/src/index.ts and web/src/marker.ts
 git diff web/src/ > /path/to/emf-conduct/map/embed-readonly-view-postmessage.patch
 ```
+
+---
+
+## API documentation (Swagger)
+
+Available under the `local` or `swagger` Docker Compose profile at `https://swagger.emf-forms.internal`.
+
+| Path | Contents |
+|------|----------|
+| `/` | Index — links to all views |
+| `/all` | Single merged Swagger UI; all five services as collapsible tag groups |
+| `/sysadmin` | Merged view of every `/health` and `/metrics` endpoint across all services |
+| `/form` | Report Form API only |
+| `/team` | Panel API only |
+| `/dispatch` | Message Router + Jambonz Adapter (internal services) |
+| `/tts` | Text-to-Speech API only |
+
+**Auth:** the Panel spec exposes an OAuth2 authorization-code flow pointing at the OIDC issuer; the Router and Jambonz specs expose an `X-Internal-Secret` API-key scheme. Click **Authorize** in Swagger UI to set credentials before using "Try it out".
+
+**Adding future ops endpoints to `/sysadmin`:** tag the route with `tags=["ops"]` and it appears automatically on next swagger restart. The `/metrics` endpoint (added by prometheus-fastapi-instrumentator) is always included regardless of tags.
 
 ---
 
