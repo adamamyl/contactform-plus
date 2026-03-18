@@ -10,7 +10,7 @@ Usage:
     uv run scripts/generate_bruno_collection.py
 
 The script reads docs/swagger-spec.json (Postman v2.1 format) and writes the
-complete Bruno collection to ~/projects/bruno/emf/EMF Conduct - Total Restoration/.
+complete Bruno collection to ~/projects/bruno/emf/conduct-api/.
 
 Environments generated: Local, Staging, Production.
 All URLs and secrets use {{variables}} so you can switch targets with a single
@@ -31,7 +31,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent
 SPEC_FILE = REPO_ROOT / "docs" / "swagger-spec.json"
-COLLECTION_DIR = Path.home() / "projects/bruno/emf/EMF Conduct - Total Restoration"
+COLLECTION_DIR = Path.home() / "projects/bruno/emf/conduct-api"
 
 # ---------------------------------------------------------------------------
 # YAML helpers — hand-rolled to avoid adding a dependency
