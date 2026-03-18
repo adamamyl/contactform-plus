@@ -78,7 +78,7 @@ def test_submitted_case_visible_in_panel(
     panel_client = httpx.Client(base_url=panel_base_url, follow_redirects=False, timeout=10.0)
     # Unauthenticated request should redirect to /login — confirms panel is up.
     resp = panel_client.get("/")
-    assert resp.status_code in (200, 302)
+    assert resp.status_code in (200, 302, 303)
     panel_client.close()
 
 

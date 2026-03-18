@@ -13,6 +13,8 @@ from emf_shared.phase import Phase, current_phase, events_for_form, is_active_ro
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +23,7 @@ from .schemas import CaseSubmission
 from .settings import Settings, get_settings
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 log = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="templates")
 
@@ -113,7 +116,18 @@ async def get_form(
     )
 
 
-@router.post("/api/submit", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/submit",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        # Our domain-level 422s return {"detail": "string"}, not ValidationError[].
+        # Override the auto-generated schema so schemathesis doesn't validate detail shape.
+        400: {"description": "Unsafe URL or invalid submission"},
+        422: {"content": {"application/json": {"schema": {}}}},
+        429: {"description": "Rate limit exceeded"},
+    },
+)
+@limiter.limit("15/10 seconds")
 async def submit_form(
     request: Request,
     submission: CaseSubmission,
@@ -163,8 +177,10 @@ async def submit_form(
     if x_idempotency_key:
         existing_token = await session.get(IdempotencyToken, x_idempotency_key)
         if existing_token is not None:
-            existing_case = await session.get(Case, existing_token.case_id)
-            friendly = existing_case.friendly_id if existing_case else x_idempotency_key[:8]
+            row = await session.execute(
+                select(Case.friendly_id).where(Case.id == existing_token.case_id)
+            )
+            friendly = row.scalar_one_or_none() or x_idempotency_key[:8]
             return JSONResponse(
                 content={"case_id": str(existing_token.case_id), "friendly_id": friendly},
                 status_code=status.HTTP_200_OK,
@@ -263,7 +279,15 @@ def _detect_image_ext(header: bytes) -> str | None:
     return None
 
 
-@router.post("/attachments", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/attachments",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"description": "Virus detected or malformed upload"},
+        413: {"description": "File too large"},
+        415: {"description": "Unsupported media type"},
+    },
+)
 async def upload_attachment(
     case_id: uuid.UUID,
     file: Annotated[UploadFile, File()],

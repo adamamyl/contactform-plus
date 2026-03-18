@@ -13,15 +13,12 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter
 from prometheus_fastapi_instrumentator import Instrumentator
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
 
-from .routes import router
+from .routes import limiter, router
 from .settings import get_settings
-
-limiter = Limiter(key_func=get_remote_address)
 
 cases_submitted_total = Counter(
     "emf_cases_submitted_total",
@@ -56,7 +53,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 def _make_serializable(obj: object) -> object:
     if isinstance(obj, dict):
         return {k: _make_serializable(v) for k, v in obj.items()}
-    if isinstance(obj, list):
+    if isinstance(obj, list | tuple):
         return [_make_serializable(v) for v in obj]
     if isinstance(obj, str | int | float | bool | type(None)):
         return obj

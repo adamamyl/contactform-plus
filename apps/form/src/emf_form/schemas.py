@@ -76,9 +76,9 @@ class ReporterDetails(BaseModel):
 
 
 class CaseSubmission(BaseModel):
-    event_name: str
+    event_name: str = Field(min_length=1)
     reporter: ReporterDetails
-    what_happened: str
+    what_happened: str = Field(min_length=10, max_length=10000)
     incident_date: date
     incident_time: time
     location: Location | None = None

@@ -79,6 +79,8 @@ def test_sql_injection_stored_safely(form_client: httpx.Client) -> None:
 
 @pytest.mark.e2e
 def test_rate_limit_triggers_429(form_client: httpx.Client) -> None:
+    import time
+
     triggered = False
     for i in range(15):
         resp = form_client.post(
@@ -91,3 +93,5 @@ def test_rate_limit_triggers_429(form_client: httpx.Client) -> None:
             triggered = True
             break
     assert triggered, "Rate limit (429) was never triggered after 15 rapid requests"
+    # Wait for the rate-limit window to reset so subsequent browser tests aren't affected.
+    time.sleep(11)

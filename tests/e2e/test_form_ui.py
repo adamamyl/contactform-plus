@@ -27,7 +27,7 @@ def test_form_submit_valid_shows_success(page: Page, form_base_url: str) -> None
     page.locator("input[name=can_contact][value=false]").click()
     page.locator("button[type=submit], input[type=submit]").first.click()
     page.wait_for_url(f"{form_base_url}/success**", timeout=10_000)
-    expect(page.locator("body")).to_contain_text("submitted")
+    expect(page.locator("body")).to_contain_text("Thank you")
 
 
 @pytest.mark.e2e

@@ -80,9 +80,9 @@ CREATE TABLE IF NOT EXISTS forms.idempotency_tokens (
 -- ---------------------------------------------------------------------------
 
 -- form_user: insert cases + idempotency tokens only
--- SELECT (friendly_id) only — needed for friendly-ID collision check
+-- SELECT (id, friendly_id) — id needed for idempotency WHERE clause; friendly_id for collision check
 GRANT INSERT ON forms.cases TO form_user;
-GRANT SELECT (friendly_id) ON forms.cases TO form_user;
+GRANT SELECT (id, friendly_id) ON forms.cases TO form_user;
 GRANT INSERT, SELECT ON forms.idempotency_tokens TO form_user;
 
 -- router_user: non-PII case view + notification management
