@@ -86,6 +86,12 @@
   "mattermost_channel_id": "changeme",
   "mattermost_webhook": null,
   "slack_webhook": null,
+  "domains": {
+    "report": "report.emf-forms.internal",
+    "panel": "panel.emf-forms.internal",
+    "map": "map.emf-forms.internal",
+    "swagger": "swagger.emf-forms.internal"
+  },
   "attachment_backend": "local",
   "attachment_max_bytes": 10485760,
   "attachment_max_per_case": 3,

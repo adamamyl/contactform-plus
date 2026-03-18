@@ -150,6 +150,7 @@ services:
       TTS_URL: http://tts:8003
       JAMBONZ_URL: http://jambonz-adapter:8004
       CONFIG_PATH: /app/config.json
+      OIDC_ISSUER: ${OIDC_ISSUER:-http://oidc.emf-forms.internal/default}
     volumes:
       - ../config.json:/app/config.json:ro
     networks:
