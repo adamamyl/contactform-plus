@@ -153,7 +153,7 @@ async def serve_audio(token: str) -> FileResponse:
     return FileResponse(path, media_type="audio/wav")
 
 
-@app.get("/health")
+@app.get("/health", tags=["ops"])
 async def health() -> dict[str, object]:
     model_ok = Path(PIPER_MODEL).exists()
     piper_ok = Path(PIPER_BIN).exists()

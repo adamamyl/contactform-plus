@@ -189,7 +189,7 @@ async def proxy_audio(filename: str) -> Response:
 # ---------------------------------------------------------------------------
 
 
-@api.get("/health")
+@api.get("/health", tags=["ops"])
 async def health(
     adapter: Annotated[JambonzAdapter, Depends(get_adapter)],
 ) -> dict[str, object]:

@@ -30,7 +30,6 @@ _TITLES: dict[str, str] = {
     "jambonz": "Jambonz Adapter (internal)",
 }
 
-# Fallback server URLs for local dev when config.json has no domains section
 _LOCAL_SERVER_URLS: dict[str, str] = {
     "form": "https://report.emf-forms.internal",
     "team": "https://panel.emf-forms.internal",
@@ -55,6 +54,7 @@ def _load_public_urls() -> dict[str, str]:
 
 _PUBLIC_URLS: dict[str, str] = _load_public_urls()
 
+# Individual-service paths shown in the index
 _PATHS: dict[str, list[str]] = {
     "form": ["form"],
     "team": ["team"],
@@ -64,13 +64,15 @@ _PATHS: dict[str, list[str]] = {
 
 _specs: dict[str, dict[str, object]] = {}
 
+_HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "options", "head", "trace"})
+
 
 def _server_url(service: str) -> str | None:
     return _PUBLIC_URLS.get(service) or _LOCAL_SERVER_URLS.get(service)
 
 
 def _inject_spec_extras(spec: dict[str, object], service: str) -> dict[str, object]:
-    """Inject server URL and security schemes before serving a spec."""
+    """Inject server URL and security schemes before serving a single-service spec."""
     spec = dict(spec)
 
     url = _server_url(service)
@@ -110,6 +112,132 @@ def _inject_spec_extras(spec: dict[str, object], service: str) -> dict[str, obje
         spec["components"] = components
 
     return spec
+
+
+def _rewrite_refs(obj: object, prefix: str) -> object:
+    """Recursively rewrite #/components/schemas/X → #/components/schemas/Prefix_X."""
+    if isinstance(obj, dict):
+        return {
+            k: (
+                "#/components/schemas/" + prefix + "_" + v[len("#/components/schemas/") :]
+                if k == "$ref" and isinstance(v, str) and v.startswith("#/components/schemas/")
+                else _rewrite_refs(v, prefix)
+            )
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [_rewrite_refs(item, prefix) for item in obj]
+    return obj
+
+
+def _tag_operations(path_item: object, tag: str) -> object:
+    """Prepend tag to every HTTP operation in a path item."""
+    if not isinstance(path_item, dict):
+        return path_item
+    result: dict[str, object] = {}
+    for method, operation in path_item.items():
+        if method in _HTTP_METHODS and isinstance(operation, dict):
+            op = dict(operation)
+            tags_list: list[object] = list(op.get("tags") or [])
+            if tag not in tags_list:
+                tags_list.insert(0, tag)
+            op["tags"] = tags_list
+            result[method] = op
+        else:
+            result[method] = operation
+    return result
+
+
+def _path_has_tag(path_item: object, tag: str) -> bool:
+    if not isinstance(path_item, dict):
+        return False
+    return any(
+        isinstance(op, dict) and tag in (op.get("tags") or [])
+        for method, op in path_item.items()
+        if method in _HTTP_METHODS
+    )
+
+
+def _merge_specs(
+    service_keys: list[str],
+    title: str,
+    op_tag: str | None = None,
+) -> dict[str, object]:
+    """Merge multiple OpenAPI specs into one.
+
+    Each service's paths are prefixed with /{svc_key} to avoid collisions.
+    An operation-level servers override is added so "try it out" hits the
+    correct hostname. Schemas are namespaced with {Prefix}_ and $refs rewritten.
+
+    If op_tag is given, only paths where at least one operation carries that tag
+    are included; /metrics is always included as a fallback (added by
+    prometheus-fastapi-instrumentator without tags).
+    """
+    merged_paths: dict[str, object] = {}
+    merged_schemas: dict[str, object] = {}
+    merged_security_schemes: dict[str, object] = {}
+    tags: list[dict[str, str]] = []
+
+    for svc_key in service_keys:
+        if svc_key not in _specs:
+            continue
+
+        spec = _inject_spec_extras(_specs[svc_key], svc_key)
+        display = _TITLES.get(svc_key, svc_key)
+        prefix = svc_key.title().replace("-", "")
+
+        # Collect schemas, prefixed to avoid cross-service collisions
+        components_raw = spec.get("components")
+        if isinstance(components_raw, dict):
+            schemas_raw = components_raw.get("schemas")
+            if isinstance(schemas_raw, dict):
+                for name, defn in schemas_raw.items():
+                    merged_schemas[f"{prefix}_{name}"] = _rewrite_refs(defn, prefix)
+            sec_raw = components_raw.get("securitySchemes")
+            if isinstance(sec_raw, dict):
+                merged_security_schemes.update(
+                    {k: v for k, v in sec_raw.items() if isinstance(k, str)}
+                )
+
+        tags.append({"name": display})
+
+        paths_raw = spec.get("paths")
+        if not isinstance(paths_raw, dict):
+            continue
+
+        svc_url = _server_url(svc_key)
+
+        for path, path_item in paths_raw.items():
+            if op_tag and not _path_has_tag(path_item, op_tag) and path != "/metrics":
+                continue
+
+            merged_path = f"/{svc_key}{path}"
+            path_item = _rewrite_refs(path_item, prefix)
+            path_item = _tag_operations(path_item, display)
+
+            # Override server per path so "try it out" hits the right host
+            if svc_url and isinstance(path_item, dict):
+                path_item = dict(path_item)
+                path_item["servers"] = [{"url": svc_url}]
+
+            merged_paths[merged_path] = path_item
+
+    result: dict[str, object] = {
+        "openapi": "3.1.0",
+        "info": {"title": title, "version": "1.0"},
+        "tags": tags,
+        "paths": merged_paths,
+    }
+
+    components: dict[str, object] = {}
+    if merged_schemas:
+        components["schemas"] = merged_schemas
+    if merged_security_schemes:
+        components["securitySchemes"] = merged_security_schemes
+    if components:
+        result["components"] = components
+
+    return result
 
 
 async def _fetch_spec(name: str, url: str) -> None:
@@ -156,7 +284,10 @@ function run() {
     }
     arr = qp.split('&');
     arr.forEach(function(v,i,a){a[i]='"'+v.replace('=','":"')+'"';});
-    qp = qp ? JSON.parse('{'+arr.join()+'}',function(k,v){return k?decodeURIComponent(v):v;}) : {};
+    qp = qp ? JSON.parse(
+        '{'+arr.join()+'}',
+        function(k,v){return k?decodeURIComponent(v):v;}
+    ) : {};
     var isValid = sentState === qp.state;
     var flow = oauth2.auth.schema.get('flow');
     var codeFlows = ['accessCode','authorizationCode','authorization_code'];
@@ -249,7 +380,9 @@ async def oauth2_redirect() -> HTMLResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def index() -> HTMLResponse:
-    all_link = '<li><a href="/all"><code>/all</code></a> — all services</li>'
+    special_links = """
+    <li><a href="/all"><code>/all</code></a> — all APIs merged</li>
+    <li><a href="/sysadmin"><code>/sysadmin</code></a> — health &amp; metrics</li>"""
     path_links = "\n".join(
         f'<li><a href="/{path}"><code>/{path}</code></a>'
         f" — {', '.join(_TITLES.get(k, k) for k in svc_keys)}</li>"
@@ -266,7 +399,7 @@ async def index() -> HTMLResponse:
 <body>
   <h1>EMF API Documentation</h1>
   <ul>
-    {all_link}
+    {special_links}
     {path_links}
   </ul>
   <p><small>Specs fetched from running services. Reload to refresh.</small></p>
@@ -282,15 +415,28 @@ async def get_spec(service: str) -> JSONResponse:
     return JSONResponse(_inject_spec_extras(_specs[service], service))
 
 
+@app.get("/api/specs-merged/all")
+async def get_merged_spec() -> JSONResponse:
+    return JSONResponse(_merge_specs(list(_specs.keys()), "EMF Conduct — All APIs"))
+
+
+@app.get("/api/specs-merged/sysadmin")
+async def get_sysadmin_spec() -> JSONResponse:
+    return JSONResponse(_merge_specs(list(_specs.keys()), "EMF Conduct — Sysadmin", op_tag="ops"))
+
+
 @app.get("/all", response_class=HTMLResponse)
 async def swagger_all() -> HTMLResponse:
     if not _specs:
         return HTMLResponse("<p>No specs available yet — try reloading.</p>")
-    sections = [
-        {"service": name, "title": _TITLES.get(name, name), "url": f"/api/specs/{name}"}
-        for name in _specs
-    ]
-    return _swagger_sections_page("EMF — All APIs", sections)
+    return _swagger_page("EMF — All APIs", "/api/specs-merged/all")
+
+
+@app.get("/sysadmin", response_class=HTMLResponse)
+async def swagger_sysadmin() -> HTMLResponse:
+    if not _specs:
+        return HTMLResponse("<p>No specs available yet — try reloading.</p>")
+    return _swagger_page("EMF — Sysadmin", "/api/specs-merged/sysadmin")
 
 
 @app.get("/{path}", response_class=HTMLResponse)

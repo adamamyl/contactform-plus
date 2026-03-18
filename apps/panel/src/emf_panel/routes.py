@@ -692,7 +692,7 @@ async def serve_attachment(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/health")
+@router.get("/health", tags=["ops"])
 async def health(session: Annotated[AsyncSession, Depends(get_session)]) -> dict[str, object]:
     try:
         await session.execute(text("SELECT 1"))
