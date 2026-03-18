@@ -80,6 +80,20 @@ STATUS_EMOJI: dict[str, str] = {
 }
 
 
+def _case_links(case_id: uuid.UUID) -> dict[str, str]:
+    base = f"/api/v1/cases/{case_id}"
+    return {
+        "self": base,
+        "history": f"{base}/history",
+        "status": f"{base}/status",
+        "urgency": f"{base}/urgency",
+        "assignee": f"{base}/assignee",
+        "tags": f"{base}/tags",
+        "ack": f"{base}/ack",
+        "calls": f"{base}/calls",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
@@ -96,8 +110,6 @@ async def auth_callback(request: Request) -> RedirectResponse:
     try:
         token = await oauth.emf.authorize_access_token(request)
     except MismatchingStateError:
-        # State already consumed (double request / browser retry).
-        # If the first hit already stored the user, just continue.
         if request.session.get("user"):
             return RedirectResponse(url="/", status_code=302)
         return RedirectResponse(url="/login", status_code=302)
@@ -113,7 +125,7 @@ async def logout(request: Request) -> RedirectResponse:
 
 
 # ---------------------------------------------------------------------------
-# Panel routes — conduct team
+# Panel HTML routes — conduct team
 # ---------------------------------------------------------------------------
 
 
@@ -255,11 +267,101 @@ async def case_detail(
     )
 
 
+# ---------------------------------------------------------------------------
+# API v1 — cases
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/v1/cases")
+async def api_list_cases(
+    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    status_filter: Annotated[list[str], Query(alias="status")] = [],  # noqa: B006
+    urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],  # noqa: B006
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict[str, object]:
+    stmt = select(Case).order_by(Case.created_at.desc())
+    if status_filter:
+        stmt = stmt.where(Case.status.in_(status_filter))
+    if urgency_filter:
+        stmt = stmt.where(Case.urgency.in_(urgency_filter))
+    total_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
+    total: int = total_result.scalar_one()
+    result = await session.execute(stmt.limit(limit).offset(offset))
+    items = [
+        {
+            "id": str(c.id),
+            "friendly_id": c.friendly_id,
+            "event_name": c.event_name,
+            "urgency": c.urgency,
+            "status": c.status,
+            "assignee": c.assignee,
+            "tags": c.tags,
+            "location_hint": c.location_hint,
+            "created_at": c.created_at.isoformat(),
+            "updated_at": c.updated_at.isoformat(),
+            "_links": _case_links(c.id),
+        }
+        for c in result.scalars().all()
+    ]
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+@router.get("/api/v1/cases/{case_id}")
+async def api_get_case(
+    case_id: uuid.UUID,
+    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, object]:
+    case = await session.get(Case, case_id)
+    if not case:
+        raise HTTPException(status_code=404)
+    return {
+        "id": str(case.id),
+        "friendly_id": case.friendly_id,
+        "event_name": case.event_name,
+        "urgency": case.urgency,
+        "status": case.status,
+        "assignee": case.assignee,
+        "tags": case.tags,
+        "location_hint": case.location_hint,
+        "form_data": case.form_data,
+        "created_at": case.created_at.isoformat(),
+        "updated_at": case.updated_at.isoformat(),
+        "_links": _case_links(case_id),
+    }
+
+
+@router.get("/api/v1/cases/{case_id}/history")
+async def api_case_history(
+    case_id: uuid.UUID,
+    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[dict[str, object]]:
+    result = await session.execute(
+        select(CaseHistory)
+        .where(CaseHistory.case_id == case_id)
+        .order_by(CaseHistory.changed_at.asc())
+    )
+    return [
+        {
+            "id": h.id,
+            "changed_by": h.changed_by,
+            "field": h.field,
+            "old_value": h.old_value,
+            "new_value": h.new_value,
+            "changed_at": h.changed_at.isoformat(),
+        }
+        for h in result.scalars().all()
+    ]
+
+
 class StatusTransition(BaseModel):
     status: str
 
 
-@router.patch("/api/cases/{case_id}/status")
+@router.patch("/api/v1/cases/{case_id}/status")
 async def transition_status(
     case_id: uuid.UUID,
     body: StatusTransition,
@@ -298,70 +400,7 @@ class AssigneeUpdate(BaseModel):
     assignee: str | None
 
 
-@router.get("/api/cases")
-async def list_cases(
-    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
-    session: Annotated[AsyncSession, Depends(get_session)],
-    status_filter: Annotated[list[str], Query(alias="status")] = [],  # noqa: B006
-    urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],  # noqa: B006
-) -> list[dict[str, object]]:
-    stmt = select(Case).order_by(Case.created_at.desc())
-    if status_filter:
-        stmt = stmt.where(Case.status.in_(status_filter))
-    if urgency_filter:
-        stmt = stmt.where(Case.urgency.in_(urgency_filter))
-    result = await session.execute(stmt)
-    return [
-        {
-            "id": str(c.id),
-            "friendly_id": c.friendly_id,
-            "event_name": c.event_name,
-            "urgency": c.urgency,
-            "status": c.status,
-            "assignee": c.assignee,
-            "tags": c.tags,
-            "location_hint": c.location_hint,
-            "created_at": c.created_at.isoformat(),
-            "updated_at": c.updated_at.isoformat(),
-        }
-        for c in result.scalars().all()
-    ]
-
-
-@router.get("/api/cases/{case_id}")
-async def get_case(
-    case_id: uuid.UUID,
-    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> dict[str, object]:
-    case = await session.get(Case, case_id)
-    if not case:
-        raise HTTPException(status_code=404)
-    return {
-        "id": str(case.id),
-        "friendly_id": case.friendly_id,
-        "event_name": case.event_name,
-        "urgency": case.urgency,
-        "status": case.status,
-        "assignee": case.assignee,
-        "tags": case.tags,
-        "location_hint": case.location_hint,
-        "form_data": case.form_data,
-        "created_at": case.created_at.isoformat(),
-        "updated_at": case.updated_at.isoformat(),
-    }
-
-
-@router.get("/api/assignees")
-async def list_assignees(
-    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
-    redis: Annotated[aioredis.Redis, Depends(get_redis)],
-) -> list[str]:
-    members: set[str] = await redis.smembers(_ASSIGNEES_KEY)  # type: ignore[misc]
-    return sorted(members)
-
-
-@router.patch("/api/cases/{case_id}/assignee")
+@router.patch("/api/v1/cases/{case_id}/assignee")
 async def update_assignee(
     case_id: uuid.UUID,
     body: AssigneeUpdate,
@@ -397,7 +436,7 @@ class TagsUpdate(BaseModel):
     tags: list[str]
 
 
-@router.patch("/api/cases/{case_id}/tags")
+@router.patch("/api/v1/cases/{case_id}/tags")
 async def update_tags(
     case_id: uuid.UUID,
     body: TagsUpdate,
@@ -430,7 +469,7 @@ class UrgencyUpdate(BaseModel):
     urgency: str
 
 
-@router.patch("/api/cases/{case_id}/urgency")
+@router.patch("/api/v1/cases/{case_id}/urgency")
 async def update_urgency(
     case_id: uuid.UUID,
     body: UrgencyUpdate,
@@ -466,7 +505,21 @@ async def update_urgency(
     return {"urgency": body.urgency}
 
 
-@router.get("/api/tags")
+# ---------------------------------------------------------------------------
+# API v1 — lookup lists
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/v1/assignees")
+async def list_assignees(
+    _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],
+) -> list[str]:
+    members: set[str] = await redis.smembers(_ASSIGNEES_KEY)  # type: ignore[misc]
+    return sorted(members)
+
+
+@router.get("/api/v1/tags")
 async def list_tags(
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -475,6 +528,11 @@ async def list_tags(
         text("SELECT DISTINCT jsonb_array_elements_text(tags) AS tag FROM forms.cases ORDER BY tag")
     )
     return [row[0] for row in result.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# API v1 — case actions
+# ---------------------------------------------------------------------------
 
 
 async def _notify_router_ack(case_id: uuid.UUID, acked_by: str, settings: Settings) -> None:
@@ -494,7 +552,7 @@ async def _notify_router_ack(case_id: uuid.UUID, acked_by: str, settings: Settin
         log.warning("Failed to notify router of ACK for case %s", case_id)
 
 
-@router.post("/api/cases/{case_id}/ack")
+@router.post("/api/v1/cases/{case_id}/ack")
 async def admin_ack(
     case_id: uuid.UUID,
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
@@ -518,7 +576,7 @@ async def admin_ack(
     return {"ok": True}
 
 
-@router.post("/api/cases/{case_id}/trigger-call")
+@router.post("/api/v1/cases/{case_id}/calls")
 async def admin_trigger_call(
     case_id: uuid.UUID,
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],
@@ -532,11 +590,16 @@ async def admin_trigger_call(
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# API v1 — dispatcher sessions
+# ---------------------------------------------------------------------------
+
+
 class DispatcherSessionRequest(BaseModel):
     send_to: str | None = None
 
 
-@router.post("/api/dispatcher-session")
+@router.post("/api/v1/dispatcher/sessions")
 async def create_dispatcher_session(
     body: DispatcherSessionRequest,
     request: Request,
@@ -549,13 +612,17 @@ async def create_dispatcher_session(
     return {"url": url, "expires_in_hours": ttl}
 
 
-@router.post("/api/dispatcher-session/{jti}/revoke")
+@router.delete("/api/v1/dispatcher/sessions/{jti}", status_code=204)
 async def revoke_dispatcher_session(
     jti: str,
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],
-) -> dict[str, bool]:
+) -> None:
     revoke_token(jti)
-    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Dispatcher HTML + API v1 dispatcher routes — token-authenticated
+# ---------------------------------------------------------------------------
 
 
 @router.get("/dispatcher-share", response_class=HTMLResponse)
@@ -569,11 +636,6 @@ async def dispatcher_share_page(
         "dispatcher_share.html",
         {"request": request, "user": user, "settings": settings},
     )
-
-
-# ---------------------------------------------------------------------------
-# Dispatcher routes — token-authenticated
-# ---------------------------------------------------------------------------
 
 
 @router.get("/dispatcher", response_class=HTMLResponse)
@@ -631,7 +693,7 @@ async def dispatcher_view(
     return response
 
 
-@router.get("/dispatcher/cases")
+@router.get("/api/v1/dispatcher/cases")
 async def dispatcher_cases(
     token: str = Query(...),
     show_all: bool = Query(False, alias="all"),
@@ -657,6 +719,7 @@ async def dispatcher_cases(
             "location_hint": c.location_hint,
             "assignee": c.assignee,
             "created_at": c.created_at.isoformat(),
+            "_links": _case_links(c.id),
         }
         for c in cases
     ]
@@ -666,7 +729,7 @@ class AckBody(BaseModel):
     acked_by: str = "dispatcher"
 
 
-@router.post("/api/dispatcher/ack/{case_id}")
+@router.post("/api/v1/dispatcher/cases/{case_id}/ack")
 async def dispatcher_ack(
     case_id: uuid.UUID,
     body: AckBody,
@@ -690,7 +753,7 @@ async def dispatcher_ack(
     return {"ok": True}
 
 
-@router.post("/api/dispatcher/trigger/{case_id}")
+@router.post("/api/v1/dispatcher/cases/{case_id}/calls")
 async def dispatcher_trigger(
     case_id: uuid.UUID,
     token: str = Query(...),

@@ -1,0 +1,492 @@
+{
+  "info": {
+    "name": "EMF Conduct System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "EMF Conduct incident management API. All panel endpoints require a bearer token obtained from the Auth request. Dispatcher endpoints use a separate short-lived JWT passed as ?token=."
+  },
+  "variable": [
+    { "key": "panel_url",  "value": "https://panel.emf-forms.internal" },
+    { "key": "router_url", "value": "https://router.emf-forms.internal" },
+    { "key": "report_url", "value": "https://report.emf-forms.internal" },
+    { "key": "oidc_url",   "value": "https://oidc.emf-forms.internal" },
+    { "key": "access_token", "value": "" },
+    { "key": "dispatcher_token", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Get Bearer Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.environment.set('access_token', pm.response.json().access_token);"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "panel", "type": "string" },
+                { "key": "password", "value": "{{oidc_client_secret}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "client_credentials" },
+                { "key": "scope",      "value": "openid email profile groups" }
+              ]
+            },
+            "url": {
+              "raw": "{{oidc_url}}/default/token",
+              "host": ["{{oidc_url}}"],
+              "path": ["default", "token"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Panel — Cases",
+      "item": [
+        {
+          "name": "List Cases",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases?limit=50&offset=0",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases"],
+              "query": [
+                { "key": "limit",   "value": "50",  "description": "Max items (1-200, default 50)" },
+                { "key": "offset",  "value": "0",   "description": "Pagination offset" },
+                { "key": "status",  "value": "",    "description": "Filter: new|assigned|in_progress|action_needed|decision_needed|closed", "disabled": true },
+                { "key": "urgency", "value": "",    "description": "Filter: low|medium|high|urgent", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Case",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases/:case_id",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases", ":case_id"],
+              "variable": [{ "key": "case_id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get Case History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases/:case_id/history",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases", ":case_id", "history"],
+              "variable": [{ "key": "case_id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Update Status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\": \"assigned\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases/:case_id/status",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases", ":case_id", "status"],
+              "variable": [{ "key": "case_id", "value": "" }]
+            },
+            "description": "Valid transitions: new→assigned; assigned→in_progress|new|closed; in_progress→action_needed|decision_needed|closed; action_needed→in_progress|decision_needed|closed; decision_needed→closed|in_progress"
+          }
+        },
+        {
+          "name": "Update Urgency",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"urgency\": \"high\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases/:case_id/urgency",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases", ":case_id", "urgency"],
+              "variable": [{ "key": "case_id", "value": "" }]
+            },
+            "description": "Urgency levels: low | medium | high | urgent"
+          }
+        },
+        {
+          "name": "Update Assignee",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"assignee\": \"alice\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases/:case_id/assignee",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases", ":case_id", "assignee"],
+              "variable": [{ "key": "case_id", "value": "" }]
+            },
+            "description": "Set to a username string, or null to unassign"
+          }
+        },
+        {
+          "name": "Update Tags",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"tags\": [\"noise\", \"welfare\"]}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases/:case_id/tags",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases", ":case_id", "tags"],
+              "variable": [{ "key": "case_id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Acknowledge Case",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases/:case_id/ack",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases", ":case_id", "ack"],
+              "variable": [{ "key": "case_id", "value": "" }]
+            },
+            "description": "Marks all notifications for this case as acked and sets assignee to the authenticated user"
+          }
+        },
+        {
+          "name": "Trigger Call",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases/:case_id/calls",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases", ":case_id", "calls"],
+              "variable": [{ "key": "case_id", "value": "" }]
+            },
+            "description": "Re-triggers the notification dispatch pipeline via pg_notify"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Panel — Lookup Lists",
+      "item": [
+        {
+          "name": "List Assignees",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/assignees",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "assignees"]
+            }
+          }
+        },
+        {
+          "name": "List Tags",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/tags",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "tags"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Panel — Dispatcher Sessions",
+      "item": [
+        {
+          "name": "Create Dispatcher Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var url = pm.response.json().url;",
+                  "var token = url.split('token=')[1];",
+                  "if (token) pm.environment.set('dispatcher_token', token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"send_to\": null}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{panel_url}}/api/v1/dispatcher/sessions",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "dispatcher", "sessions"]
+            },
+            "description": "Creates a time-limited dispatcher JWT. Returns URL with embedded token. Post-request script stores the token in dispatcher_token."
+          }
+        },
+        {
+          "name": "Revoke Dispatcher Session",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/dispatcher/sessions/:jti",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "dispatcher", "sessions", ":jti"],
+              "variable": [{ "key": "jti", "value": "", "description": "JWT ID from dispatcher token payload" }]
+            },
+            "description": "Returns 204 No Content on success"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Panel — Dispatcher (token auth)",
+      "description": "These endpoints authenticate via ?token= (dispatcher JWT), not the bearer token. Disable collection-level auth for these.",
+      "item": [
+        {
+          "name": "List Dispatcher Cases",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/dispatcher/cases?token={{dispatcher_token}}",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "dispatcher", "cases"],
+              "query": [
+                { "key": "token", "value": "{{dispatcher_token}}" },
+                { "key": "all",   "value": "false", "description": "Include assigned cases", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Dispatcher Acknowledge Case",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"acked_by\": \"dispatcher\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{panel_url}}/api/v1/dispatcher/cases/:case_id/ack?token={{dispatcher_token}}",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "dispatcher", "cases", ":case_id", "ack"],
+              "query": [{ "key": "token", "value": "{{dispatcher_token}}" }],
+              "variable": [{ "key": "case_id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Dispatcher Trigger Call",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/dispatcher/cases/:case_id/calls?token={{dispatcher_token}}",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "dispatcher", "cases", ":case_id", "calls"],
+              "query": [{ "key": "token", "value": "{{dispatcher_token}}" }],
+              "variable": [{ "key": "case_id", "value": "" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Report Form",
+      "item": [
+        {
+          "name": "Submit Incident Report",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}", "description": "Optional: prevents duplicate submissions on retry" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_name\": \"EMF 2026\",\n  \"what_happened\": \"A brief description of the incident\",\n  \"urgency\": \"medium\",\n  \"phase\": \"weekend\",\n  \"can_contact\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{report_url}}/api/submit",
+              "host": ["{{report_url}}"],
+              "path": ["api", "submit"]
+            },
+            "description": "Returns 201 with {friendly_id} on success. 200 if idempotency key matches a prior submission."
+          }
+        },
+        {
+          "name": "Form Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{report_url}}/health",
+              "host": ["{{report_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Message Router",
+      "item": [
+        {
+          "name": "Router Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{router_url}}/health",
+              "host": ["{{router_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Signal Webhook",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{router_url}}/webhook/signal",
+              "host": ["{{router_url}}"],
+              "path": ["webhook", "signal"]
+            },
+            "description": "Called by Signal CLI on incoming reactions. Emoji 🤙 = ACK."
+          }
+        },
+        {
+          "name": "Mattermost Action Webhook",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Webhook-Secret", "value": "{{mattermost_webhook_secret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"context\": {\"action\": \"ack\", \"case_id\": \"\"}}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{router_url}}/webhook/mattermost/action",
+              "host": ["{{router_url}}"],
+              "path": ["webhook", "mattermost", "action"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health Checks",
+      "item": [
+        {
+          "name": "Panel Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/health",
+              "host": ["{{panel_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Router Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{router_url}}/health",
+              "host": ["{{router_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Form Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{report_url}}/health",
+              "host": ["{{report_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

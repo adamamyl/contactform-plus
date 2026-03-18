@@ -26,7 +26,7 @@ def test_panel_dispatcher_unauthenticated_returns_401(panel_client: httpx.Client
 
     fake_notif_id = str(uuid.uuid4())
     resp = panel_client.post(
-        f"/api/dispatcher/ack/{fake_notif_id}",
+        f"/api/v1/dispatcher/cases/{fake_notif_id}/ack",
         json={"acked_by": "e2e-test"},
         headers={"Authorization": "Bearer invalid-token"},
     )

@@ -123,7 +123,7 @@ def test_dispatcher_ack_updates_db(
         pytest.skip("E2E_DISPATCHER_TOKEN not set")
 
     resp = httpx.post(
-        f"{panel_base_url}/api/dispatcher/ack/{case_id}",
+        f"{panel_base_url}/api/v1/dispatcher/cases/{case_id}/ack",
         params={"token": token_env},
         json={"acked_by": "e2e_test"},
         timeout=10.0,
