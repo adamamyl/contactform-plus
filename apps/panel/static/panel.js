@@ -29,7 +29,7 @@
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       var btn = form.querySelector("button[type=submit]");
-      jsonPatch("/api/cases/" + form.dataset.caseId + "/" + endpoint, getBody(form))
+      jsonPatch("/api/v1/cases/" + form.dataset.caseId + "/" + endpoint, getBody(form))
         .then(function (r) { flashBtn(btn, r.ok ? successMsg : "Error", r.ok); })
         .catch(function () { flashBtn(btn, "Error", false); });
     });
@@ -44,7 +44,7 @@
     e.preventDefault();
     var btn = form.querySelector("button[type=submit]");
     jsonPatch(
-      "/api/cases/" + form.dataset.caseId + "/status",
+      "/api/v1/cases/" + form.dataset.caseId + "/status",
       { status: form.querySelector("input[name=status]").value }
     )
       .then(function (r) { flashBtn(btn, r.ok ? "Done" : "Error", r.ok); })
@@ -78,7 +78,7 @@
     genBtn.addEventListener("click", function () {
       if (errEl) errEl.hidden = true;
       var sendTo = (document.getElementById("send_to") || {}).value || null;
-      fetch("/api/dispatcher-session", {
+      fetch("/api/v1/dispatcher/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ send_to: sendTo || null }),
@@ -122,13 +122,13 @@
       var action = btn.dataset.action;
       btn.disabled = true;
       if (action === "ack") {
-        fetch("/api/dispatcher/ack/" + caseId + "?token=" + token, {
+        fetch("/api/v1/dispatcher/cases/" + caseId + "/ack?token=" + token, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: '{"acked_by":"dispatcher"}',
         }).then(function () { btn.textContent = "✅"; });
       } else if (action === "trigger") {
-        fetch("/api/dispatcher/trigger/" + caseId + "?token=" + token, {
+        fetch("/api/v1/dispatcher/cases/" + caseId + "/calls?token=" + token, {
           method: "POST",
         }).then(function () { btn.textContent = "📞 Sent"; });
       } else {
@@ -144,8 +144,8 @@
     var caseId = btn.dataset.caseId;
     var action = btn.dataset.action;
     var url = action === "admin-ack"
-      ? "/api/cases/" + caseId + "/ack"
-      : "/api/cases/" + caseId + "/trigger-call";
+      ? "/api/v1/cases/" + caseId + "/ack"
+      : "/api/v1/cases/" + caseId + "/calls";
     fetch(url, { method: "POST" })
       .then(function (r) {
         btn.textContent = r.ok ? (action === "admin-ack" ? "\u2705 ACKed" : "\u{1F4DE} Sent") : "Error";
@@ -172,7 +172,7 @@
   function initAssigneeList() {
     var dl = document.getElementById("assignee-options");
     if (!dl) return;
-    fetch("/api/assignees")
+    fetch("/api/v1/assignees")
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (names) {
         names.forEach(function (name) {
