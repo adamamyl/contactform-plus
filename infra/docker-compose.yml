@@ -134,8 +134,6 @@ services:
     build:
       context: ./swagger
       dockerfile: Dockerfile
-    ports:
-      - "${SWAGGER_PORT:-8080}:8080"
     profiles:
       - local
       - swagger
@@ -151,6 +149,9 @@ services:
       ROUTER_URL: http://msg-router:8002
       TTS_URL: http://tts:8003
       JAMBONZ_URL: http://jambonz-adapter:8004
+      CONFIG_PATH: /app/config.json
+    volumes:
+      - ../config.json:/app/config.json:ro
     networks:
       - contactform
 

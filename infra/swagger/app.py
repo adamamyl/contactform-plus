@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -19,6 +20,28 @@ _SERVICES: dict[str, str] = {
     "jambonz": os.environ.get("JAMBONZ_URL", "http://jambonz-adapter:8004"),
 }
 
+
+def _load_public_urls() -> dict[str, str]:
+    """Derive public-facing server URLs from config.json domains section.
+
+    These are injected into each OpenAPI spec so Swagger UI 'try it out'
+    hits the real public hostname rather than a Docker-internal address.
+    """
+    config_path = Path(os.environ.get("CONFIG_PATH", "config.json"))
+    try:
+        cfg = json.loads(config_path.read_text())
+        domains: dict[str, str | None] = cfg.get("domains") or {}
+    except Exception:
+        return {}
+    mapping = {
+        "form": domains.get("report"),
+        "team": domains.get("panel"),
+    }
+    return {svc: f"https://{host}" for svc, host in mapping.items() if host}
+
+
+_PUBLIC_URLS: dict[str, str] = _load_public_urls()
+
 _PATHS: dict[str, list[str]] = {
     "form": ["form"],
     "team": ["team"],
@@ -26,7 +49,7 @@ _PATHS: dict[str, list[str]] = {
     "text-to-speech": ["tts"],
 }
 
-_specs: dict[str, object] = {}
+_specs: dict[str, dict[str, object]] = {}
 
 
 async def _fetch_spec(name: str, url: str) -> None:
@@ -37,7 +60,9 @@ async def _fetch_spec(name: str, url: str) -> None:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(f"{url}/openapi.json")
                 if resp.status_code == 200:
-                    _specs[name] = resp.json()
+                    data = resp.json()
+                    if isinstance(data, dict):
+                        _specs[name] = data
                     return
         except Exception:
             pass
@@ -140,7 +165,10 @@ async def index() -> HTMLResponse:
 async def get_spec(service: str) -> JSONResponse:
     if service not in _specs:
         raise HTTPException(status_code=404, detail=f"Spec for '{service}' not available")
-    return JSONResponse(_specs[service])
+    spec = dict(_specs[service])
+    if service in _PUBLIC_URLS:
+        spec["servers"] = [{"url": _PUBLIC_URLS[service], "description": "Local"}]
+    return JSONResponse(spec)
 
 
 @app.get("/all", response_class=HTMLResponse)
