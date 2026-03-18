@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
+import httpx
 from emf_shared.db import get_session
 from emf_shared.friendly_id import generate_unique
 from emf_shared.phase import Phase, current_phase, events_for_form, is_active_routing_window
@@ -18,8 +21,70 @@ from .schemas import CaseSubmission
 from .settings import Settings, get_settings
 
 router = APIRouter()
-
+log = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="templates")
+
+_SAFE_BROWSING_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
+
+
+async def _scan_with_clamd(data: bytes) -> str | None:
+    try:
+        import pyclamd
+
+        cd = pyclamd.ClamdNetworkSocket(host="clamav", port=3310, timeout=10)
+        result = await asyncio.to_thread(cd.scan_stream, data)
+        if result:
+            return str(next(iter(result.values()))[1])
+        return None
+    except Exception:
+        log.warning("clamd not reachable — skipping AV scan")
+        return None
+
+
+async def _clamd_ping() -> bool:
+    try:
+        import pyclamd
+
+        cd = pyclamd.ClamdNetworkSocket(host="clamav", port=3310, timeout=3)
+        return bool(await asyncio.to_thread(cd.ping))
+    except Exception:
+        return False
+
+
+async def _check_urls_safe_browsing(urls: list[str], api_key: str) -> list[str]:
+    payload: dict[str, object] = {
+        "client": {"clientId": "emf-conduct", "clientVersion": "1.0"},
+        "threatInfo": {
+            "threatTypes": ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE"],
+            "platformTypes": ["ANY_PLATFORM"],
+            "threatEntryTypes": ["URL"],
+            "threatEntries": [{"url": u} for u in urls],
+        },
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(_SAFE_BROWSING_URL, params={"key": api_key}, json=payload)
+        if resp.status_code != 200:
+            log.warning("Safe Browsing API returned %s — skipping URL check", resp.status_code)
+            return []
+        raw = resp.json()
+        if not isinstance(raw, dict):
+            return []
+        matches = raw.get("matches", [])
+        if not isinstance(matches, list):
+            return []
+        unsafe: list[str] = []
+        for m in matches:
+            if isinstance(m, dict):
+                threat = m.get("threat")
+                if isinstance(threat, dict):
+                    url = threat.get("url")
+                    if isinstance(url, str):
+                        unsafe.append(url)
+        return unsafe
+    except Exception:
+        log.warning("Safe Browsing API request failed — skipping URL check", exc_info=True)
+        return []
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -103,6 +168,19 @@ async def submit_form(
             return JSONResponse(
                 content={"case_id": str(existing_token.case_id), "friendly_id": friendly},
                 status_code=status.HTTP_200_OK,
+            )
+
+    if submission.media_links and settings.google_safe_browsing_key:
+        unsafe = await _check_urls_safe_browsing(
+            submission.media_links, settings.google_safe_browsing_key
+        )
+        if unsafe:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "One or more links could not be verified as safe. "
+                    "Please remove them and resubmit."
+                ),
             )
 
     existing_ids_result = await session.execute(select(Case.friendly_id))
@@ -206,6 +284,13 @@ async def upload_attachment(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File too large (max {cfg.attachment_max_bytes // (1024 * 1024)} MB)",
         )
+    virus = await _scan_with_clamd(header + rest)
+    if virus:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Upload rejected by virus scanner: {virus}",
+        )
+
     case_dir = settings.attachment_dir / str(case_id)
     case_dir.mkdir(parents=True, exist_ok=True)
     existing = (
@@ -228,14 +313,23 @@ async def upload_attachment(
 @router.get("/health")
 async def health(
     session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, object]:
     try:
         await session.execute(text("SELECT 1"))
         db_status = "ok"
     except Exception:
         db_status = "error"
+
+    clamd_status = "ok" if await _clamd_ping() else "unavailable"
+    sb_status = "configured" if settings.google_safe_browsing_key else "not_configured"
+
     return {
         "status": "ok" if db_status == "ok" else "degraded",
-        "checks": {"database": db_status},
+        "checks": {
+            "database": db_status,
+            "clamav": clamd_status,
+            "safe_browsing": sb_status,
+        },
         "version": "0.1.0",
     }

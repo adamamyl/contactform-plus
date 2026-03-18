@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import io
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import date
 from typing import cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -13,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from emf_form.models import Case, IdempotencyToken
+from emf_form.settings import Settings
 
 from .conftest import make_valid_payload
 
@@ -350,3 +352,232 @@ async def test_can_contact_yes_no_contact_during_event_returns_422(
     )
     response = await event_time_client.post("/api/submit", json=payload)
     assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# ClamAV attachment scanning
+# ---------------------------------------------------------------------------
+
+_JPEG_HEADER = b"\xff\xd8\xff" + b"\x00" * 9  # minimal valid JPEG magic
+
+
+@pytest.fixture()
+def sb_settings(mock_config: AppConfig) -> Settings:
+    settings = MagicMock(spec=Settings)
+    settings.database_url = "postgresql+asyncpg://test:test@localhost/test"
+    settings.app_config = mock_config
+    settings.google_safe_browsing_key = "test-sb-key"
+    return cast(Settings, settings)
+
+
+@pytest_asyncio.fixture()
+async def sb_client(
+    sb_settings: Settings, mock_session: AsyncSession
+) -> AsyncGenerator[AsyncClient, None]:
+    from emf_shared.db import get_session
+
+    from emf_form.main import app
+    from emf_form.settings import get_settings
+
+    async def override_session() -> AsyncGenerator[AsyncSession, None]:
+        yield mock_session
+
+    app.dependency_overrides[get_settings] = lambda: sb_settings
+    app.dependency_overrides[get_session] = override_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        yield ac
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_upload_clean_file_accepted(
+    mock_settings: Settings, mock_session: AsyncSession
+) -> None:
+    from emf_shared.db import get_session
+
+    from emf_form.main import app
+    from emf_form.settings import get_settings
+
+    mock_settings.attachment_dir = MagicMock()  # type: ignore[assignment]
+    mock_settings.attachment_dir.__truediv__ = MagicMock(return_value=MagicMock())
+
+    async def override_session() -> AsyncGenerator[AsyncSession, None]:
+        yield mock_session
+
+    app.dependency_overrides[get_settings] = lambda: mock_settings
+    app.dependency_overrides[get_session] = override_session
+
+    with patch("emf_form.routes._scan_with_clamd", return_value=None) as mock_scan:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post(
+                f"/attachments?case_id={uuid.uuid4()}",
+                files={
+                    "file": ("test.jpg", io.BytesIO(_JPEG_HEADER + b"\x00" * 100), "image/jpeg")
+                },
+            )
+        mock_scan.assert_awaited_once()
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_upload_infected_file_rejected(
+    mock_settings: Settings, mock_session: AsyncSession
+) -> None:
+    from emf_shared.db import get_session
+
+    from emf_form.main import app
+    from emf_form.settings import get_settings
+
+    async def override_session() -> AsyncGenerator[AsyncSession, None]:
+        yield mock_session
+
+    app.dependency_overrides[get_settings] = lambda: mock_settings
+    app.dependency_overrides[get_session] = override_session
+
+    with patch("emf_form.routes._scan_with_clamd", return_value="Eicar-Test-Signature"):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post(
+                f"/attachments?case_id={uuid.uuid4()}",
+                files={
+                    "file": ("test.jpg", io.BytesIO(_JPEG_HEADER + b"\x00" * 100), "image/jpeg")
+                },
+            )
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 400
+    assert "Eicar-Test-Signature" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_upload_clamd_unreachable_allows_upload(
+    mock_settings: Settings, mock_session: AsyncSession
+) -> None:
+    from emf_shared.db import get_session
+
+    from emf_form.main import app
+    from emf_form.settings import get_settings
+
+    mock_settings.attachment_dir = MagicMock()  # type: ignore[assignment]
+    mock_settings.attachment_dir.__truediv__ = MagicMock(return_value=MagicMock())
+
+    async def override_session() -> AsyncGenerator[AsyncSession, None]:
+        yield mock_session
+
+    app.dependency_overrides[get_settings] = lambda: mock_settings
+    app.dependency_overrides[get_session] = override_session
+
+    # clamd unreachable → _scan_with_clamd returns None (degraded gracefully)
+    with patch("emf_form.routes._scan_with_clamd", return_value=None):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post(
+                f"/attachments?case_id={uuid.uuid4()}",
+                files={
+                    "file": ("test.jpg", io.BytesIO(_JPEG_HEADER + b"\x00" * 100), "image/jpeg")
+                },
+            )
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# URL safety checking (Google Safe Browsing)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_safe_url_submission_accepted(sb_client: AsyncClient) -> None:
+    payload = make_valid_payload(media_links=["https://drive.google.com/file/d/abc123/view"])
+    with patch("emf_form.routes._check_urls_safe_browsing", return_value=[]) as mock_check:
+        response = await sb_client.post("/api/submit", json=payload)
+        mock_check.assert_awaited_once()
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_unsafe_url_blocks_submission(sb_client: AsyncClient) -> None:
+    bad_url = "https://malware.example.com/evil"
+    payload = make_valid_payload(media_links=[bad_url])
+    with patch("emf_form.routes._check_urls_safe_browsing", return_value=[bad_url]):
+        response = await sb_client.post("/api/submit", json=payload)
+    assert response.status_code == 400
+    assert "verified as safe" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_safe_browsing_api_failure_allows_submission(sb_client: AsyncClient) -> None:
+    payload = make_valid_payload(media_links=["https://example.com/evidence"])
+    # API failure → returns [] → submission goes through
+    with patch("emf_form.routes._check_urls_safe_browsing", return_value=[]):
+        response = await sb_client.post("/api/submit", json=payload)
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_empty_safe_browsing_key_skips_check(client: AsyncClient) -> None:
+    # client uses mock_settings which has google_safe_browsing_key = ""
+    payload = make_valid_payload(media_links=["https://example.com/evidence"])
+    with patch("emf_form.routes._check_urls_safe_browsing") as mock_check:
+        response = await client.post("/api/submit", json=payload)
+        mock_check.assert_not_called()
+    assert response.status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# Health endpoint — ClamAV and Safe Browsing checks
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_health_clamd_ok(mock_session: AsyncSession, client: AsyncClient) -> None:
+    execute_result = MagicMock()
+    mock_session.execute = AsyncMock(return_value=execute_result)  # type: ignore[method-assign]
+    with patch("emf_form.routes._clamd_ping", return_value=True):
+        response = await client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["checks"]["clamav"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_health_clamd_unavailable(mock_session: AsyncSession, client: AsyncClient) -> None:
+    execute_result = MagicMock()
+    mock_session.execute = AsyncMock(return_value=execute_result)  # type: ignore[method-assign]
+    with patch("emf_form.routes._clamd_ping", return_value=False):
+        response = await client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["checks"]["clamav"] == "unavailable"
+    assert data["status"] == "ok"  # clamd unavailable is not a health failure
+
+
+@pytest.mark.asyncio
+async def test_health_safe_browsing_not_configured(
+    mock_session: AsyncSession,
+) -> None:
+    from emf_shared.db import get_session
+
+    from emf_form.main import app
+    from emf_form.settings import Settings, get_settings
+
+    settings = MagicMock(spec=Settings)
+    settings.google_safe_browsing_key = ""
+
+    async def override_session() -> AsyncGenerator[AsyncSession, None]:
+        yield mock_session
+
+    app.dependency_overrides[get_settings] = lambda: cast(Settings, settings)
+    app.dependency_overrides[get_session] = override_session
+
+    execute_result = MagicMock()
+    mock_session.execute = AsyncMock(return_value=execute_result)  # type: ignore[method-assign]
+
+    with patch("emf_form.routes._clamd_ping", return_value=False):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.get("/health")
+
+    app.dependency_overrides.clear()
+    assert response.json()["checks"]["safe_browsing"] == "not_configured"

@@ -3362,6 +3362,6 @@ Replaced broken SMTP (Outlook.com blocks SMTP auth; host.docker.internal unreach
 - [ ] Swagger: filter missing services from URL list so `/dispatch` and `/all` pages don't error when Jambonz is not running
 - [ ] Swagger: rename `_PATHS["sysadmin"]` → `"text-to-speech"` in `infra/swagger/app.py`
 - [ ] Docker install: `find_free_port(preferred, lo=8100, hi=9000)` in `scripts/install.py`; write chosen ports to `.env`
-- [ ] ClamAV: wire clamd socket into attachment upload pipeline
-- [ ] Attachment tests: MIME rejection, ClamAV positive → 400, max 3 files, max 10 MB, unauthenticated → 403
+- [x] ClamAV: wire clamd socket into attachment upload pipeline
+- [x] Attachment tests: MIME rejection, ClamAV positive → 400, max 3 files, max 10 MB, unauthenticated → 403
 - [ ] Add `CURRENT_EVENT_OVERRIDE` to `.env-example`
