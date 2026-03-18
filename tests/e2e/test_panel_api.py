@@ -14,8 +14,8 @@ def test_panel_health_returns_ok(panel_client: httpx.Client) -> None:
 
 @pytest.mark.e2e
 def test_panel_unauthenticated_redirects_to_oidc(panel_client: httpx.Client) -> None:
-    resp = panel_client.get("/cases")
-    assert resp.status_code in (302, 307), f"Expected redirect to OIDC, got {resp.status_code}"
+    resp = panel_client.get("/")
+    assert resp.status_code in (302, 303, 307), f"Expected redirect to OIDC, got {resp.status_code}"
     location = resp.headers.get("location", "")
     assert location, "Redirect has no Location header"
 

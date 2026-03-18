@@ -43,7 +43,7 @@ def _submit_case(page: Page, form_base_url: str, urgency: str = "urgent") -> dic
         page.locator("#incident_time").fill("12:00")
         if page.locator("#urgency").count():
             page.locator("#urgency").select_option(urgency)
-        page.locator("input[name=can_contact][value=true]").check()
+        page.locator("input[name=can_contact][value=false]").check()
         page.locator("#submit-btn").click()
         page.wait_for_url(f"{form_base_url}/success**", timeout=15_000)
     finally:
