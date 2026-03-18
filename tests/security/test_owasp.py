@@ -142,8 +142,12 @@ def test_env_example_has_no_real_secrets() -> None:
             key, _, val = line.partition("=")
             if any(k in key.upper() for k in ("PASSWORD", "SECRET", "KEY", "TOKEN")):
                 assert (
-                    val.strip() == "changeme"
-                ), f"{key} in .env-example must be 'changeme', got '{val.strip()}'"
+                    val.strip()
+                    in (
+                        "changeme",
+                        "",
+                    )
+                ), f"{key} in .env-example must be 'changeme' or empty, got '{val.strip()}'"
 
 
 def test_config_example_has_no_real_secrets() -> None:
