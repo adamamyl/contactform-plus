@@ -67,6 +67,7 @@ async def client(
 ) -> AsyncGenerator[AsyncClient, None]:
     from emf_shared.db import get_session
 
+    from emf_form.routes import limiter
     from emf_form.settings import get_settings
 
     async def override_session() -> AsyncGenerator[AsyncSession, None]:
@@ -74,6 +75,7 @@ async def client(
 
     app.dependency_overrides[get_settings] = lambda: mock_settings
     app.dependency_overrides[get_session] = override_session
+    limiter.reset()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac

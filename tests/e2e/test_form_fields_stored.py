@@ -86,7 +86,7 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
             "what_happened": _WHAT_HAPPENED,
             "incident_date": "2024-06-01",
             "incident_time": "14:00",
-            "can_contact": "true",
+            "can_contact": "false",
         },
     ),
     (
@@ -121,7 +121,7 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
             "incident_time": "20:00",
             "location_lat": 52.0413,
             "location_lon": -2.3779,
-            "can_contact": "true",
+            "can_contact": "false",
         },
     ),
     (
@@ -133,7 +133,7 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
             "location_text": "Workshop tent B",
             "location_lat": 52.0418,
             "location_lon": -2.3772,
-            "can_contact": "true",
+            "can_contact": "false",
         },
     ),
     (
@@ -143,7 +143,7 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
             "incident_date": "2024-06-01",
             "incident_time": "10:00",
             "urgency": "low",
-            "can_contact": "true",
+            "can_contact": "false",
         },
     ),
     (
@@ -153,7 +153,7 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
             "incident_date": "2024-06-01",
             "incident_time": "11:00",
             "urgency": "high",
-            "can_contact": "true",
+            "can_contact": "false",
         },
     ),
     (
@@ -163,7 +163,7 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
             "incident_date": "2024-06-01",
             "incident_time": "12:00",
             "urgency": "urgent",
-            "can_contact": "true",
+            "can_contact": "false",
         },
     ),
     (
@@ -262,7 +262,7 @@ def test_urgency_and_event_stored(
     page.locator("#incident_time").fill("12:00")
     page.locator("#event_name").select_option(event_name)
     _select(page, "#urgency", urgency)
-    page.locator("input[name=can_contact][value=true]").check()
+    page.locator("input[name=can_contact][value=false]").check()
 
     api_resp = _submit_and_capture(page, form_base_url)
     assert "case_id" in api_resp, f"No case_id in response: {api_resp}"
@@ -303,7 +303,10 @@ def test_form_fields_stored_in_db(
 
     # --- reporter section ---
     _fill_text(page, "#reporter_name", fields.get("reporter_name"))
-    _fill_text(page, "#reporter_pronouns", fields.get("reporter_pronouns"))
+    if fields.get("reporter_pronouns"):
+        # pronouns text input is hidden until "Other" is selected in the preset
+        page.locator("#reporter_pronouns_preset").select_option("__other__")
+        page.locator("#reporter_pronouns").fill(fields["reporter_pronouns"])
     _fill_text(page, "#reporter_email", fields.get("reporter_email"))
     _fill_text(page, "#reporter_phone", fields.get("reporter_phone"))
     _fill_text(page, "#reporter_camping_with", fields.get("reporter_camping_with"))

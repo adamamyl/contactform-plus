@@ -13,7 +13,7 @@ from emf_shared.config import AppConfig, EventConfig, SmtpConfig
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from emf_form.models import Case, IdempotencyToken
+from emf_form.models import IdempotencyToken
 from emf_form.settings import Settings
 
 from .conftest import make_valid_payload
@@ -49,17 +49,25 @@ async def test_idempotency_token_reuse_returns_200(
     existing_token = MagicMock(spec=IdempotencyToken)
     existing_token.case_id = existing_case_id
 
-    existing_case = MagicMock(spec=Case)
-    existing_case.friendly_id = existing_friendly_id
+    # session.get returns the token; session.execute used for SELECT (friendly_id)
+    mock_session.get = AsyncMock(return_value=existing_token)  # type: ignore[method-assign]
 
-    async def mock_get(model: type, key: object) -> object:
-        if model is IdempotencyToken:
-            return existing_token
-        if model is Case:
-            return existing_case
-        return None
+    friendly_id_result = MagicMock()
+    friendly_id_result.scalar_one_or_none.return_value = existing_friendly_id
+    existing_ids_result = MagicMock()
+    existing_ids_result.scalars.return_value.all.return_value = []
 
-    mock_session.get = AsyncMock(side_effect=mock_get)  # type: ignore[method-assign]
+    call_count: list[int] = [0]
+
+    async def mock_execute(stmt: object, *args: object, **kwargs: object) -> object:
+        call_count[0] += 1
+        # First execute is the SELECT (friendly_id) WHERE id = ... for idempotency
+        if call_count[0] == 1:
+            return friendly_id_result
+        # Second execute is SELECT (friendly_id) for collision check
+        return existing_ids_result
+
+    mock_session.execute = AsyncMock(side_effect=mock_execute)  # type: ignore[method-assign]
 
     payload = make_valid_payload()
     response = await client.post(
