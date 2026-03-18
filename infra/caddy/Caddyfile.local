@@ -32,7 +32,7 @@ tts.emf-forms.internal {
 	reverse_proxy tts:8003
 }
 
-http://oidc.emf-forms.internal {
+oidc.emf-forms.internal {
 	reverse_proxy mock-oidc:8080 {
 		header_up Host {http.request.host}
 	}
