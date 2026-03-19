@@ -3365,3 +3365,39 @@ Replaced broken SMTP (Outlook.com blocks SMTP auth; host.docker.internal unreach
 - [x] ClamAV: wire clamd socket into attachment upload pipeline
 - [x] Attachment tests: MIME rejection, ClamAV positive → 400, max 3 files, max 10 MB, unauthenticated → 403
 - [ ] Add `CURRENT_EVENT_OVERRIDE` to `.env-example`
+
+
+---
+
+### Phase X — Distributed Trace IDs & Structured Logging ✅
+
+**Design decision:** Full OpenTelemetry was evaluated and rejected for always-on use. Rationale: ~15 MB of deps per service, requires a running OTLP collector, Grafana Tempo needs 200–400 MB RAM — too expensive for a system that may be dormant 50 weeks/year. The `form → router` path uses `pg_notify` (not HTTP), so OTel can't automatically link those spans anyway. The actual requirement — being able to `grep` across container logs by trace ID — is fully met by a lightweight ContextVar + JSON logging approach with zero new infrastructure.
+
+#### X.1 — Shared library additions (`shared/src/emf_shared/`)
+- [x] `tracing.py`: `ContextVar[str]` for trace ID, `get_trace_id()`, `set_trace_id()`, `new_trace_id()`, `outbound_headers()`
+- [x] `middleware.py`: `TraceIDMiddleware(BaseHTTPMiddleware)` — reads `X-Trace-ID` from inbound request (or mints a new one), sets ContextVar, echoes header on response
+- [x] `logging.py`: `configure_logging(service_name, level)` — installs `_TraceFilter` (injects `trace_id` + `service` into every log record) and JSON formatter (`python-json-logger`)
+- [x] `shared/pyproject.toml`: add `python-json-logger>=3.0`, `starlette>=0.40`; mypy override for `pythonjsonlogger.*`
+
+#### X.2 — App wiring (5 services)
+- [x] `apps/form/src/emf_form/main.py`: `configure_logging("form")`, `TraceIDMiddleware` outermost
+- [x] `apps/panel/src/emf_panel/main.py`: `configure_logging("panel")`, `TraceIDMiddleware` outermost
+- [x] `apps/router/src/router/main.py`: `configure_logging("router")`, `TraceIDMiddleware` outermost
+- [x] `apps/tts/src/tts/main.py`: `configure_logging("tts")`, `TraceIDMiddleware` outermost
+- [x] `apps/jambonz/src/jambonz/main.py`: `configure_logging("jambonz")`, `TraceIDMiddleware` (CORSMiddleware stays outermost — LIFO)
+
+#### X.3 — Background task trace injection
+- [x] `apps/router/src/router/listener.py` `_handle_new_case()`: `set_trace_id(new_trace_id())` at entry (synthetic trace for each pg_notify dispatch)
+- [x] `apps/router/src/router/main.py` `_poll_signal_reactions()`: `set_trace_id(new_trace_id())` per reaction processed
+
+#### X.4 — Outbound header propagation (httpx call sites)
+- [x] `apps/panel/src/emf_panel/routes.py` `_notify_router_ack()`
+- [x] `apps/jambonz/src/jambonz/main.py` `_call_router_ack()`
+- [x] `apps/router/src/router/channels/telephony.py` `_headers()` + jambonz-adapter register call
+- [x] `apps/router/src/router/channels/mattermost.py` `_auth_headers()` + webhook calls
+- [x] `apps/router/src/router/channels/slack.py` `send()` + `send_ack_confirmation()`
+- [x] `apps/router/src/router/channels/signal.py` `send()` + `send_ack_confirmation()`
+
+#### X.5 — Tests (`shared/tests/`)
+- [x] `test_tracing.py`: trace ID format, uniqueness, set/get, `outbound_headers`, task isolation (ContextVar is per-task), child task inherits parent trace, `_TraceFilter` injects fields
+- [x] `test_middleware.py`: generates ID when none provided, echoes incoming ID, ID available in route handler, unique per request, no bleed between requests

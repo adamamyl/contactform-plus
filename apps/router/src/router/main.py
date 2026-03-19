@@ -17,6 +17,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from emf_shared.db import get_session, get_session_factory, init_db
+from emf_shared.logging import configure_logging
+from emf_shared.middleware import TraceIDMiddleware
+from emf_shared.tracing import new_trace_id, set_trace_id
 from router.ack.tokens import decode_ack_token
 from router.alert_router import AlertRouter
 from router.channels.email import EmailAdapter
@@ -27,6 +30,8 @@ from router.channels.telephony import TelephonyAdapter
 from router.listener import listen_for_cases
 from router.models import Notification
 from router.settings import Settings
+
+configure_logging("router")
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +87,7 @@ async def _poll_signal_reactions(
             if not target_ts:
                 continue
 
+            set_trace_id(new_trace_id())
             try:
                 async with factory() as session:
                     result = await session.execute(
@@ -240,6 +246,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(title="EMF Router Service", lifespan=lifespan)
+app.add_middleware(TraceIDMiddleware, service_name="router")
 api = APIRouter()
 
 

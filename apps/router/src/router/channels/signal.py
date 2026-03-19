@@ -4,6 +4,7 @@ import logging
 
 import httpx
 
+from emf_shared.tracing import outbound_headers
 from router.channels.base import ChannelAdapter
 from router.models import CaseAlert
 
@@ -71,7 +72,9 @@ class SignalAdapter(ChannelAdapter):
         }
         try:
             async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.post(f"{self._api_url}/v2/send", json=payload)
+                resp = await client.post(
+                    f"{self._api_url}/v2/send", json=payload, headers=outbound_headers()
+                )
                 if resp.status_code in (200, 201):
                     data = resp.json()
                     ts = str(data.get("timestamp", ""))
@@ -100,7 +103,9 @@ class SignalAdapter(ChannelAdapter):
         }
         try:
             async with httpx.AsyncClient(timeout=15) as client:
-                await client.post(f"{self._api_url}/v2/send", json=payload)
+                await client.post(
+                    f"{self._api_url}/v2/send", json=payload, headers=outbound_headers()
+                )
         except Exception:
             log.exception(
                 "SignalAdapter.send_ack_confirmation failed for case %s", alert.case_id

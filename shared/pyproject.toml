@@ -7,7 +7,9 @@ dependencies = [
     "asyncpg>=0.30",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
+    "python-json-logger>=3.0",
     "sqlalchemy[asyncio]>=2.0",
+    "starlette>=0.40",
 ]
 
 [build-system]
@@ -19,7 +21,9 @@ packages = ["src/emf_shared"]
 
 [dependency-groups]
 dev = [
+    "anyio[trio]>=4.0",
     "bandit[toml]>=1.8",
+    "httpx>=0.27",
     "mypy>=1.13",
     "pip-audit>=2.7",
     "pytest>=8.3",
@@ -42,6 +46,10 @@ select = ["E", "W", "F", "I", "S", "B", "A", "C4", "UP"]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "pythonjsonlogger.*"
+ignore_missing_imports = true
 
 [tool.bandit]
 skips = []

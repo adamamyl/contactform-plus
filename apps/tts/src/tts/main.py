@@ -10,12 +10,16 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from emf_shared.logging import configure_logging
+from emf_shared.middleware import TraceIDMiddleware
 from fastapi import FastAPI, HTTPException, status
 from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from tts.builder import build_tts_message
+
+configure_logging("tts")
 
 MAX_TEXT_LEN = 500
 AUDIO_TTL_SECONDS = 300
@@ -64,6 +68,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(title="EMF TTS Service", lifespan=lifespan)
+app.add_middleware(TraceIDMiddleware, service_name="tts")
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 
