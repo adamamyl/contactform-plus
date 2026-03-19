@@ -213,8 +213,8 @@ async def case_list(
             select(
                 Notification.case_id,
                 sa_case(
-                    (func.count().filter(Notification.state != "acked") > 0, "nack"),
-                    else_="acked",
+                    (func.count().filter(Notification.state == "acked") > 0, "acked"),
+                    else_="nack",
                 ).label("notif_state"),
             )
             .where(Notification.case_id.in_(case_ids))
