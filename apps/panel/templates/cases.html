@@ -7,13 +7,14 @@
 </div>
 
 <form class="filter-form" method="get" action="/">
-  <details class="filter-details"{% if selected_statuses or selected_urgencies or request.query_params.get('assignee') %} open{% endif %}>
+  <details class="filter-details"{% if selected_statuses or selected_urgencies or selected_notifs or request.query_params.get('assignee') %} open{% endif %}>
     <summary class="filter-summary">
       Filters
-      {% if selected_statuses or selected_urgencies or request.query_params.get('assignee') %}
+      {% if selected_statuses or selected_urgencies or selected_notifs or request.query_params.get('assignee') %}
       <span class="filter-active-hint">
         {% if selected_statuses %}{{ selected_statuses | join(', ') | replace('_',' ') }}{% endif %}
         {% if selected_urgencies %} · {{ selected_urgencies | join(', ') }}{% endif %}
+        {% if selected_notifs %} · notif: {{ selected_notifs | join(', ') }}{% endif %}
         {% if request.query_params.get('assignee') %} · {{ request.query_params.get('assignee') }}{% endif %}
       </span>
       {% endif %}
@@ -36,6 +37,16 @@
           <input type="checkbox" name="urgency" value="{{ u }}"
             {% if u in selected_urgencies %}checked{% endif %}>
           <span class="badge badge--{{ u }}">{{ u }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Notif</span>
+        {% for n in ["acked","nack"] %}
+        <label class="filter-check">
+          <input type="checkbox" name="notif" value="{{ n }}"
+            {% if n in selected_notifs %}checked{% endif %}>
+          <span class="badge badge--{{ n }}">{{ n | upper }}</span>
         </label>
         {% endfor %}
       </div>
@@ -64,7 +75,7 @@
       {{ sort_th('id', 'ID') }}
       {{ sort_th('urgency', 'Urgency') }}
       {{ sort_th('status', 'Status') }}
-      <th>Notif</th>
+      {{ sort_th('notif', 'Notif') }}
       {{ sort_th('assignee', 'Assignee') }}
       <th>Location</th>
       {{ sort_th('submitted', 'Submitted') }}
