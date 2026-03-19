@@ -8,6 +8,7 @@ import asyncpg  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 
 from emf_shared.db import get_session
+from emf_shared.tracing import new_trace_id, set_trace_id
 from router.alert_router import AlertRouter
 from router.models import Notification
 
@@ -42,6 +43,7 @@ async def listen_for_cases(dsn: str, router: AlertRouter) -> None:
 
 
 async def _handle_new_case(case_id: str, router: AlertRouter) -> None:
+    set_trace_id(new_trace_id())
     try:
         async for session in get_session():
             result = await session.execute(

@@ -4,6 +4,7 @@ import logging
 
 import httpx
 
+from emf_shared.tracing import outbound_headers
 from router.channels.base import ChannelAdapter
 from router.models import CaseAlert
 
@@ -47,7 +48,7 @@ class MattermostAdapter(ChannelAdapter):
         return bool(self._api_url and self._channel_id and self._token)
 
     def _auth_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._token}"}
+        return {"Authorization": f"Bearer {self._token}", **outbound_headers()}
 
     async def is_available(self) -> bool:
         if self._uses_posts_api():
@@ -151,7 +152,9 @@ class MattermostAdapter(ChannelAdapter):
             text += f"\nAlso sent via: {', '.join(alert.also_sent_via)}"
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(self._webhook_url, json={"text": text})  # type: ignore[arg-type]
+                resp = await client.post(
+                    self._webhook_url, json={"text": text}, headers=outbound_headers()
+                )  # type: ignore[arg-type]
                 if resp.status_code == 200:
                     return "mattermost"
                 log.warning(
@@ -213,7 +216,9 @@ class MattermostAdapter(ChannelAdapter):
         text = f"✅ Case {alert.friendly_id} acknowledged by {acked_by}."
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                await client.post(self._webhook_url, json={"text": text})  # type: ignore[arg-type]
+                await client.post(
+                    self._webhook_url, json={"text": text}, headers=outbound_headers()
+                )  # type: ignore[arg-type]
         except Exception:
             log.exception(
                 "MattermostAdapter._send_webhook_ack failed for case %s", alert.case_id

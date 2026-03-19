@@ -11,7 +11,12 @@ from fastapi.responses import Response
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
+from emf_shared.logging import configure_logging
+from emf_shared.middleware import TraceIDMiddleware
+from emf_shared.tracing import outbound_headers
 from jambonz.adapter import JambonzAdapter
+
+configure_logging("jambonz")
 
 log = logging.getLogger(__name__)
 
@@ -53,12 +58,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(TraceIDMiddleware, service_name="jambonz")
 api = APIRouter()
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 
 async def _call_router_ack(case_id: str, acked_by: str) -> None:
-    headers: dict[str, str] = {}
+    headers: dict[str, str] = {**outbound_headers()}
     if ROUTER_INTERNAL_SECRET:
         headers["X-Internal-Secret"] = ROUTER_INTERNAL_SECRET
     try:

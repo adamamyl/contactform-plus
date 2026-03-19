@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from emf_shared.db import init_db
+from emf_shared.logging import configure_logging
+from emf_shared.middleware import TraceIDMiddleware
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -14,6 +16,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from .auth import configure_oauth
 from .routes import router
 from .settings import get_settings
+
+configure_logging("panel")
 
 
 @asynccontextmanager
@@ -27,6 +31,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(title="EMF Conduct Panel", lifespan=lifespan)
 
 _session_secret = os.environ.get("SECRET_KEY", "dev-session-key-replace-in-prod")
+app.add_middleware(TraceIDMiddleware, service_name="panel")
 app.add_middleware(
     SessionMiddleware,
     secret_key=_session_secret,

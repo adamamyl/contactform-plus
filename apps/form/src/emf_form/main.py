@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import cast
 
 from emf_shared.db import init_db
+from emf_shared.logging import configure_logging
+from emf_shared.middleware import TraceIDMiddleware
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
@@ -19,6 +21,8 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from .routes import limiter, router
 from .settings import get_settings
+
+configure_logging("form")
 
 cases_submitted_total = Counter(
     "emf_cases_submitted_total",
@@ -69,6 +73,7 @@ async def validation_exception_handler(
     return JSONResponse(status_code=422, content={"detail": errors})
 
 
+app.add_middleware(TraceIDMiddleware, service_name="form")
 app.add_middleware(SlowAPIMiddleware)
 app.include_router(router)
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")

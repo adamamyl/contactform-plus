@@ -11,6 +11,7 @@ import redis.asyncio as aioredis
 from authlib.integrations.base_client.errors import MismatchingStateError
 from emf_shared.config import EventConfig
 from emf_shared.db import get_session
+from emf_shared.tracing import outbound_headers
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -557,7 +558,7 @@ async def list_tags(
 async def _notify_router_ack(case_id: uuid.UUID, acked_by: str, settings: Settings) -> None:
     if not settings.router_internal_url:
         return
-    headers: dict[str, str] = {}
+    headers: dict[str, str] = {**outbound_headers()}
     if settings.router_internal_secret:
         headers["X-Internal-Secret"] = settings.router_internal_secret
     try:

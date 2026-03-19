@@ -4,6 +4,7 @@ import logging
 
 import httpx
 
+from emf_shared.tracing import outbound_headers
 from router.channels.base import ChannelAdapter
 from router.models import CaseAlert
 
@@ -34,7 +35,9 @@ class SlackAdapter(ChannelAdapter):
         )
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(self._webhook_url, json={"text": text})
+                resp = await client.post(
+                    self._webhook_url, json={"text": text}, headers=outbound_headers()
+                )
                 if resp.status_code == 200:
                     return "slack"
                 log.warning(
@@ -53,7 +56,9 @@ class SlackAdapter(ChannelAdapter):
         text = f"✅ Case {alert.friendly_id} acknowledged by {acked_by}."
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                await client.post(self._webhook_url, json={"text": text})
+                await client.post(
+                    self._webhook_url, json={"text": text}, headers=outbound_headers()
+                )
         except Exception:
             log.exception(
                 "SlackAdapter.send_ack_confirmation failed for case %s", alert.case_id

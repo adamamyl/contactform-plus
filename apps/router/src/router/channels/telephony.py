@@ -4,6 +4,7 @@ import logging
 
 import httpx
 
+from emf_shared.tracing import outbound_headers
 from router.channels.base import ChannelAdapter
 from router.models import CaseAlert
 
@@ -38,7 +39,7 @@ class TelephonyAdapter(ChannelAdapter):
         self._jambonz_adapter_url = jambonz_adapter_url.rstrip("/")
 
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._api_key}"}
+        return {"Authorization": f"Bearer {self._api_key}", **outbound_headers()}
 
     async def is_available(self) -> bool:
         if not self._api_url or not self._account_sid:
@@ -105,6 +106,7 @@ class TelephonyAdapter(ChannelAdapter):
                             await client.post(
                                 f"{self._jambonz_adapter_url}/internal/register/{call_sid}",
                                 json={"audio_url": audio_url, "case_id": alert.case_id},
+                                headers=outbound_headers(),
                             )
                     except Exception:
                         log.warning(
