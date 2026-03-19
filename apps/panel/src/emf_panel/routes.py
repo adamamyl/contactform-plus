@@ -277,6 +277,10 @@ async def case_detail(
             for f in sorted(attach_dir.iterdir())
             if f.suffix.lower() in {".jpg", ".png", ".gif", ".webp"}
         ]
+    acked_result = await session.execute(
+        select(func.count()).where(Notification.case_id == case_id, Notification.state == "acked")
+    )
+    is_acked = acked_result.scalar_one() > 0
     return templates.TemplateResponse(
         request,
         "case_detail.html",
@@ -285,6 +289,8 @@ async def case_detail(
             "case": case,
             "history": history,
             "user": user,
+            "current_username": _username(user),
+            "is_acked": is_acked,
             "valid_next_statuses": sorted(valid_next),
             "attachments": attachments,
             "status_emoji": STATUS_EMOJI,
@@ -458,11 +464,11 @@ async def update_assignee(
     if not case:
         raise HTTPException(status_code=404)
     old = case.assignee
-    await session.execute(
-        update(Case)
-        .where(Case.id == case_id)
-        .values(assignee=body.assignee, updated_at=datetime.now(tz=UTC))
-    )
+    now = datetime.now(tz=UTC)
+    new_values: dict[str, object] = {"assignee": body.assignee, "updated_at": now}
+    if body.assignee and case.status == "new":
+        new_values["status"] = "assigned"
+    await session.execute(update(Case).where(Case.id == case_id).values(**new_values))
     session.add(
         CaseHistory(
             case_id=case_id,
@@ -472,6 +478,16 @@ async def update_assignee(
             new_value=body.assignee,
         )
     )
+    if body.assignee and case.status == "new":
+        session.add(
+            CaseHistory(
+                case_id=case_id,
+                changed_by=_username(user),
+                field="status",
+                old_value="new",
+                new_value="assigned",
+            )
+        )
     await session.commit()
     if body.assignee:
         await redis.sadd(_ASSIGNEES_KEY, body.assignee)  # type: ignore[misc]
