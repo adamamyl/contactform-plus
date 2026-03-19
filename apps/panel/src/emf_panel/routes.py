@@ -603,7 +603,7 @@ async def admin_trigger_call(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, bool]:
     await session.execute(
-        text("SELECT pg_notify('new_case', :payload)"),
+        text("SELECT pg_notify('retrigger_case', :payload)"),
         {"payload": str(case_id)},
     )
     await session.commit()
@@ -786,7 +786,7 @@ async def dispatcher_trigger(
     dev_id = device_id or str(uuid.uuid4())
     validate_dispatcher_token(token, dev_id, settings.secret_key)
     await session.execute(
-        text("SELECT pg_notify('new_case', :payload)"),
+        text("SELECT pg_notify('retrigger_case', :payload)"),
         {"payload": str(case_id)},
     )
     await session.commit()

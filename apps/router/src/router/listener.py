@@ -22,7 +22,7 @@ async def listen_for_cases(dsn: str, router: AlertRouter) -> None:
     while True:
         try:
             conn: asyncpg.Connection[asyncpg.Record] = await asyncpg.connect(dsn)
-            log.info("Listener connected; registering LISTEN new_case")
+            log.info("Listener connected; registering LISTEN new_case + retrigger_case")
 
             async def _on_notify(
                 connection: asyncpg.Connection[asyncpg.Record],
@@ -30,10 +30,12 @@ async def listen_for_cases(dsn: str, router: AlertRouter) -> None:
                 channel: str,
                 payload: str,
             ) -> None:
-                log.info("NOTIFY new_case: %s", payload)
-                asyncio.create_task(_handle_new_case(payload, router))
+                log.info("NOTIFY %s: %s", channel, payload)
+                force = channel == "retrigger_case"
+                asyncio.create_task(_handle_new_case(payload, router, force=force))
 
             await conn.add_listener("new_case", _on_notify)
+            await conn.add_listener("retrigger_case", _on_notify)
             # Poll until the connection drops
             while not conn.is_closed():
                 await asyncio.sleep(5)
@@ -42,16 +44,21 @@ async def listen_for_cases(dsn: str, router: AlertRouter) -> None:
             await asyncio.sleep(5)
 
 
-async def _handle_new_case(case_id: str, router: AlertRouter) -> None:
+async def _handle_new_case(
+    case_id: str, router: AlertRouter, *, force: bool = False
+) -> None:
     set_trace_id(new_trace_id())
     try:
         async for session in get_session():
-            result = await session.execute(
-                select(func.count()).where(Notification.case_id == uuid.UUID(case_id))
-            )
-            if result.scalar_one() > 0:
-                log.info("Case %s already has notifications; skipping", case_id)
-                return
+            if not force:
+                result = await session.execute(
+                    select(func.count()).where(
+                        Notification.case_id == uuid.UUID(case_id)
+                    )
+                )
+                if result.scalar_one() > 0:
+                    log.info("Case %s already has notifications; skipping", case_id)
+                    return
             alert = await router.load_alert_from_db(case_id, session)
             if alert is None:
                 log.warning("Case %s not found in cases_router view", case_id)
