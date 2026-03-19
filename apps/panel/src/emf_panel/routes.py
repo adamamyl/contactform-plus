@@ -130,6 +130,15 @@ async def logout(request: Request) -> RedirectResponse:
 # ---------------------------------------------------------------------------
 
 
+def _username(user: dict[str, object]) -> str:
+    """Return the best available display name from OIDC claims."""
+    for key in ("preferred_username", "name", "sub", "email"):
+        val = user.get(key)
+        if val and isinstance(val, str):
+            return val
+    return "unknown"
+
+
 _URGENCY_ORDER = sa_case(
     {"urgent": 0, "high": 1, "medium": 2, "low": 3},
     value=Case.urgency,
@@ -168,7 +177,7 @@ async def case_list(
     order: str = "desc",
 ) -> HTMLResponse:
     if assignee == "me":
-        assignee = str(user.get("preferred_username", ""))
+        assignee = _username(user)
     sort_col = _SORT_COLS.get(sort, Case.created_at)
     sort_expr = sort_col.desc() if order == "desc" else sort_col.asc()
     stmt = select(Case).order_by(sort_expr)
@@ -423,7 +432,7 @@ async def transition_status(
     session.add(
         CaseHistory(
             case_id=case_id,
-            changed_by=str(user.get("preferred_username", "unknown")),
+            changed_by=_username(user),
             field="status",
             old_value=old_status,
             new_value=body.status,
@@ -457,7 +466,7 @@ async def update_assignee(
     session.add(
         CaseHistory(
             case_id=case_id,
-            changed_by=str(user.get("preferred_username", "unknown")),
+            changed_by=_username(user),
             field="assignee",
             old_value=old,
             new_value=body.assignee,
@@ -492,7 +501,7 @@ async def update_tags(
     session.add(
         CaseHistory(
             case_id=case_id,
-            changed_by=str(user.get("preferred_username", "unknown")),
+            changed_by=_username(user),
             field="tags",
             old_value=str(old_tags),
             new_value=str(body.tags),
@@ -532,7 +541,7 @@ async def update_urgency(
     session.add(
         CaseHistory(
             case_id=case_id,
-            changed_by=str(user.get("preferred_username", "unknown")),
+            changed_by=_username(user),
             field="urgency",
             old_value=old_urgency,
             new_value=body.urgency,
@@ -597,7 +606,7 @@ async def admin_ack(
     settings: Annotated[Settings, Depends(get_settings)],
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> dict[str, bool]:
-    username = str(user.get("preferred_username", "admin"))
+    username = _username(user)
     now = datetime.now(tz=UTC)
     await session.execute(
         update(Notification)
