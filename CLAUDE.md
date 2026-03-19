@@ -70,6 +70,7 @@ uv run scripts/bad_strings_test.py --url http://localhost:8000 --sample 50 --see
 uv run scripts/generate_secrets.py  # print secrets to paste into .env
 uv run scripts/install.py           # interactive guided installer
 uv run scripts/backup.py --recipient <age-pubkey>  # encrypted DB backup
+uv run scripts/generate_bruno_collection.py  # regenerate Bruno API collection from docs/swagger-spec.json
 ```
 
 ## Git workflow

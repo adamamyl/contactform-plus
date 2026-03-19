@@ -294,6 +294,23 @@ Submit an incident report.
 
 ---
 
+## Report Form API — Attachments
+
+### `POST /attachments`
+
+Upload an image attachment for a case. No auth required. Called immediately after submit with the `case_id` from the submit response.
+
+**Query params:** `case_id` (UUID, required)
+
+**Body:** `multipart/form-data` with a `file` field. Accepted types: JPEG, PNG, GIF, WebP. Max 10 MB. Max 5 per case.
+
+**Response `201`:** `{"id": "abc123.jpg", "case_id": "uuid"}`
+**Response `400`:** Virus detected.
+**Response `413`:** File too large.
+**Response `415`:** Unsupported file type.
+
+---
+
 ## Message Router API
 
 Base URL: `https://router.emf-forms.internal`
@@ -306,13 +323,92 @@ Returns status of database, email, and signal adapter.
 
 Called by Signal CLI REST API on incoming reactions. Emoji 🤙 triggers ACK.
 
+**Body:**
+```json
+{"envelope": {"source": "+441234567890", "dataMessage": {"reaction": {"emoji": "🤙", "targetSentTimestamp": ""}}}}
+```
+
 ### `POST /webhook/mattermost/action`
 
-Called by Mattermost when a button is clicked. Requires `X-Webhook-Secret` header.
+Called by Mattermost when a button is clicked. Requires `X-Webhook-Secret` header matching `MATTERMOST_WEBHOOK_SECRET`.
 
 ### `GET /ack/{token}`
 
-Email magic-link ACK endpoint. The `token` is a JWT embedded in notification emails.
+Email magic-link ACK endpoint. The `token` is a JWT embedded in notification emails. Returns HTML confirmation page.
+
+### `POST /internal/ack/{case_id}` *(internal)*
+
+Called by Jambonz adapter (DTMF press 1) and panel dispatcher. Requires `X-Internal-Secret` header.
+
+**Body:** `{"acked_by": "jambonz_dtmf"}` — optional `notification_id` field to ack a specific notification; omit to ack all for the case.
+
+---
+
+## TTS Service API
+
+Base URL: `http://tts:8003` (internal Docker network only — not publicly exposed)
+
+### `POST /synthesise`
+
+Generate speech and return it as a streaming `audio/wav` response.
+
+**Body:** `{"friendly_id": "brave-mango", "urgency": "high", "location_hint": "Main stage", "include_dtmf": true}`
+
+Provide either `text` (raw string, max 500 chars) or `friendly_id` + `urgency`. `location_hint` and `include_dtmf` are optional.
+
+### `POST /synthesise/file`
+
+Same as above but caches the WAV to a temp file and returns a token URL valid for 5 minutes. Used by Jambonz so it can pass a fetchable URL to the cloud dialler.
+
+**Response `200`:** `{"audio_url": "/audio/<token>"}`
+
+### `GET /audio/{token}`
+
+Serve a previously synthesised WAV file. `404` if expired or not found.
+
+### `GET /health`
+
+Returns status of Piper binary and model file.
+
+---
+
+## Jambonz Adapter API
+
+Base URL: `http://jambonz:8004` (port 8004; webhooks must be reachable by Jambonz cloud)
+
+### `POST /webhook/jambonz/call`
+
+Jambonz fires this when a call needs instructions (initial answer) or when DTMF digits are received (gather). Press **1** to ACK.
+
+**Query params (set on gather `actionHook`):** `case_id`, `audio_url`
+
+**Body:** `{"call_sid": "", "call_status": "trying", "digits": "", "tag": {}}`
+
+### `POST /webhook/jambonz/status`
+
+Jambonz fires this on every call state change. Must return `{}` — returning verbs here terminates the call.
+
+### `GET /audio/{filename}` / `HEAD /audio/{filename}`
+
+Proxies audio files from the TTS service so Jambonz (cloud) can fetch them via the public adapter URL.
+
+### `POST /internal/register/{call_sid}` *(internal)*
+
+Called by the router after initiating an outbound call. Maps the `call_sid` to the `audio_url` and `case_id` so the call webhook can look them up on answer.
+
+**Body:** `{"audio_url": "", "case_id": ""}`
+
+### `GET /health`
+
+Returns Jambonz API connectivity status.
+
+---
+
+## Panel — Attachments
+
+### `GET /cases/{case_id}/attachments/{filename}`
+
+Serve a case attachment. Requires bearer auth (conduct team only). Returns the image file directly.
 
 ---
 
@@ -335,17 +431,28 @@ All services expose `GET /health` returning:
 ## Postman / Bruno Import
 
 - **Postman:** Import `docs/swagger-spec.json` (Postman Collection v2.1)
-- **Bruno:** Collection at `~/projects/bruno/emf/EMF Conduct - Total Restoration/`
+- **Bruno:** Collection at `~/projects/bruno/emf/conduct-api/`
 
-Set these environment variables before running:
+To regenerate the Bruno collection after spec changes:
 
-| Variable | Value |
-|---|---|
-| `panel_url` | `https://panel.emf-forms.internal` |
-| `router_url` | `https://router.emf-forms.internal` |
-| `report_url` | `https://report.emf-forms.internal` |
-| `oidc_url` | `https://oidc.emf-forms.internal` |
-| `access_token` | Populated by Auth request |
-| `dispatcher_token` | Populated by Create Dispatcher Session |
+```bash
+uv run scripts/generate_bruno_collection.py
+```
 
-Run **Get Bearer Token** first — it populates `access_token` automatically via a post-request script.
+Select the **Local**, **Staging**, or **Production** environment and fill in secrets (paste from `.env`):
+
+| Variable | Local default | Notes |
+|---|---|---|
+| `panel_url` | `https://panel.emf-forms.internal` | |
+| `router_url` | `https://router.emf-forms.internal` | |
+| `report_url` | `https://report.emf-forms.internal` | |
+| `oidc_url` | `https://oidc.emf-forms.internal` | |
+| `tts_url` | `http://localhost:8003` | Internal only |
+| `jambonz_url` | `http://localhost:8004` | Internal only |
+| `oidc_client_secret` | — | Paste from `.env` |
+| `router_internal_secret` | — | Paste from `.env` |
+| `mattermost_webhook_secret` | — | Paste from `.env` |
+| `access_token` | — | Populated by **Auth** request |
+| `dispatcher_token` | — | Populated by **Create Dispatcher Session** |
+
+Run **Auth** first — it populates `access_token` automatically via a post-request script. Run **Create Dispatcher Session** to populate `dispatcher_token`.
