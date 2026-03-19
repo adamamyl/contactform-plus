@@ -31,7 +31,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent
 SPEC_FILE = REPO_ROOT / "docs" / "swagger-spec.json"
-COLLECTION_DIR = Path.home() / "projects/bruno/emf/EMF Conduct - Total Restoration"
+COLLECTION_DIR = Path.home() / "projects/bruno/emf/conduct-api"
 
 # ---------------------------------------------------------------------------
 # YAML helpers — hand-rolled to avoid adding a dependency
