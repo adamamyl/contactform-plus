@@ -136,10 +136,18 @@ _URGENCY_ORDER = sa_case(
     else_=9,
 )
 
+_NOTIF_SORT = (
+    select(func.count())
+    .where(Notification.case_id == Case.id, Notification.state == "acked")
+    .correlate(Case)
+    .scalar_subquery()
+)
+
 _SORT_COLS = {
     "id": Case.friendly_id,
     "urgency": _URGENCY_ORDER,
     "status": Case.status,
+    "notif": _NOTIF_SORT,
     "assignee": Case.assignee,
     "submitted": Case.created_at,
 }
@@ -153,6 +161,7 @@ async def case_list(
     settings: Annotated[Settings, Depends(get_settings)],
     status_filter: Annotated[list[str], Query(alias="status")] = [],  # noqa: B006
     urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],  # noqa: B006
+    notif_filter: Annotated[list[str], Query(alias="notif")] = [],  # noqa: B006
     assignee: str | None = None,
     tag: str | None = None,
     sort: str = "submitted",
@@ -167,6 +176,13 @@ async def case_list(
         stmt = stmt.where(Case.status.in_(status_filter))
     if urgency_filter:
         stmt = stmt.where(Case.urgency.in_(urgency_filter))
+    acked_subq = select(Notification.id).where(
+        Notification.case_id == Case.id, Notification.state == "acked"
+    )
+    if "acked" in notif_filter and "nack" not in notif_filter:
+        stmt = stmt.where(exists(acked_subq))
+    elif "nack" in notif_filter and "acked" not in notif_filter:
+        stmt = stmt.where(~exists(acked_subq))
     if assignee:
         stmt = stmt.where(Case.assignee == assignee)
     if tag:
@@ -215,6 +231,7 @@ async def case_list(
             "valid_transitions": VALID_TRANSITIONS,
             "selected_statuses": status_filter,
             "selected_urgencies": urgency_filter,
+            "selected_notifs": notif_filter,
             "map_urls": map_urls,
             "notif_states": notif_states,
             "sort": sort,
@@ -658,12 +675,24 @@ async def dispatcher_share_page(
     )
 
 
+_DISPATCHER_SORT_COLS = {
+    "urgency": _URGENCY_ORDER,
+    "id": Case.friendly_id,
+    "status": Case.status,
+    "submitted": Case.created_at,
+}
+
+_DISPATCHER_DEFAULT_URGENCIES = ["urgent", "high"]
+
+
 @router.get("/dispatcher", response_class=HTMLResponse)
 async def dispatcher_view(
     request: Request,
     token: str = Query(...),
-    show_acked: bool = Query(False),
+    urgency_filter: Annotated[list[str], Query(alias="urgency")] = [],  # noqa: B006
     event_override: str | None = Query(None, alias="event"),
+    sort: str = "urgency",
+    order: str = "asc",
     device_id: Annotated[str | None, Cookie()] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
     session: Annotated[AsyncSession, Depends(get_session)] = None,  # type: ignore[assignment]
@@ -679,15 +708,14 @@ async def dispatcher_view(
         active_event = event_override
     else:
         active_event = settings.current_event_override or _current_active_event(cfg.events)
+    active_urgencies = urgency_filter if urgency_filter else _DISPATCHER_DEFAULT_URGENCIES
+    sort_col = _DISPATCHER_SORT_COLS.get(sort, _URGENCY_ORDER)
+    sort_expr = sort_col.asc() if order == "asc" else sort_col.desc()
     stmt = (
         select(Case)
         .where(Case.assignee.is_(None))
-        .order_by(Case.urgency.desc(), Case.created_at.desc())
-    )
-    if active_event:
-        stmt = stmt.where(Case.event_name == active_event)
-    if not show_acked:
-        stmt = stmt.where(
+        .where(Case.urgency.in_(active_urgencies))
+        .where(
             ~exists(
                 select(Notification.id).where(
                     Notification.case_id == Case.id,
@@ -695,8 +723,17 @@ async def dispatcher_view(
                 )
             )
         )
+        .order_by(sort_expr, Case.created_at.asc())
+    )
+    if active_event:
+        stmt = stmt.where(Case.event_name == active_event)
     result = await session.execute(stmt)
     cases = result.scalars().all()
+
+    def make_sort_url(col: str) -> str:
+        new_order = "desc" if sort == col and order == "asc" else "asc"
+        return str(request.url.include_query_params(sort=col, order=new_order))
+
     response = templates.TemplateResponse(
         request,
         "dispatcher.html",
@@ -705,7 +742,11 @@ async def dispatcher_view(
             "cases": cases,
             "token": token,
             "active_event": active_event,
-            "show_acked": show_acked,
+            "active_urgencies": active_urgencies,
+            "all_urgencies": ["urgent", "high", "medium", "low"],
+            "sort": sort,
+            "order": order,
+            "make_sort_url": make_sort_url,
             "map_base_url": _map_base_url(settings),
         },
     )

@@ -20,23 +20,54 @@
       No active event. Cases from all events are shown.
     </div>
     {% endif %}
-    <p class="hint">
-      Showing unassigned{% if not show_acked %}, unacknowledged{% endif %} cases.
-      {% if show_acked %}
-      <a href="?token={{ token }}">Hide ACK'd</a>
-      {% else %}
-      <a href="?token={{ token }}&show_acked=true">Show ACK'd</a>
+
+    <form class="filter-form" method="get">
+      <input type="hidden" name="token" value="{{ token }}">
+      {% if request.query_params.get('event') %}
+      <input type="hidden" name="event" value="{{ request.query_params.get('event') }}">
       {% endif %}
-      · <a href="?token={{ token }}&all=true">Show all</a>
-    </p>
+      <details class="filter-details" open>
+        <summary class="filter-summary">
+          Filters
+          <span class="filter-active-hint">urgency: {{ active_urgencies | join(', ') }}</span>
+        </summary>
+        <div class="filter-body">
+          <div class="filter-group">
+            <span class="filter-label">Urgency</span>
+            {% for u in all_urgencies %}
+            <label class="filter-check">
+              <input type="checkbox" name="urgency" value="{{ u }}"
+                {% if u in active_urgencies %}checked{% endif %}>
+              <span class="badge badge--{{ u }}">{{ u }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="filter-group filter-group--actions">
+            <button type="submit" class="btn btn--small">Filter</button>
+            <a href="?token={{ token }}" class="btn btn--small btn--outline">Reset</a>
+          </div>
+        </div>
+      </details>
+    </form>
+
+    <p class="hint">Showing unassigned, unacknowledged cases.</p>
+
+    {% macro sort_th(col, label) %}
+    <th class="sortable{% if sort == col %} sort-active{% endif %}">
+      <a href="{{ make_sort_url(col) }}">{{ label }}
+        {% if sort == col %}{{ '↑' if order == 'asc' else '↓' }}{% endif %}
+      </a>
+    </th>
+    {% endmacro %}
 
     <table class="cases-table">
       <thead>
         <tr>
-          <th>Urgency</th>
-          <th>Case ID</th>
-          <th>Status</th>
+          {{ sort_th('urgency', 'Urgency') }}
+          {{ sort_th('id', 'Case ID') }}
+          {{ sort_th('status', 'Status') }}
           <th>Location</th>
+          {{ sort_th('submitted', 'Submitted') }}
           <th>Actions</th>
         </tr>
       </thead>
@@ -55,6 +86,7 @@
             {{ case.location_hint or '—' }}
             {% endif %}
           </td>
+          <td>{{ case.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
           <td>
             <button class="btn btn--small btn--ack" data-case-id="{{ case.id }}" data-action="ack">ACK</button>
             <button class="btn btn--small btn--trigger" data-case-id="{{ case.id }}" data-action="trigger">Trigger call</button>
@@ -62,7 +94,7 @@
         </tr>
         {% if has_loc %}
         <tr>
-          <td colspan="5" style="padding:0;">
+          <td colspan="6" style="padding:0;">
             <details>
               <summary style="padding:0.3rem 0.75rem;cursor:pointer;font-size:0.85rem;color:var(--color-hint);">🗺 Show map</summary>
               <div class="case-map-container" style="margin:0;border-radius:0;border-left:0;border-right:0;">
@@ -77,7 +109,7 @@
         </tr>
         {% endif %}
         {% else %}
-        <tr><td colspan="5" class="empty">No unassigned cases.</td></tr>
+        <tr><td colspan="6" class="empty">No unacknowledged unassigned cases.</td></tr>
         {% endfor %}
       </tbody>
     </table>
