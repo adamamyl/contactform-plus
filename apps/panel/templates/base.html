@@ -11,7 +11,7 @@
     <nav class="top-nav">
       <a href="/" class="home-link">&#8962; HOME</a>
       {% if user %}
-      <span class="user-info">{{ user.preferred_username or user.email or 'Team member' }}</span>
+      <span class="user-info">{{ user.preferred_username or user.name or user.sub or user.email or 'Team member' }}</span>
       <a href="/logout" class="logout-link">Log out</a>
       {% endif %}
       <button id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode">🌙</button>
