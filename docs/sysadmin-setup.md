@@ -363,6 +363,17 @@ docker compose -f infra/docker-compose.yml restart caddy
 
 **If using custom TLS certificates** (e.g. internal CA): mount them into the Caddy container and add a `tls /path/to/cert /path/to/key` directive to the generated Caddyfile.
 
+### Trusting the Caddy local CA on macOS (local dev)
+
+When running locally, Caddy generates a self-signed local CA. Extract and trust it with:
+
+```bash
+docker run --rm -v infra_caddy_data:/data alpine cat /data/caddy/pki/authorities/local/root.crt > /tmp/caddy-root.crt \
+  && sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /tmp/caddy-root.crt
+```
+
+Restart your browser after running this.
+
 ---
 
 ## 10. OIDC integration
