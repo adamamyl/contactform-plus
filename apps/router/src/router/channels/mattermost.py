@@ -142,6 +142,8 @@ class MattermostAdapter(ChannelAdapter):
         return None
 
     async def _send_webhook(self, alert: CaseAlert) -> str | None:
+        if not self._webhook_url:
+            return None
         emoji = URGENCY_EMOJI.get(alert.urgency, "⚪")
         text = (
             f"{emoji} **New {alert.urgency} case**: {alert.friendly_id}\n"
@@ -154,7 +156,7 @@ class MattermostAdapter(ChannelAdapter):
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
                     self._webhook_url, json={"text": text}, headers=outbound_headers()
-                )  # type: ignore[arg-type]
+                )
                 if resp.status_code == 200:
                     return "mattermost"
                 log.warning(
@@ -213,12 +215,14 @@ class MattermostAdapter(ChannelAdapter):
             )
 
     async def _send_webhook_ack(self, alert: CaseAlert, acked_by: str) -> None:
+        if not self._webhook_url:
+            return
         text = f"✅ Case {alert.friendly_id} acknowledged by {acked_by}."
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 await client.post(
                     self._webhook_url, json={"text": text}, headers=outbound_headers()
-                )  # type: ignore[arg-type]
+                )
         except Exception:
             log.exception(
                 "MattermostAdapter._send_webhook_ack failed for case %s", alert.case_id

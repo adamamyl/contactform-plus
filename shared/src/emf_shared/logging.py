@@ -9,8 +9,8 @@ _service_name: str = ""
 
 class _TraceFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        record.trace_id = get_trace_id() or "-"  # type: ignore[attr-defined]
-        record.service = _service_name  # type: ignore[attr-defined]
+        record.__dict__["trace_id"] = get_trace_id() or "-"
+        record.__dict__["service"] = _service_name
         return True
 
 
