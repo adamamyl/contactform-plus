@@ -191,7 +191,9 @@ async def test_signal_adapter_send_posts_to_group() -> None:
         async def __aexit__(self, *a: object) -> None:
             pass
 
-        async def post(self, url: str, json: dict[str, object]) -> FakeResp:
+        async def post(
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
+        ) -> FakeResp:
             captured.append(json)
             return FakeResp()
 
@@ -736,7 +738,9 @@ async def test_signal_message_includes_map_link() -> None:
         async def __aexit__(self, *a: object) -> None:
             pass
 
-        async def post(self, url: str, json: dict[str, object]) -> FakeResp:
+        async def post(
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
+        ) -> FakeResp:
             captured.append(json)
             return FakeResp()
 
@@ -786,7 +790,9 @@ async def test_signal_message_no_map_link_when_no_coords() -> None:
         async def __aexit__(self, *a: object) -> None:
             pass
 
-        async def post(self, url: str, json: dict[str, object]) -> FakeResp:
+        async def post(
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
+        ) -> FakeResp:
             captured.append(json)
             return FakeResp()
 
@@ -838,7 +844,9 @@ async def test_signal_ack_confirmation_includes_acked_by() -> None:
         async def __aexit__(self, *a: object) -> None:
             pass
 
-        async def post(self, url: str, json: dict[str, object]) -> FakeResp:
+        async def post(
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
+        ) -> FakeResp:
             captured.append(json)
             return FakeResp()
 
@@ -891,7 +899,9 @@ async def test_signal_also_sent_via() -> None:
         async def __aexit__(self, *a: object) -> None:
             pass
 
-        async def post(self, url: str, json: dict[str, object]) -> FakeResp:
+        async def post(
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
+        ) -> FakeResp:
             captured.append(json)
             return FakeResp()
 
@@ -992,7 +1002,7 @@ async def test_mattermost_posts_api_send() -> None:
             pass
 
         async def post(
-            self, url: str, json: dict[str, object], headers: dict[str, str]
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
         ) -> FakeResp:
             captured_requests.append({"url": url, "body": json})
             return FakeResp()
@@ -1044,7 +1054,7 @@ async def test_mattermost_ack_updates_post() -> None:
             pass
 
         async def post(
-            self, url: str, json: dict[str, object], headers: dict[str, str]
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
         ) -> FakeResp:
             captured_requests.append({"url": url, "body": json})
             return FakeResp()
@@ -1094,7 +1104,9 @@ async def test_mattermost_falls_back_to_webhook() -> None:
         async def __aexit__(self, *a: object) -> None:
             pass
 
-        async def post(self, url: str, json: dict[str, object]) -> FakeResp:
+        async def post(
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
+        ) -> FakeResp:
             return FakeResp()
 
     with patch("httpx.AsyncClient", return_value=FakeClient()):
