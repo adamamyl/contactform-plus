@@ -5,12 +5,16 @@
     "description": "EMF Conduct incident management API. All panel endpoints require a bearer token obtained from the Auth request. Dispatcher endpoints use a separate short-lived JWT passed as ?token=."
   },
   "variable": [
-    { "key": "panel_url",  "value": "https://panel.emf-forms.internal" },
-    { "key": "router_url", "value": "https://router.emf-forms.internal" },
-    { "key": "report_url", "value": "https://report.emf-forms.internal" },
-    { "key": "oidc_url",   "value": "https://oidc.emf-forms.internal" },
-    { "key": "access_token", "value": "" },
-    { "key": "dispatcher_token", "value": "" }
+    { "key": "panel_url",                 "value": "https://panel.emf-forms.internal" },
+    { "key": "router_url",                "value": "https://router.emf-forms.internal" },
+    { "key": "report_url",                "value": "https://report.emf-forms.internal" },
+    { "key": "oidc_url",                  "value": "https://oidc.emf-forms.internal" },
+    { "key": "tts_url",                   "value": "http://tts:8003" },
+    { "key": "jambonz_url",               "value": "http://jambonz:8004" },
+    { "key": "access_token",              "value": "" },
+    { "key": "dispatcher_token",          "value": "" },
+    { "key": "mattermost_webhook_secret", "value": "" },
+    { "key": "router_internal_secret",    "value": "" }
   ],
   "auth": {
     "type": "bearer",
@@ -70,10 +74,10 @@
               "host": ["{{panel_url}}"],
               "path": ["api", "v1", "cases"],
               "query": [
-                { "key": "limit",   "value": "50",  "description": "Max items (1-200, default 50)" },
-                { "key": "offset",  "value": "0",   "description": "Pagination offset" },
-                { "key": "status",  "value": "",    "description": "Filter: new|assigned|in_progress|action_needed|decision_needed|closed", "disabled": true },
-                { "key": "urgency", "value": "",    "description": "Filter: low|medium|high|urgent", "disabled": true }
+                { "key": "limit",   "value": "50", "description": "Max items (1-200, default 50)" },
+                { "key": "offset",  "value": "0",  "description": "Pagination offset" },
+                { "key": "status",  "value": "",   "description": "Filter: new|assigned|in_progress|action_needed|decision_needed|closed", "disabled": true },
+                { "key": "urgency", "value": "",   "description": "Filter: low|medium|high|urgent", "disabled": true }
               ]
             }
           }
@@ -102,6 +106,23 @@
               "path": ["api", "v1", "cases", ":case_id", "history"],
               "variable": [{ "key": "case_id", "value": "" }]
             }
+          }
+        },
+        {
+          "name": "Lookup Case",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/api/v1/cases/lookup",
+              "host": ["{{panel_url}}"],
+              "path": ["api", "v1", "cases", "lookup"],
+              "query": [
+                { "key": "friendly_id", "value": "", "description": "Human-readable ID (e.g. brave-mango)", "disabled": true },
+                { "key": "id",          "value": "", "description": "UUID case ID", "disabled": true }
+              ]
+            },
+            "description": "Look up a case by friendly_id or UUID. Exactly one query param required."
           }
         },
         {
@@ -177,6 +198,23 @@
               "path": ["api", "v1", "cases", ":case_id", "tags"],
               "variable": [{ "key": "case_id", "value": "" }]
             }
+          }
+        },
+        {
+          "name": "Get Attachment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{panel_url}}/cases/:case_id/attachments/:filename",
+              "host": ["{{panel_url}}"],
+              "path": ["cases", ":case_id", "attachments", ":filename"],
+              "variable": [
+                { "key": "case_id",  "value": "" },
+                { "key": "filename", "value": "", "description": "e.g. abc123.jpg" }
+              ]
+            },
+            "description": "Serves a case attachment. Requires bearer auth (conduct team only). Returns the image file directly."
           }
         },
         {
@@ -290,7 +328,7 @@
     },
     {
       "name": "Panel — Dispatcher (token auth)",
-      "description": "These endpoints authenticate via ?token= (dispatcher JWT), not the bearer token. Disable collection-level auth for these.",
+      "description": "These endpoints authenticate via ?token= (dispatcher JWT), not the bearer token. Auth is set to noauth on each request.",
       "item": [
         {
           "name": "List Dispatcher Cases",
@@ -304,7 +342,7 @@
               "path": ["api", "v1", "dispatcher", "cases"],
               "query": [
                 { "key": "token", "value": "{{dispatcher_token}}" },
-                { "key": "all",   "value": "false", "description": "Include assigned cases", "disabled": true }
+                { "key": "all",   "value": "false", "description": "Include already-assigned cases", "disabled": true }
               ]
             }
           }
@@ -360,7 +398,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"event_name\": \"EMF 2026\",\n  \"what_happened\": \"A brief description of the incident\",\n  \"urgency\": \"medium\",\n  \"phase\": \"weekend\",\n  \"can_contact\": false\n}",
+              "raw": "{\n  \"event_name\": \"EMF 2026\",\n  \"what_happened\": \"A brief description of the incident\",\n  \"urgency\": \"medium\",\n  \"can_contact\": false\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -369,6 +407,27 @@
               "path": ["api", "submit"]
             },
             "description": "Returns 201 with {friendly_id} on success. 200 if idempotency key matches a prior submission."
+          }
+        },
+        {
+          "name": "Upload Attachment",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "description": "JPEG, PNG, GIF, or WebP. Max 10 MB." }
+              ]
+            },
+            "url": {
+              "raw": "{{report_url}}/attachments?case_id=",
+              "host": ["{{report_url}}"],
+              "path": ["attachments"],
+              "query": [{ "key": "case_id", "value": "", "description": "UUID from submit response" }]
+            },
+            "description": "Upload an image attachment for a case. Returns {id, case_id}. Max 5 attachments per case. Accepts JPEG, PNG, GIF, WebP."
           }
         },
         {
@@ -410,7 +469,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "{\"envelope\": {\"source\": \"+441234567890\", \"dataMessage\": {\"reaction\": {\"emoji\": \"\\ud83e\\udd19\", \"targetSentTimestamp\": \"\"}}}}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -418,7 +477,7 @@
               "host": ["{{router_url}}"],
               "path": ["webhook", "signal"]
             },
-            "description": "Called by Signal CLI on incoming reactions. Emoji 🤙 = ACK."
+            "description": "Called by Signal CLI on incoming reactions. Emoji 🤙 = ACK. targetSentTimestamp must match a known notification message_id."
           }
         },
         {
@@ -432,14 +491,248 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"context\": {\"action\": \"ack\", \"case_id\": \"\"}}",
+              "raw": "{\"user_name\": \"alice\", \"context\": {\"action\": \"ack\", \"case_id\": \"\", \"secret\": \"{{mattermost_webhook_secret}}\"}}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{router_url}}/webhook/mattermost/action",
               "host": ["{{router_url}}"],
               "path": ["webhook", "mattermost", "action"]
+            },
+            "description": "Called by Mattermost interactive button. Returns {update: {message}} to update the post."
+          }
+        },
+        {
+          "name": "Email ACK Magic Link",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{router_url}}/ack/:token",
+              "host": ["{{router_url}}"],
+              "path": ["ack", ":token"],
+              "variable": [{ "key": "token", "value": "", "description": "Signed JWT from the email ACK link" }]
+            },
+            "description": "Clicked from the conduct email. Verifies the signed token, marks the case acked, returns HTML confirmation."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Router (Internal)",
+      "description": "Internal router endpoints — only reachable on the Docker network. Require X-Internal-Secret header matching ROUTER_INTERNAL_SECRET.",
+      "item": [
+        {
+          "name": "Internal ACK",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Internal-Secret", "value": "{{router_internal_secret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"acked_by\": \"jambonz_dtmf\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{router_url}}/internal/ack/:case_id",
+              "host": ["{{router_url}}"],
+              "path": ["internal", "ack", ":case_id"],
+              "variable": [{ "key": "case_id", "value": "" }]
+            },
+            "description": "Called by Jambonz adapter (DTMF ACK) and panel dispatcher. Optional notification_id to ack a specific notification; omit to ack all for the case."
+          }
+        }
+      ]
+    },
+    {
+      "name": "TTS Service",
+      "description": "Internal Piper text-to-speech service (port 8003). Not exposed publicly — accessed by the router and Jambonz adapter on the Docker network.",
+      "item": [
+        {
+          "name": "Synthesise (stream)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"friendly_id\": \"brave-mango\", \"urgency\": \"high\", \"location_hint\": \"Main stage\", \"include_dtmf\": true}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{tts_url}}/synthesise",
+              "host": ["{{tts_url}}"],
+              "path": ["synthesise"]
+            },
+            "description": "Returns a streaming audio/wav response. Provide either text OR (friendly_id + urgency). location_hint and include_dtmf are optional."
+          }
+        },
+        {
+          "name": "Synthesise to File",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"friendly_id\": \"brave-mango\", \"urgency\": \"high\", \"location_hint\": \"Main stage\", \"include_dtmf\": true}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{tts_url}}/synthesise/file",
+              "host": ["{{tts_url}}"],
+              "path": ["synthesise", "file"]
+            },
+            "description": "Synthesises and caches to a temp file. Returns {audio_url} token valid for 5 minutes. Used by Jambonz to get a fetchable URL."
+          }
+        },
+        {
+          "name": "Serve Audio",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{tts_url}}/audio/:token",
+              "host": ["{{tts_url}}"],
+              "path": ["audio", ":token"],
+              "variable": [{ "key": "token", "value": "", "description": "Token from /synthesise/file response" }]
+            },
+            "description": "Returns the cached WAV file. 404 if expired or not found."
+          }
+        },
+        {
+          "name": "TTS Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{tts_url}}/health",
+              "host": ["{{tts_url}}"],
+              "path": ["health"]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jambonz Adapter",
+      "description": "Telephony adapter (port 8004). Webhooks are called by Jambonz cloud.",
+      "item": [
+        {
+          "name": "Jambonz Call Webhook",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"call_sid\": \"\", \"call_status\": \"trying\", \"digits\": \"\", \"tag\": {}}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{jambonz_url}}/webhook/jambonz/call?case_id=&audio_url=",
+              "host": ["{{jambonz_url}}"],
+              "path": ["webhook", "jambonz", "call"],
+              "query": [
+                { "key": "case_id",   "value": "", "description": "UUID of the case" },
+                { "key": "audio_url", "value": "", "description": "TTS audio URL" }
+              ]
+            },
+            "description": "Jambonz fires this when a call needs instructions or digits are pressed. Press 1 to ACK."
+          }
+        },
+        {
+          "name": "Jambonz Status Webhook",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"call_sid\": \"\", \"call_status\": \"completed\", \"digits\": \"\", \"tag\": {}}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{jambonz_url}}/webhook/jambonz/status",
+              "host": ["{{jambonz_url}}"],
+              "path": ["webhook", "jambonz", "status"]
+            },
+            "description": "Jambonz fires this for every call state change. Must always return {} — returning verbs causes call termination."
+          }
+        },
+        {
+          "name": "Proxy Audio (GET)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{jambonz_url}}/audio/:filename",
+              "host": ["{{jambonz_url}}"],
+              "path": ["audio", ":filename"],
+              "variable": [{ "key": "filename", "value": "" }]
+            },
+            "description": "Proxies audio from the TTS service. Jambonz (cloud) fetches this via the public adapter URL to play it on the call."
+          }
+        },
+        {
+          "name": "Proxy Audio (HEAD)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "HEAD",
+            "header": [],
+            "url": {
+              "raw": "{{jambonz_url}}/audio/:filename",
+              "host": ["{{jambonz_url}}"],
+              "path": ["audio", ":filename"],
+              "variable": [{ "key": "filename", "value": "" }]
+            },
+            "description": "HEAD variant — Jambonz probes before fetching."
+          }
+        },
+        {
+          "name": "Jambonz Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{jambonz_url}}/health",
+              "host": ["{{jambonz_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jambonz (Internal)",
+      "description": "Internal Jambonz adapter endpoints — only reachable on the Docker network. Called by the router after initiating outbound calls.",
+      "item": [
+        {
+          "name": "Register Call",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"audio_url\": \"\", \"case_id\": \"\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{jambonz_url}}/internal/register/:call_sid",
+              "host": ["{{jambonz_url}}"],
+              "path": ["internal", "register", ":call_sid"],
+              "variable": [{ "key": "call_sid", "value": "", "description": "Jambonz call SID from the outbound call response" }]
+            },
+            "description": "Maps the call_sid to the TTS audio_url and case_id so the call webhook can look them up on answer."
           }
         }
       ]
@@ -482,6 +775,32 @@
             "url": {
               "raw": "{{report_url}}/health",
               "host": ["{{report_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "TTS Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{tts_url}}/health",
+              "host": ["{{tts_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Jambonz Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{jambonz_url}}/health",
+              "host": ["{{jambonz_url}}"],
               "path": ["health"]
             }
           }

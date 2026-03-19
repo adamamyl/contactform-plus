@@ -31,7 +31,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent
 SPEC_FILE = REPO_ROOT / "docs" / "swagger-spec.json"
-COLLECTION_DIR = Path.home() / "projects/bruno/emf/conduct-api"
+COLLECTION_DIR = Path.home() / "projects/bruno/emf/EMF Conduct - Total Restoration"
 
 # ---------------------------------------------------------------------------
 # YAML helpers — hand-rolled to avoid adding a dependency
@@ -298,7 +298,11 @@ ENVIRONMENTS: dict[str, list[tuple[str, str]]] = {
         ("router_url", "https://router.emf-forms.internal"),
         ("report_url", "https://report.emf-forms.internal"),
         ("oidc_url", "https://oidc.emf-forms.internal"),
+        ("tts_url", "http://localhost:8003"),
+        ("jambonz_url", "http://localhost:8004"),
         ("oidc_client_secret", ""),  # paste from .env OIDC_CLIENT_SECRET
+        ("router_internal_secret", ""),  # paste from .env ROUTER_INTERNAL_SECRET
+        ("mattermost_webhook_secret", ""),  # paste from .env MATTERMOST_WEBHOOK_SECRET
         ("access_token", ""),
         ("dispatcher_token", ""),
     ],
@@ -307,7 +311,11 @@ ENVIRONMENTS: dict[str, list[tuple[str, str]]] = {
         ("router_url", "https://router.staging.emf-forms.internal"),
         ("report_url", "https://report.staging.emf-forms.internal"),
         ("oidc_url", "https://oidc.staging.emf-forms.internal"),
+        ("tts_url", "http://tts.staging.emf-forms.internal:8003"),
+        ("jambonz_url", "http://jambonz.staging.emf-forms.internal:8004"),
         ("oidc_client_secret", ""),
+        ("router_internal_secret", ""),
+        ("mattermost_webhook_secret", ""),
         ("access_token", ""),
         ("dispatcher_token", ""),
     ],
@@ -316,7 +324,11 @@ ENVIRONMENTS: dict[str, list[tuple[str, str]]] = {
         ("router_url", "https://router.emfcamp.org"),
         ("report_url", "https://report.emfcamp.org"),
         ("oidc_url", "https://oidc.emfcamp.org"),
+        ("tts_url", "http://tts.emfcamp.org:8003"),
+        ("jambonz_url", "http://jambonz.emfcamp.org:8004"),
         ("oidc_client_secret", ""),
+        ("router_internal_secret", ""),
+        ("mattermost_webhook_secret", ""),
         ("access_token", ""),
         ("dispatcher_token", ""),
     ],
@@ -339,7 +351,11 @@ FOLDER_MAP: dict[str, tuple[str, str, int]] = {
     "Panel \u2014 Dispatcher (token auth)": ("Panel/Dispatcher", "Dispatcher", 4),
     "Report Form": ("Report Form", "Report Form", 3),
     "Message Router": ("Message Router", "Message Router", 4),
-    "Health Checks": ("Health", "Health", 5),
+    "Router (Internal)": ("Router Internal", "Router (Internal)", 5),
+    "TTS Service": ("TTS", "TTS Service", 6),
+    "Jambonz Adapter": ("Jambonz", "Jambonz Adapter", 7),
+    "Jambonz (Internal)": ("Jambonz Internal", "Jambonz (Internal)", 8),
+    "Health Checks": ("Health", "Health", 9),
 }
 
 # Auth request is top-level and gets special handling (basic auth, script)
