@@ -49,7 +49,7 @@
     <p><strong>Reporter:</strong>
       {% if r.name %}👤 {{ r.name }}{% else %}👤 anonymous{% endif %}
       {% if r.pronouns %}&nbsp;·&nbsp;🏷️ {{ r.pronouns }}{% endif %}
-      {% if r.email %}&nbsp;·&nbsp;✉️ <a href="mailto:{{ r.email }}">{{ r.email }}</a>{% endif %}
+      {% if r.email %}&nbsp;·&nbsp;✉️ <a href="mailto:{{ r.email }}" class="email-link">{{ r.email }}</a>{% endif %}
       {% if r.phone %}&nbsp;·&nbsp;📞 {{ r.phone }}{% endif %}
     </p>
   {% endif %}
@@ -86,18 +86,21 @@
            placeholder="Username" list="assignee-options" autocomplete="off">
     <datalist id="assignee-options"></datalist>
     <button type="submit" class="btn btn--small">Save</button>
+    <button type="button" class="btn btn--small btn--outline" id="assign-me-btn"
+            data-username="{{ current_username }}">Assign to me</button>
   </form>
 
   <form class="inline-form" id="tags-form" data-case-id="{{ case.id }}">
     <label for="tags">Tags (comma-separated)</label>
     <input type="text" id="tags" name="tags" value="{{ case.tags | join(', ') }}"
-           list="existing-tags" placeholder="tag1, tag2">
+           list="existing-tags" placeholder="tag1, tag2" autocomplete="off">
+    <datalist id="existing-tags"></datalist>
     <button type="submit" class="btn btn--small">Save</button>
   </form>
 
   <div class="dispatcher-actions" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
     <button class="btn btn--small btn--ack" data-action="admin-ack"
-            data-case-id="{{ case.id }}">ACK notification</button>
+            data-case-id="{{ case.id }}">{% if is_acked %}✅ ACKed{% else %}ACK notification{% endif %}</button>
     <button class="btn btn--small btn--trigger" data-action="admin-trigger"
             data-case-id="{{ case.id }}">Trigger call</button>
   </div>

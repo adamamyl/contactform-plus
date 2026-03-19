@@ -157,3 +157,6 @@ details[open] .filter-summary::before { transform: rotate(90deg); }
   .cases-table th, .cases-table td { padding: 0.4rem 0.5rem; }
   .page-header { flex-direction: column; align-items: flex-start; }
 }
+
+.email-link { color: #f472b6; text-decoration: none; }
+.email-link:hover { text-decoration: underline; }

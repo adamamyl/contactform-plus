@@ -169,19 +169,38 @@
     });
   }
 
-  function initAssigneeList() {
-    var dl = document.getElementById("assignee-options");
+  function populateDatalist(id, values) {
+    var dl = document.getElementById(id);
     if (!dl) return;
+    values.forEach(function (v) {
+      var opt = document.createElement("option");
+      opt.value = v;
+      dl.appendChild(opt);
+    });
+  }
+
+  function initAssigneeList() {
+    if (!document.getElementById("assignee-options")) return;
     fetch("/api/v1/assignees")
       .then(function (r) { return r.ok ? r.json() : []; })
-      .then(function (names) {
-        names.forEach(function (name) {
-          var opt = document.createElement("option");
-          opt.value = name;
-          dl.appendChild(opt);
-        });
-      })
+      .then(function (names) { populateDatalist("assignee-options", names); })
       .catch(function () {});
+    fetch("/api/v1/tags")
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (tags) { populateDatalist("existing-tags", tags); })
+      .catch(function () {});
+  }
+
+  function initAssignToMe() {
+    var btn = document.getElementById("assign-me-btn");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var input = document.getElementById("assignee");
+      if (input) {
+        input.value = btn.dataset.username;
+        document.getElementById("assignee-form").dispatchEvent(new Event("submit"));
+      }
+    });
   }
 
   function initTheme() {
@@ -202,6 +221,7 @@
     initTheme();
     initRelativeTimes();
     initAssigneeList();
+    initAssignToMe();
     initCaseForms();
     initDispatcherShare();
     initDispatcher();
