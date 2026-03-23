@@ -63,10 +63,12 @@
     const textarea = getById("what_happened");
     const countEl = getById("what_happened-count");
     if (!textarea || !countEl) return;
-    updateCharCount(textarea, countEl);
-    textarea.addEventListener("input", function () {
+    function update() {
       updateCharCount(textarea, countEl);
-    });
+      textarea.classList.toggle("has-value", textarea.value.trim().length > 0);
+    }
+    update();
+    textarea.addEventListener("input", update);
   }
 
   function initDateTimeDefaults() {
@@ -451,12 +453,40 @@
     });
   }
 
+  function initContactFields() {
+    var contactFields = getById("contact-fields");
+    if (!contactFields) return;
+    function update() {
+      var checked = document.querySelector("input[name=\"can_contact\"]:checked");
+      contactFields.hidden = !(checked && /** @type {HTMLInputElement} */ (checked).value === "true");
+    }
+    document.querySelectorAll("input[name=\"can_contact\"]").forEach(function (el) {
+      el.addEventListener("change", update);
+    });
+    update();
+  }
+
+  function initAccordionRestore() {
+    ["details-location", "details-more", "details-context"].forEach(function (id) {
+      var details = getById(id);
+      if (!details) return;
+      var hasValue = Array.from(details.querySelectorAll("input:not([type=hidden]), textarea, select")).some(function (el) {
+        var input = /** @type {HTMLInputElement} */ (el);
+        if (input.type === "radio") return input.checked;
+        return input.value.trim().length > 0;
+      });
+      if (hasValue) details.open = true;
+    });
+  }
+
   function init() {
     initCharCount();
     initDateTimeDefaults();
     initStateTracking();
     initPronouns();
     initMap();
+    initContactFields();
+    initAccordionRestore();
 
     const form = getById("conduct-form");
     if (form) {

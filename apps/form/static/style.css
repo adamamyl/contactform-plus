@@ -430,3 +430,69 @@ select.form-control {
 .site-footer span[aria-hidden="true"] {
   color: var(--color-outline);
 }
+
+/* Accordion (details/summary) — event time form */
+.form-details {
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-lg);
+}
+
+.form-details > summary {
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  color: var(--color-primary);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  user-select: none;
+  border-radius: var(--radius);
+}
+
+.form-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.form-details > summary::before {
+  content: "▶";
+  font-size: 0.6875rem;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.form-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.form-details > summary:hover,
+.form-details > summary:focus-visible {
+  background-color: var(--color-primary-container);
+}
+
+.form-details[open] > summary {
+  border-bottom: 1px solid var(--color-primary-container);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.form-details-body {
+  padding: var(--space-md) var(--space-md) var(--space-xs);
+}
+
+/* Contact fields reveal */
+#contact-fields {
+  padding: var(--space-sm) 0;
+}
+
+/* Highlight the "what happened" textarea until it has content */
+#what_happened:not(.has-value) {
+  background-color: #FFFDE7;
+  border-color: #F9A825;
+}
+
+#what_happened:not(.has-value):focus {
+  background-color: #FFFDE7;
+  border-color: var(--color-primary);
+}
