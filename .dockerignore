@@ -1,0 +1,23 @@
+# Build artefacts — these are recreated inside the image by uv
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.egg-info
+
+# Tests — not needed in production images
+**/tests
+tests
+
+# Dev / infra — not part of any Python service image
+.git
+docs
+scripts
+reports
+map
+infra
+node_modules
+
+# Config / secrets — never bake into images
+.env
+config.json
