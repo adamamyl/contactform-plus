@@ -72,15 +72,28 @@ docker compose -f /opt/ghost-docker/compose.yml \
 
 ### Start / stop the conduct stack
 
+Use `scripts/start-emf-stack.sh` — it wraps `docker compose` with both override files baked in:
+
 ```bash
 cd /opt/emf-conduct
 
-# Start (or recreate changed services)
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.wolfcraig.yml up -d
+scripts/start-emf-stack.sh up -d          # start
+scripts/start-emf-stack.sh down           # stop
+scripts/start-emf-stack.sh logs -f form   # tail logs
+scripts/start-emf-stack.sh --dry-run up -d  # preview command without running
+```
 
-# Stop
+Or with the full compose command directly:
+
+```bash
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.wolfcraig.yml up -d
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.wolfcraig.yml down
 ```
+
+> **Warning:** Always include `-f infra/docker-compose.wolfcraig.yml` (or use the script above).
+> The base commands in README.md omit it — running those on wolfcraig recreates containers without
+> the correct `container_name` values and `caddy-proxy` network attachment, causing 502s from Caddy
+> even though the containers appear healthy. Fix: `scripts/start-emf-stack.sh up -d --force-recreate`.
 
 ### After changing config.json domains
 
