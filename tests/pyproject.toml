@@ -6,7 +6,7 @@ dependencies = [
     "emf-form",
     "emf-panel",
     "httpx>=0.28.1",
-    "pytest>=9.0.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
 ]
 
