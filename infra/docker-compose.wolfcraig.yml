@@ -1,8 +1,10 @@
 # wolfcraig deployment override.
-# Ghost's Caddy handles TLS termination for all virtual hosts — conduct's built-in Caddy is disabled.
+# Traefik (from traefik-proxy repo) handles TLS for all vhosts.
+# This file overrides service labels to use thisparish.org domains,
+# disables local-only profiles, and resets exposed ports.
 #
 # Pre-requisites (once, on wolfcraig):
-#   docker network create caddy-proxy
+#   Run scripts/setup.sh in traefik-proxy repo (creates traefik-public network)
 #   ln -s ../.env infra/.env   # lets compose interpolate ${VAR:-default} from the real .env
 #   docker exec infra-postgres-1 psql -U emf_forms_admin -c "CREATE DATABASE mattermost;"
 #
@@ -10,19 +12,19 @@
 #   docker compose -f infra/docker-compose.yml -f infra/docker-compose.wolfcraig.yml up -d
 
 services:
-  caddy:
-    profiles:
-      - _disabled
-
   postgres:
     ports: !reset []
 
   form:
     container_name: emf-form
     ports: !reset []
-    networks:
-      - contactform
-      - caddy-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-form.rule=Host(`report.emf.thisparish.org`)
+      - traefik.http.routers.emf-form.entrypoints=websecure
+      - traefik.http.routers.emf-form.tls=true
+      - traefik.http.routers.emf-form.middlewares=security-headers@file
+      - traefik.http.services.emf-form.loadbalancer.server.port=8000
 
   panel:
     container_name: emf-panel
@@ -31,16 +33,23 @@ services:
       OIDC_CLIENT_ID: emf-forms
       OIDC_CLIENT_SECRET: secret
       BASE_URL: https://panel.emf.thisparish.org
-    networks:
-      - contactform
-      - caddy-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-panel.rule=Host(`panel.emf.thisparish.org`)
+      - traefik.http.routers.emf-panel.entrypoints=websecure
+      - traefik.http.routers.emf-panel.tls=true
+      - traefik.http.routers.emf-panel.middlewares=security-headers@file
+      - traefik.http.services.emf-panel.loadbalancer.server.port=8001
 
   jambonz-adapter:
     container_name: emf-jambonz
     ports: !reset []
-    networks:
-      - contactform
-      - caddy-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-jambonz-panel.rule=Host(`panel.emf.thisparish.org`) && (PathPrefix(`/webhook/jambonz`) || PathPrefix(`/audio/`))
+      - traefik.http.routers.emf-jambonz-panel.entrypoints=websecure
+      - traefik.http.routers.emf-jambonz-panel.tls=true
+      - traefik.http.services.emf-jambonz.loadbalancer.server.port=8004
 
   signal-api:
     ports: !reset []
@@ -49,22 +58,31 @@ services:
     profiles: !reset []
     environment:
       JSON_CONFIG: '{"interactiveLogin":true,"httpServer":"NettyWrapper","tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"client_id","match":"emf-forms","claims":{"groups":["team_conduct"]}}]}]}'
-    networks:
-      - contactform
-      - caddy-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-mock-oidc.rule=Host(`auth.emf.thisparish.org`)
+      - traefik.http.routers.emf-mock-oidc.entrypoints=websecure
+      - traefik.http.routers.emf-mock-oidc.tls=true
+      - traefik.http.services.emf-mock-oidc.loadbalancer.server.port=8080
 
   emf-map:
     profiles: !reset []
-    networks:
-      - contactform
-      - caddy-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-map.rule=Host(`map.emf.thisparish.org`)
+      - traefik.http.routers.emf-map.entrypoints=websecure
+      - traefik.http.routers.emf-map.tls=true
+      - traefik.http.services.emf-map.loadbalancer.server.port=8080
 
   swagger:
     profiles: !reset []
     ports: !reset []
-    networks:
-      - contactform
-      - caddy-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-swagger.rule=Host(`swagger.emf.thisparish.org`)
+      - traefik.http.routers.emf-swagger.entrypoints=websecure
+      - traefik.http.routers.emf-swagger.tls=true
+      - traefik.http.services.emf-swagger.loadbalancer.server.port=8080
 
   mattermost:
     profiles: !reset []
@@ -72,10 +90,13 @@ services:
     environment:
       MM_SERVICESETTINGS_SITEURL: https://mattermost.emf.thisparish.org
       MM_SQLSETTINGS_DATASOURCE: postgres://emf_forms_admin:${ADMIN_DB_PASSWORD}@postgres/mattermost?sslmode=disable
-    networks:
-      - contactform
-      - caddy-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-mattermost.rule=Host(`mattermost.emf.thisparish.org`)
+      - traefik.http.routers.emf-mattermost.entrypoints=websecure
+      - traefik.http.routers.emf-mattermost.tls=true
+      - traefik.http.services.emf-mattermost.loadbalancer.server.port=8065
 
 networks:
-  caddy-proxy:
+  traefik-public:
     external: true

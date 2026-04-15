@@ -1,22 +1,4 @@
 services:
-  caddy:
-    image: caddy:2-alpine
-    command: caddy run --config /etc/caddy/Caddyfile.local --adapter caddyfile
-    ports:
-      - "443:443"
-      - "80:80"
-    volumes:
-      - ./caddy:/etc/caddy:ro
-      - caddy_data:/data
-    depends_on:
-      - form
-      - panel
-      - msg-router
-    networks:
-      contactform:
-        aliases:
-          - oidc.emf-forms.internal
-
   postgres:
     image: postgres:17-alpine
     environment:
@@ -43,13 +25,12 @@ services:
     build:
       context: ..
       dockerfile: apps/form/Dockerfile
+    restart: unless-stopped
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD:-localdev}@postgres/emf_forms
       CONFIG_PATH: /app/config.json
       LOCAL_DEV: "true"
-    ports:
-      - "${FORM_PORT:-8000}:8000"
     volumes:
       - ../config.json:/app/config.json:ro
     depends_on:
@@ -57,11 +38,20 @@ services:
         condition: service_healthy
     networks:
       - contactform
+      - traefik-public
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-form.rule=Host(`report.emf-forms.internal`)
+      - traefik.http.routers.emf-form.entrypoints=websecure
+      - traefik.http.routers.emf-form.tls=true
+      - traefik.http.routers.emf-form.middlewares=security-headers@file
+      - traefik.http.services.emf-form.loadbalancer.server.port=8000
 
   panel:
     build:
       context: ..
       dockerfile: apps/panel/Dockerfile
+    restart: unless-stopped
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://team_member:${TEAM_MEMBER_DB_PASSWORD:-localdev}@postgres/emf_forms
@@ -79,11 +69,20 @@ services:
         condition: service_healthy
     networks:
       - contactform
+      - traefik-public
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-panel.rule=Host(`panel.emf-forms.internal`)
+      - traefik.http.routers.emf-panel.entrypoints=websecure
+      - traefik.http.routers.emf-panel.tls=true
+      - traefik.http.routers.emf-panel.middlewares=security-headers@file
+      - traefik.http.services.emf-panel.loadbalancer.server.port=8001
 
   msg-router:
     build:
       context: ..
       dockerfile: apps/router/Dockerfile
+    restart: unless-stopped
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD:-localdev}@postgres/emf_forms
@@ -101,6 +100,7 @@ services:
     build:
       context: ..
       dockerfile: apps/tts/Dockerfile
+    restart: unless-stopped
     networks:
       - contactform
 
@@ -108,11 +108,10 @@ services:
     build:
       context: ..
       dockerfile: apps/jambonz/Dockerfile
+    restart: unless-stopped
     env_file: ../.env
     environment:
       CONFIG_PATH: /app/config.json
-    ports:
-      - "${JAMBONZ_ADAPTER_PORT:-8004}:8004"
     volumes:
       - ../config.json:/app/config.json:ro
     depends_on:
@@ -120,16 +119,33 @@ services:
       - tts
     networks:
       - contactform
+      - traefik-public
+    labels:
+      - traefik.enable=true
+      # Jambonz webhook + audio paths on the panel vhost
+      # Longer rule → higher priority than emf-panel router automatically
+      - traefik.http.routers.emf-jambonz-panel.rule=Host(`panel.emf-forms.internal`) && (PathPrefix(`/webhook/jambonz`) || PathPrefix(`/audio/`))
+      - traefik.http.routers.emf-jambonz-panel.entrypoints=websecure
+      - traefik.http.routers.emf-jambonz-panel.tls=true
+      - traefik.http.services.emf-jambonz.loadbalancer.server.port=8004
 
   emf-map:
     build:
       context: ${EMF_MAP_PATH:-../../emf/map/web}
       dockerfile: Dockerfile
+    restart: unless-stopped
     profiles:
       - map
       - local
     networks:
       - contactform
+      - traefik-public
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-map.rule=Host(`map.emf-forms.internal`)
+      - traefik.http.routers.emf-map.entrypoints=websecure
+      - traefik.http.routers.emf-map.tls=true
+      - traefik.http.services.emf-map.loadbalancer.server.port=8080
 
   swagger:
     build:
@@ -156,19 +172,35 @@ services:
       - ../config.json:/app/config.json:ro
     networks:
       - contactform
+      - traefik-public
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-swagger.rule=Host(`swagger.emf-forms.internal`)
+      - traefik.http.routers.emf-swagger.entrypoints=websecure
+      - traefik.http.routers.emf-swagger.tls=true
+      - traefik.http.services.emf-swagger.loadbalancer.server.port=8080
 
   mock-oidc:
     image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    restart: unless-stopped
     environment:
       JSON_CONFIG: '{"interactiveLogin":true,"httpServer":"NettyWrapper","tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"grant_type","match":"client_credentials","claims":{"sub":"api-client","groups":["team_conduct"]}}]}]}'
     profiles:
       - local
     networks:
       - contactform
+      - traefik-public
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emf-mock-oidc.rule=Host(`oidc.emf-forms.internal`)
+      - traefik.http.routers.emf-mock-oidc.entrypoints=websecure
+      - traefik.http.routers.emf-mock-oidc.tls=true
+      - traefik.http.services.emf-mock-oidc.loadbalancer.server.port=8080
 
   mattermost:
     build:
       context: ./mattermost
+    restart: unless-stopped
     environment:
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://emf_forms_admin:${ADMIN_DB_PASSWORD:-localdev}@postgres/mattermost?sslmode=disable
@@ -201,10 +233,9 @@ services:
 
   signal-api:
     image: bbernhard/signal-cli-rest-api:latest
+    restart: unless-stopped
     environment:
       MODE: native
-    ports:
-      - "8080:8080"
     volumes:
       - signal_data:/home/.local/share/signal-cli
     networks:
@@ -226,6 +257,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -264,7 +296,6 @@ services:
       - contactform
 
 volumes:
-  caddy_data:
   pg_data:
   signal_data:
   tts_audio:
@@ -276,3 +307,5 @@ volumes:
 networks:
   contactform:
     driver: bridge
+  traefik-public:
+    external: true
