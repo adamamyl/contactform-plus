@@ -24,7 +24,7 @@ jobs:
       - run: uv run python -m mypy src/ --strict
       - run: uv run bandit -r src/ -ll
       - run: uv run pytest tests/ -q
-      - run: uv run pip-audit
+      - run: uv run pip-audit --skip-editable
 
   form:
     name: test-form
@@ -43,7 +43,7 @@ jobs:
       - run: uv run python -m mypy src/ --strict
       - run: uv run bandit -r src/ -ll
       - run: uv run pytest tests/ -q
-      - run: uv run pip-audit
+      - run: uv run pip-audit --skip-editable
 
   panel:
     name: test-panel
@@ -62,7 +62,7 @@ jobs:
       - run: uv run python -m mypy src/ --strict
       - run: uv run bandit -r src/ -ll
       - run: uv run pytest tests/ -q
-      - run: uv run pip-audit
+      - run: uv run pip-audit --skip-editable
 
   router:
     name: test-router
@@ -81,7 +81,7 @@ jobs:
       - run: uv run python -m mypy src/ --strict
       - run: uv run bandit -r src/ -ll
       - run: uv run pytest tests/ -q
-      - run: uv run pip-audit
+      - run: uv run pip-audit --skip-editable
 
   tts:
     name: test-tts
@@ -100,7 +100,7 @@ jobs:
       - run: uv run python -m mypy src/ --strict
       - run: uv run bandit -r src/ -ll
       - run: uv run pytest tests/ -q
-      - run: uv run pip-audit
+      - run: uv run pip-audit --skip-editable
 
   jambonz:
     name: test-jambonz
@@ -119,7 +119,7 @@ jobs:
       - run: uv run python -m mypy src/ --strict
       - run: uv run bandit -r src/ -ll
       - run: uv run pytest tests/ -q
-      - run: uv run pip-audit
+      - run: uv run pip-audit --skip-editable
 
   security:
     name: security
