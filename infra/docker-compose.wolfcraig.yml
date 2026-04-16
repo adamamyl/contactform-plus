@@ -93,6 +93,9 @@ services:
   mattermost:
     profiles: !reset []
     ports: !reset []
+    networks:
+      - contactform
+      - traefik-public
     environment:
       MM_SERVICESETTINGS_SITEURL: https://mattermost.emf.thisparish.org
       MM_SQLSETTINGS_DATASOURCE: postgres://emf_forms_admin:${ADMIN_DB_PASSWORD}@postgres/mattermost?sslmode=disable
