@@ -23,6 +23,7 @@ services:
       - traefik.http.routers.emf-form.rule=Host(`report.emf.thisparish.org`)
       - traefik.http.routers.emf-form.entrypoints=websecure
       - traefik.http.routers.emf-form.tls=true
+      - traefik.http.routers.emf-form.tls.certresolver=leprod
       - traefik.http.routers.emf-form.middlewares=security-headers@file
       - traefik.http.services.emf-form.loadbalancer.server.port=8000
 
@@ -38,6 +39,7 @@ services:
       - traefik.http.routers.emf-panel.rule=Host(`panel.emf.thisparish.org`)
       - traefik.http.routers.emf-panel.entrypoints=websecure
       - traefik.http.routers.emf-panel.tls=true
+      - traefik.http.routers.emf-panel.tls.certresolver=leprod
       - traefik.http.routers.emf-panel.middlewares=security-headers@file
       - traefik.http.services.emf-panel.loadbalancer.server.port=8001
 
@@ -49,6 +51,7 @@ services:
       - traefik.http.routers.emf-jambonz-panel.rule=Host(`panel.emf.thisparish.org`) && (PathPrefix(`/webhook/jambonz`) || PathPrefix(`/audio/`))
       - traefik.http.routers.emf-jambonz-panel.entrypoints=websecure
       - traefik.http.routers.emf-jambonz-panel.tls=true
+      - traefik.http.routers.emf-jambonz-panel.tls.certresolver=leprod
       - traefik.http.services.emf-jambonz.loadbalancer.server.port=8004
 
   signal-api:
@@ -63,6 +66,7 @@ services:
       - traefik.http.routers.emf-mock-oidc.rule=Host(`auth.emf.thisparish.org`)
       - traefik.http.routers.emf-mock-oidc.entrypoints=websecure
       - traefik.http.routers.emf-mock-oidc.tls=true
+      - traefik.http.routers.emf-mock-oidc.tls.certresolver=leprod
       - traefik.http.services.emf-mock-oidc.loadbalancer.server.port=8080
 
   emf-map:
@@ -72,6 +76,7 @@ services:
       - traefik.http.routers.emf-map.rule=Host(`map.emf.thisparish.org`)
       - traefik.http.routers.emf-map.entrypoints=websecure
       - traefik.http.routers.emf-map.tls=true
+      - traefik.http.routers.emf-map.tls.certresolver=leprod
       - traefik.http.services.emf-map.loadbalancer.server.port=8080
 
   swagger:
@@ -82,6 +87,7 @@ services:
       - traefik.http.routers.emf-swagger.rule=Host(`swagger.emf.thisparish.org`)
       - traefik.http.routers.emf-swagger.entrypoints=websecure
       - traefik.http.routers.emf-swagger.tls=true
+      - traefik.http.routers.emf-swagger.tls.certresolver=leprod
       - traefik.http.services.emf-swagger.loadbalancer.server.port=8080
 
   mattermost:
@@ -95,6 +101,7 @@ services:
       - traefik.http.routers.emf-mattermost.rule=Host(`mattermost.emf.thisparish.org`)
       - traefik.http.routers.emf-mattermost.entrypoints=websecure
       - traefik.http.routers.emf-mattermost.tls=true
+      - traefik.http.routers.emf-mattermost.tls.certresolver=leprod
       - traefik.http.services.emf-mattermost.loadbalancer.server.port=8065
 
 networks:
