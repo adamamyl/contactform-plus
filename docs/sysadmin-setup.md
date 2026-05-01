@@ -308,6 +308,57 @@ The container must stay running during the scan. Once linked, the number is regi
 
 ---
 
+## 7a. EMF site map service (optional)
+
+The `emf-map` Docker service embeds the [EMF site map](https://github.com/emfcamp/map) inside the report form, allowing reporters to pin their location. It is gated behind the `map` Compose profile and is only needed if `site_map.enabled` is `true` in `config.json`.
+
+### Patch requirements
+
+The upstream map repo needs two small patches to support embed mode:
+
+- `?embed=true` — hides the header
+- `?readonly=true` — suppresses click-to-pin (used in panel case detail)
+- `postMessage` `emf-marker` / `emf-view` — lets the parent frame receive coordinates and map state
+- `?marker=lat,lon` — pre-sets the pin on load
+
+The patch file is at `map/embed-readonly-view-postmessage.patch` in this repo. It applies against upstream commit `c96be26` (or later).
+
+### Setup
+
+```bash
+# Clone the upstream map repo
+git clone https://github.com/emfcamp/map.git /opt/emf-map
+
+# Apply our embed patch
+cd /opt/emf-map
+git am /opt/emf-conduct/map/embed-readonly-view-postmessage.patch
+```
+
+If the patch doesn't apply cleanly (upstream has moved on), rebase manually:
+
+```bash
+git fetch origin
+git rebase origin/main
+# resolve any conflicts in web/src/index.ts — our additions are in the embed else-block
+# and the ?marker= param block just before this.map.addControl(this.marker, ...)
+```
+
+### Compose
+
+Set `EMF_MAP_PATH` in `.env` if your clone isn't at the default path (`../../emf/map/web` relative to `infra/`):
+
+```bash
+EMF_MAP_PATH=/opt/emf-map/web
+```
+
+Start with the `map` profile:
+
+```bash
+docker compose -f infra/docker-compose.yml --profile map up -d emf-map
+```
+
+---
+
 ## 8. First start
 
 ```bash
