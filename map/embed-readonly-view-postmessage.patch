@@ -1,4 +1,4 @@
-From 1c542244c833bd64e4b4882e30b260c3b9571323 Mon Sep 17 00:00:00 2001
+From fa7f5e6f50828f1e90f770cddc150d5cee421624 Mon Sep 17 00:00:00 2001
 From: Adam McGreggor <adam@adamamyl.com>
 Date: Sat, 7 Mar 2026 20:23:18 +0000
 Subject: [PATCH] feat(embed): add readonly mode and view postMessage for embed
@@ -12,9 +12,10 @@ Subject: [PATCH] feat(embed): add readonly mode and view postMessage for embed
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ---
- web/src/index.ts  | 23 +++++++++++++++++++++++
- web/src/marker.ts |  4 ++++
- 2 files changed, 27 insertions(+)
+ web/src/index.ts           | 23 +++++++++++++++++++++++
+ web/src/marker.ts          |  4 ++++
+ web/src/style/map_style.ts |  2 +-
+ 3 files changed, 28 insertions(+), 1 deletion(-)
 
 diff --git a/web/src/index.ts b/web/src/index.ts
 index 6e1b309..cd3143d 100644
@@ -77,5 +78,18 @@ index 4ad4472..decde32 100644
      }
 
      updateLocation() {
+diff --git a/web/src/style/map_style.ts b/web/src/style/map_style.ts
+index 10a0648..28bf1cf 100644
+--- a/web/src/style/map_style.ts
++++ b/web/src/style/map_style.ts
+@@ -789,7 +789,7 @@ const style: StyleSpecification = {
+     },
+   },
+   sprite: 'https://openmaptiles.github.io/positron-gl-style/sprite',
+-  glyphs: 'https://map.emfcamp.org/tiles/font/{fontstack}/{range}',
++  glyphs: 'https://map.emfcamp.org/fonts/{fontstack}/{range}.pbf',
+   layers: sortBy(layers, [(item) => item.zindex || 0]).map((item) => {
+     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     const { zindex: _, ...new_item } = item
 --
 2.50.1 (Apple Git-155)
