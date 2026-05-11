@@ -1,4 +1,4 @@
-From 93291ea8245e469af9057f15d72643ebec2f57a0 Mon Sep 17 00:00:00 2001
+From 1f61c184250ec627dde0b647ea224c45a1d32af0 Mon Sep 17 00:00:00 2001
 From: Adam McGreggor <adam@adamamyl.com>
 Date: Sat, 7 Mar 2026 20:23:18 +0000
 Subject: [PATCH] feat(embed): add readonly mode and view postMessage for embed
@@ -12,56 +12,57 @@ Subject: [PATCH] feat(embed): add readonly mode and view postMessage for embed
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ---
- web/src/index.ts  | 23 +++++++++++++++++++++++
- web/src/marker.ts |  4 ++++
- 2 files changed, 27 insertions(+)
+ web/src/index.ts           | 23 +++++++++++++++++++++++
+ web/src/marker.ts          |  4 ++++
+ web/src/style/map_style.ts |  2 +-
+ 3 files changed, 28 insertions(+), 1 deletion(-)
 
 diff --git a/web/src/index.ts b/web/src/index.ts
-index fe3d398..252c49f 100644
+index 6e1b309..cd3143d 100644
 --- a/web/src/index.ts
 +++ b/web/src/index.ts
-@@ -118,6 +118,7 @@ class EventMap {
+@@ -115,6 +115,7 @@ class EventMap {
 
-         const url = new URL(window.location.href)
-         const embed = url.searchParams.get('embed') == 'true'
-+        const readonly = url.searchParams.get('readonly') == 'true'
+     const url = new URL(window.location.href)
+     const embed = url.searchParams.get('embed') == 'true'
++    const readonly = url.searchParams.get('readonly') == 'true'
 
-         if (!embed) {
-             this.map.addControl(new maplibregl.NavigationControl(), 'top-right')
-@@ -149,11 +150,33 @@ class EventMap {
-             }
-         } else {
-             document.querySelector('header')!.style.display = 'none'
-+            this.map.on('load', () => {
-+                this.map!.resize()
-+            })
-+            if (!readonly) {
-+                this.map.on('click', (e: maplibregl.MapMouseEvent) => {
-+                    this.marker!.setLocation(e.lngLat)
-+                })
-+            }
-+            const sendView = () => {
-+                const c = this.map!.getCenter()
-+                window.parent.postMessage(
-+                    { type: 'emf-view', zoom: this.map!.getZoom(), lat: c.lat, lon: c.lng },
-+                    '*',
-+                )
-+            }
-+            this.map.on('moveend', sendView)
-+            this.map.on('load', sendView)
-         }
+     if (!embed) {
+       this.map.addControl(new maplibregl.NavigationControl(), 'top-right')
+@@ -146,11 +147,33 @@ class EventMap {
+       }
+     } else {
+       document.querySelector('header')!.style.display = 'none'
++      this.map.on('load', () => {
++        this.map!.resize()
++      })
++      if (!readonly) {
++        this.map.on('click', (e: maplibregl.MapMouseEvent) => {
++          this.marker!.setLocation(e.lngLat)
++        })
++      }
++      const sendView = () => {
++        const c = this.map!.getCenter()
++        window.parent.postMessage(
++          { type: 'emf-view', zoom: this.map!.getZoom(), lat: c.lat, lon: c.lng },
++          '*',
++        )
++      }
++      this.map.on('moveend', sendView)
++      this.map.on('load', sendView)
+     }
 
-         this.map.addControl(this.layer_switcher, 'top-right')
-         this.url_hash.enable(this.map)
+     this.map.addControl(this.layer_switcher, 'top-right')
+     this.url_hash.enable(this.map)
 
-+        const markerParam = url.searchParams.get('marker')
-+        if (markerParam) {
-+            this.marker!.setURLString(markerParam)
-+        }
++    const markerParam = url.searchParams.get('marker')
++    if (markerParam) {
++      this.marker!.setURLString(markerParam)
++    }
 +
-         this.map.addControl(this.marker, 'top-right')
+     this.map.addControl(this.marker, 'top-right')
 
-         const contextMenu = new ContextMenu(this.map)
+     const contextMenu = new ContextMenu(this.map)
 diff --git a/web/src/marker.ts b/web/src/marker.ts
 index 4ad4472..decde32 100644
 --- a/web/src/marker.ts
@@ -77,5 +78,18 @@ index 4ad4472..decde32 100644
      }
 
      updateLocation() {
+diff --git a/web/src/style/map_style.ts b/web/src/style/map_style.ts
+index e761971..34179af 100644
+--- a/web/src/style/map_style.ts
++++ b/web/src/style/map_style.ts
+@@ -779,7 +779,7 @@ const style: StyleSpecification = {
+     },
+   },
+   sprite: 'https://openmaptiles.github.io/positron-gl-style/sprite',
+-  glyphs: 'https://map.emfcamp.org/tiles/font/{fontstack}/{range}',
++  glyphs: 'https://map.emfcamp.org/fonts/{fontstack}/{range}.pbf',
+   layers: sortBy(layers, [(item) => item.zindex || 0]).map((item) => {
+     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     const { zindex: _, ...new_item } = item
 --
-2.50.1 (Apple Git-155)
+2.54.0
