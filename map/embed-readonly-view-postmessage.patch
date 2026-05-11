@@ -1,4 +1,4 @@
-From fa7f5e6f50828f1e90f770cddc150d5cee421624 Mon Sep 17 00:00:00 2001
+From 1f61c184250ec627dde0b647ea224c45a1d32af0 Mon Sep 17 00:00:00 2001
 From: Adam McGreggor <adam@adamamyl.com>
 Date: Sat, 7 Mar 2026 20:23:18 +0000
 Subject: [PATCH] feat(embed): add readonly mode and view postMessage for embed
@@ -79,10 +79,10 @@ index 4ad4472..decde32 100644
 
      updateLocation() {
 diff --git a/web/src/style/map_style.ts b/web/src/style/map_style.ts
-index 10a0648..28bf1cf 100644
+index e761971..34179af 100644
 --- a/web/src/style/map_style.ts
 +++ b/web/src/style/map_style.ts
-@@ -789,7 +789,7 @@ const style: StyleSpecification = {
+@@ -779,7 +779,7 @@ const style: StyleSpecification = {
      },
    },
    sprite: 'https://openmaptiles.github.io/positron-gl-style/sprite',
@@ -92,4 +92,4 @@ index 10a0648..28bf1cf 100644
      // eslint-disable-next-line @typescript-eslint/no-unused-vars
      const { zindex: _, ...new_item } = item
 --
-2.50.1 (Apple Git-155)
+2.54.0
