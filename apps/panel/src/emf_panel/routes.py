@@ -64,7 +64,10 @@ def _current_active_event(events: list[EventConfig], today: date | None = None) 
 
 def _dispatcher_config(settings: Settings) -> tuple[int, int]:
     """Return (ttl_hours, max_devices) from current event config, falling back to settings."""
-    cfg = settings.app_config
+    try:
+        cfg = settings.app_config
+    except OSError:
+        return settings.dispatcher_session_ttl_hours, settings.dispatcher_session_max_devices
     active_name = settings.current_event_override or _current_active_event(cfg.events)
     if active_name:
         for ev in cfg.events:
