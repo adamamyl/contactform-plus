@@ -62,6 +62,20 @@ def _current_active_event(events: list[EventConfig], today: date | None = None) 
     return None
 
 
+def _dispatcher_config(settings: Settings) -> tuple[int, int]:
+    """Return (ttl_hours, max_devices) from current event config, falling back to settings."""
+    try:
+        cfg = settings.app_config
+    except OSError:
+        return settings.dispatcher_session_ttl_hours, settings.dispatcher_session_max_devices
+    active_name = settings.current_event_override or _current_active_event(cfg.events)
+    if active_name:
+        for ev in cfg.events:
+            if ev.name == active_name:
+                return ev.dispatcher_session_ttl_hours, ev.dispatcher_session_max_devices
+    return settings.dispatcher_session_ttl_hours, settings.dispatcher_session_max_devices
+
+
 VALID_TRANSITIONS: dict[str, set[str]] = {
     "new": {"assigned"},
     "assigned": {"in_progress", "new", "closed"},
@@ -668,7 +682,7 @@ async def create_dispatcher_session(
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, object]:
-    ttl = settings.dispatcher_session_ttl_hours
+    ttl, _ = _dispatcher_config(settings)
     token = create_dispatcher_token(settings.secret_key, ttl)
     url = f"{settings.base_url}/dispatcher?token={token}"
     return {"url": url, "expires_in_hours": ttl}
@@ -725,9 +739,8 @@ async def dispatcher_view(
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
-    validate_dispatcher_token(
-        token, dev_id, settings.secret_key, settings.dispatcher_session_max_devices
-    )
+    _, max_devices = _dispatcher_config(settings)
+    validate_dispatcher_token(token, dev_id, settings.secret_key, max_devices)
     cfg = settings.app_config
     known_event_names = {e.name for e in cfg.events}
     active_event: str | None
@@ -792,9 +805,8 @@ async def dispatcher_cases(
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
-    validate_dispatcher_token(
-        token, dev_id, settings.secret_key, settings.dispatcher_session_max_devices
-    )
+    _, max_devices = _dispatcher_config(settings)
+    validate_dispatcher_token(token, dev_id, settings.secret_key, max_devices)
     stmt = select(Case).order_by(Case.urgency.desc(), Case.created_at.desc())
     if not show_all:
         stmt = stmt.where(Case.assignee.is_(None))
@@ -831,9 +843,8 @@ async def dispatcher_ack(
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
-    validate_dispatcher_token(
-        token, dev_id, settings.secret_key, settings.dispatcher_session_max_devices
-    )
+    _, max_devices = _dispatcher_config(settings)
+    validate_dispatcher_token(token, dev_id, settings.secret_key, max_devices)
     now = datetime.now(tz=UTC)
     await session.execute(
         update(Notification)
@@ -856,9 +867,8 @@ async def dispatcher_trigger(
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
-    validate_dispatcher_token(
-        token, dev_id, settings.secret_key, settings.dispatcher_session_max_devices
-    )
+    _, max_devices = _dispatcher_config(settings)
+    validate_dispatcher_token(token, dev_id, settings.secret_key, max_devices)
     await session.execute(
         text("SELECT pg_notify('retrigger_case', :payload)"),
         {"payload": str(case_id)},
