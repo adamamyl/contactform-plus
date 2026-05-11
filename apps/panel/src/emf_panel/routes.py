@@ -707,10 +707,11 @@ async def dispatcher_share_page(
     user: Annotated[dict[str, object], Depends(require_conduct_team)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> HTMLResponse:
+    ttl, max_devices = _dispatcher_config(settings)
     return templates.TemplateResponse(
         request,
         "dispatcher_share.html",
-        {"request": request, "user": user, "settings": settings},
+        {"request": request, "user": user, "ttl": ttl, "max_devices": max_devices},
     )
 
 
