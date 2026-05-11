@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     base_url: str = "http://localhost:8001"
     redis_url: str = "redis://redis:6379"
     dispatcher_session_ttl_hours: int = 8
+    dispatcher_session_max_devices: int = 2
     current_event_override: str | None = None
     attachment_dir: str = "/app/attachments"
     router_internal_url: str = "http://msg-router:8002"

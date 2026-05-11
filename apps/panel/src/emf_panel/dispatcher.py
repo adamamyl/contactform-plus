@@ -24,7 +24,9 @@ def create_dispatcher_token(secret_key: str, ttl_hours: int) -> str:
     return token
 
 
-def validate_dispatcher_token(token: str, device_id: str, secret_key: str) -> dict[str, object]:
+def validate_dispatcher_token(
+    token: str, device_id: str, secret_key: str, max_devices: int = 2
+) -> dict[str, object]:
     try:
         payload: dict[str, object] = jwt.decode(token, secret_key, algorithms=["HS256"])
     except jwt.PyJWTError as err:
@@ -38,7 +40,7 @@ def validate_dispatcher_token(token: str, device_id: str, secret_key: str) -> di
 
     devices = _active_sessions.setdefault(jti, [])
     if device_id not in devices:
-        if len(devices) >= 2:
+        if len(devices) >= max_devices:
             raise HTTPException(status_code=403, detail="Maximum devices for this session reached")
         devices.append(device_id)
 

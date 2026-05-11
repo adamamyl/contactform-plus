@@ -2,7 +2,7 @@
 {% block title %}Dispatcher URL — EMF Conduct Panel{% endblock %}
 {% block content %}
 <h1>Generate dispatcher URL</h1>
-<p>Create a time-limited session URL for a dispatcher. Valid for up to 2 devices simultaneously.</p>
+<p>Create a time-limited session URL for a dispatcher. Valid for {{ settings.dispatcher_session_ttl_hours }}h, up to {{ settings.dispatcher_session_max_devices }} devices simultaneously.</p>
 
 <form id="session-form">
   <label for="send_to">Email to (optional)</label>

@@ -725,7 +725,9 @@ async def dispatcher_view(
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
-    validate_dispatcher_token(token, dev_id, settings.secret_key)
+    validate_dispatcher_token(
+        token, dev_id, settings.secret_key, settings.dispatcher_session_max_devices
+    )
     cfg = settings.app_config
     known_event_names = {e.name for e in cfg.events}
     active_event: str | None
@@ -790,7 +792,9 @@ async def dispatcher_cases(
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
-    validate_dispatcher_token(token, dev_id, settings.secret_key)
+    validate_dispatcher_token(
+        token, dev_id, settings.secret_key, settings.dispatcher_session_max_devices
+    )
     stmt = select(Case).order_by(Case.urgency.desc(), Case.created_at.desc())
     if not show_all:
         stmt = stmt.where(Case.assignee.is_(None))
@@ -827,7 +831,9 @@ async def dispatcher_ack(
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
-    validate_dispatcher_token(token, dev_id, settings.secret_key)
+    validate_dispatcher_token(
+        token, dev_id, settings.secret_key, settings.dispatcher_session_max_devices
+    )
     now = datetime.now(tz=UTC)
     await session.execute(
         update(Notification)
@@ -850,7 +856,9 @@ async def dispatcher_trigger(
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
-    validate_dispatcher_token(token, dev_id, settings.secret_key)
+    validate_dispatcher_token(
+        token, dev_id, settings.secret_key, settings.dispatcher_session_max_devices
+    )
     await session.execute(
         text("SELECT pg_notify('retrigger_case', :payload)"),
         {"payload": str(case_id)},
