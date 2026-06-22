@@ -92,7 +92,7 @@ def _resolve_text(req: TTSRequest) -> str:
         )
         return _sanitise(raw)
     raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail="Provide either 'text' or 'friendly_id' + 'urgency'",
     )
 

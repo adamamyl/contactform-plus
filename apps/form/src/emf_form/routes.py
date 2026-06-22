@@ -148,13 +148,13 @@ async def submit_form(
     valid_events = {e.name for e in config.events}
     if submission.event_name not in valid_events:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Unknown event: {submission.event_name}",
         )
 
     if submission.urgency not in set(config.urgency_levels):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Invalid urgency: {submission.urgency}",
         )
 
@@ -164,13 +164,13 @@ async def submit_form(
         if phase == Phase.EVENT_TIME:
             if not has_email and not has_phone:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="An email address or phone number is required when you have agreed to be contacted.",  # noqa: E501
                 )
         else:
             if not has_email:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="An email address is required when you have agreed to be contacted.",
                 )
 
@@ -325,7 +325,7 @@ async def upload_attachment(
     )
     if len(existing) >= cfg.attachment_max_per_case:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Maximum {cfg.attachment_max_per_case} attachments per case",
         )
     filename = f"{uuid.uuid4().hex}.{ext}"

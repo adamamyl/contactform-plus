@@ -504,7 +504,7 @@ async def update_assignee(
         )
     await session.commit()
     if body.assignee:
-        await redis.sadd(_ASSIGNEES_KEY, body.assignee)  # type: ignore[misc]
+        await redis.sadd(_ASSIGNEES_KEY, body.assignee)
     return {"assignee": body.assignee}
 
 
@@ -591,7 +591,7 @@ async def list_assignees(
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> list[str]:
-    members: set[str] = await redis.smembers(_ASSIGNEES_KEY)  # type: ignore[misc]
+    members = cast(set[str], await redis.smembers(_ASSIGNEES_KEY))
     return sorted(members)
 
 
@@ -647,7 +647,7 @@ async def admin_ack(
         update(Case).where(Case.id == case_id).values(assignee=username, updated_at=now)
     )
     await session.commit()
-    await redis.sadd(_ASSIGNEES_KEY, username)  # type: ignore[misc]
+    await redis.sadd(_ASSIGNEES_KEY, username)
     await _notify_router_ack(case_id, username, settings)
     return {"ok": True}
 
