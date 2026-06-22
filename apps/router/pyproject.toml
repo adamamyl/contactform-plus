@@ -37,5 +37,12 @@ dev = [
     "ruff>=0.15.4",
 ]
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore:coroutine '.*' was never awaited:RuntimeWarning",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+
 [tool.uv.sources]
 emf-shared = { path = "../../shared", editable = true }

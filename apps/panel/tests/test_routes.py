@@ -343,10 +343,10 @@ async def test_dispatcher_ack(
     client: AsyncClient, valid_token: str, mock_session: AsyncMock
 ) -> None:
     case_id = str(uuid.uuid4())
+    client.cookies.set("device_id", "test-device-1")
     resp = await client.post(
         f"/api/v1/dispatcher/cases/{case_id}/ack?token={valid_token}",
         json={"acked_by": "dispatcher"},
-        cookies={"device_id": "test-device-1"},
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
@@ -357,9 +357,9 @@ async def test_dispatcher_trigger_call(
     client: AsyncClient, valid_token: str, mock_session: AsyncMock
 ) -> None:
     case_id = str(uuid.uuid4())
+    client.cookies.set("device_id", "test-device-1")
     resp = await client.post(
         f"/api/v1/dispatcher/cases/{case_id}/calls?token={valid_token}",
-        cookies={"device_id": "test-device-1"},
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
