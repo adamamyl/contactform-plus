@@ -1,5 +1,5 @@
 FROM python:3.14-slim AS builder
-RUN pip install uv --no-cache-dir
+RUN pip install uv==0.7.13 --no-cache-dir
 WORKDIR /workspace
 COPY apps/jambonz/pyproject.toml apps/jambonz/uv.lock apps/jambonz/
 COPY shared/ shared/

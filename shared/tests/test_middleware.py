@@ -58,7 +58,10 @@ async def test_generates_different_id_per_request() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        ids = {(await client.get("/")).headers.get(TRACE_HEADER) for _ in range(5)}
+        ids: set[str | None] = set()
+        for _ in range(5):
+            resp = await client.get("/")
+            ids.add(resp.headers.get(TRACE_HEADER))
     assert len(ids) == 5
 
 

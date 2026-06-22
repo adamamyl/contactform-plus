@@ -40,8 +40,8 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 filterwarnings = [
-    "ignore:coroutine '.*' was never awaited:RuntimeWarning",
-    "ignore::pytest.PytestUnraisableExceptionWarning",
+    "ignore:coroutine '.*' was never awaited:RuntimeWarning:router.alert_router",
+    "ignore:coroutine '.*' was never awaited:RuntimeWarning:unittest.mock",
 ]
 
 [tool.uv.sources]

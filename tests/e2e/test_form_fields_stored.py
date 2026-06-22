@@ -307,6 +307,8 @@ def test_form_fields_stored_in_db(
     # Open all collapsed <details> sections so optional fields inside are visible
     for details in page.locator("details.form-details").all():
         details.evaluate("el => el.setAttribute('open', '')")
+    # setAttribute is synchronous JS — no animation; DOM update is immediate
+    expect(page.locator("details.form-details").first).to_have_attribute("open", "")
 
     # --- reporter section (contact-fields div only visible after can_contact=true) ---
     _fill_text(page, "#reporter_name", fields.get("reporter_name"))
