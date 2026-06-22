@@ -1,5 +1,5 @@
 FROM python:3.14-slim AS builder
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+RUN pip install uv --no-cache-dir
 WORKDIR /workspace
 COPY apps/tts/pyproject.toml apps/tts/uv.lock apps/tts/
 COPY shared/ shared/
