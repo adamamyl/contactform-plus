@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /workspace
 COPY apps/tts/pyproject.toml apps/tts/uv.lock apps/tts/
@@ -6,7 +6,7 @@ COPY shared/ shared/
 WORKDIR /workspace/apps/tts
 RUN UV_PROJECT_ENVIRONMENT=/app/.venv uv sync --frozen --no-dev --no-install-project
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 RUN useradd -m -u 1001 appuser
 WORKDIR /app
 
