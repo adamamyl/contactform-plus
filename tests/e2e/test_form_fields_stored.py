@@ -301,7 +301,14 @@ def test_form_fields_stored_in_db(
     page.locator("#incident_date").fill(fields["incident_date"])
     page.locator("#incident_time").fill(fields["incident_time"])
 
-    # --- reporter section ---
+    # --- can_contact first — reveals #contact-fields when "true" ---
+    page.locator(f"input[name=can_contact][value={fields['can_contact']}]").check()
+
+    # Open all collapsed <details> sections so optional fields inside are visible
+    for details in page.locator("details.form-details").all():
+        details.evaluate("el => el.setAttribute('open', '')")
+
+    # --- reporter section (contact-fields div only visible after can_contact=true) ---
     _fill_text(page, "#reporter_name", fields.get("reporter_name"))
     if fields.get("reporter_pronouns"):
         # pronouns text input is hidden until "Other" is selected in the preset
@@ -311,7 +318,7 @@ def test_form_fields_stored_in_db(
     _fill_text(page, "#reporter_phone", fields.get("reporter_phone"))
     _fill_text(page, "#reporter_camping_with", fields.get("reporter_camping_with"))
 
-    # --- location text ---
+    # --- location text (inside details-location, now open) ---
     _fill_text(page, "#location_text", fields.get("location_text"))
 
     # --- map pin (simulated postMessage) ---
@@ -332,9 +339,6 @@ def test_form_fields_stored_in_db(
     _fill_text(page, "#others_involved", fields.get("others_involved"))
     _fill_text(page, "#why_it_happened", fields.get("why_it_happened"))
     _fill_text(page, "#anything_else", fields.get("anything_else"))
-
-    # --- can_contact (required radio) ---
-    page.locator(f"input[name=can_contact][value={fields['can_contact']}]").check()
 
     # --- submit and capture case_id ---
     api_resp = _submit_and_capture(page, form_base_url)
