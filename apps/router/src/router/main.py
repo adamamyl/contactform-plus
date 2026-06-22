@@ -316,7 +316,7 @@ async def email_ack(
 ) -> HTMLResponse:
     try:
         notification_id = decode_ack_token(token, settings.secret_key)
-    except (jwt.PyJWTError, ValueError):
+    except jwt.PyJWTError, ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
         )
