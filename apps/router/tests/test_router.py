@@ -1116,6 +1116,362 @@ async def test_mattermost_falls_back_to_webhook() -> None:
 
 
 # ---------------------------------------------------------------------------
+# EMF phone adapter
+# ---------------------------------------------------------------------------
+
+
+def _make_emf_phone_targets() -> list[object]:
+    from emf_shared.config import EMFPhoneTarget
+
+    return [
+        EMFPhoneTarget(number=7483, description="site", order=1, delay_seconds=0),
+        EMFPhoneTarget(number=2326, description="adam", order=2, delay_seconds=5),
+    ]
+
+
+def _make_emf_phone_adapter(
+    targets: list[object] | None = None,
+) -> "object":
+    from emf_shared.config import EMFPhoneTarget
+    from router.channels.emf_phone import EMFPhoneAdapter
+
+    t: list[EMFPhoneTarget] = targets or _make_emf_phone_targets()  # type: ignore[assignment]
+    return EMFPhoneAdapter(
+        api_url="http://sip.example.com:3000",
+        api_key="secret",
+        targets=t,
+        router_self_url="http://router:8002",
+        router_internal_secret="internal",
+    )
+
+
+@pytest.mark.asyncio
+async def test_emf_phone_is_available_true_when_configured() -> None:
+    adapter = _make_emf_phone_adapter()
+
+    class FakeResp:
+        status_code = 405
+
+    class FakeClient:
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, *a: object) -> None:
+            pass
+
+        async def get(self, url: str, **kwargs: object) -> FakeResp:
+            return FakeResp()
+
+    with patch("httpx.AsyncClient", return_value=FakeClient()):
+        from router.channels.emf_phone import EMFPhoneAdapter
+
+        assert isinstance(adapter, EMFPhoneAdapter)
+        result = await adapter.is_available()
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_emf_phone_is_available_false_when_server_error() -> None:
+    adapter = _make_emf_phone_adapter()
+
+    class FakeResp:
+        status_code = 503
+
+    class FakeClient:
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, *a: object) -> None:
+            pass
+
+        async def get(self, url: str, **kwargs: object) -> FakeResp:
+            return FakeResp()
+
+    with patch("httpx.AsyncClient", return_value=FakeClient()):
+        from router.channels.emf_phone import EMFPhoneAdapter
+
+        assert isinstance(adapter, EMFPhoneAdapter)
+        result = await adapter.is_available()
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_emf_phone_send_acknowledge_triggers_ack_and_returns_message_id(
+    sample_alert: CaseAlert,
+) -> None:
+    from router.channels.emf_phone import EMFPhoneAdapter
+
+    adapter = _make_emf_phone_adapter()
+    assert isinstance(adapter, EMFPhoneAdapter)
+
+    ack_calls: list[dict[str, object]] = []
+
+    class FakeAckResp:
+        status_code = 200
+
+    class FakeAlertResp:
+        status_code = 200
+
+        def json(self) -> dict[str, object]:
+            return {"number": 7483, "result": "ACKNOWLEDGE"}
+
+    class FakeClient:
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, *a: object) -> None:
+            pass
+
+        async def post(
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
+        ) -> "FakeAlertResp | FakeAckResp":
+            if "/internal/ack/" in url:
+                ack_calls.append({"url": url, "body": json})
+                return FakeAckResp()
+            return FakeAlertResp()
+
+    with patch("httpx.AsyncClient", return_value=FakeClient()):
+        result = await adapter.send(sample_alert)
+
+    assert result == "ACKNOWLEDGE:7483"
+    assert len(ack_calls) == 1
+    assert sample_alert.case_id in ack_calls[0]["url"]
+
+
+@pytest.mark.asyncio
+async def test_emf_phone_send_skip_tries_next_target(
+    sample_alert: CaseAlert,
+) -> None:
+    from router.channels.emf_phone import EMFPhoneAdapter
+
+    adapter = _make_emf_phone_adapter()
+    assert isinstance(adapter, EMFPhoneAdapter)
+
+    call_log: list[int] = []
+
+    class FakeResp:
+        def __init__(self, result: str) -> None:
+            self._result = result
+
+        @property
+        def status_code(self) -> int:
+            return 200
+
+        def json(self) -> dict[str, object]:
+            return {"result": self._result}
+
+    class FakeClient:
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, *a: object) -> None:
+            pass
+
+        async def post(
+            self, url: str, *, json: dict[str, object] | None = None, **kwargs: object
+        ) -> FakeResp:
+            if json and "number" in json:
+                call_log.append(int(json["number"]))
+                if json["number"] == 7483:
+                    return FakeResp("SKIP")
+                return FakeResp("ACKNOWLEDGE")
+            return FakeResp("ACKNOWLEDGE")
+
+    with patch("httpx.AsyncClient", return_value=FakeClient()):
+        with patch("asyncio.sleep"):
+            result = await adapter.send(sample_alert)
+
+    assert call_log == [7483, 2326]
+    assert result == "ACKNOWLEDGE:2326"
+
+
+@pytest.mark.asyncio
+async def test_emf_phone_send_all_fail_returns_none(
+    sample_alert: CaseAlert,
+) -> None:
+    from router.channels.emf_phone import EMFPhoneAdapter
+
+    adapter = _make_emf_phone_adapter()
+    assert isinstance(adapter, EMFPhoneAdapter)
+
+    class FakeResp:
+        status_code = 200
+
+        def json(self) -> dict[str, object]:
+            return {"result": "NO-ANSWER"}
+
+    class FakeClient:
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, *a: object) -> None:
+            pass
+
+        async def post(self, url: str, **kwargs: object) -> FakeResp:
+            return FakeResp()
+
+    with patch("httpx.AsyncClient", return_value=FakeClient()):
+        with patch("asyncio.sleep"):
+            result = await adapter.send(sample_alert)
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_emf_phone_message_excludes_dtmf_prompt(
+    sample_alert: CaseAlert,
+) -> None:
+    from router.channels.emf_phone import _build_message
+
+    msg = _build_message(sample_alert)
+    assert "Press" not in msg
+    assert sample_alert.friendly_id.replace("-", " ") in msg
+
+
+def test_emf_phone_message_includes_location() -> None:
+    import datetime
+    from router.channels.emf_phone import _build_message
+    from router.models import CaseAlert
+
+    alert = CaseAlert(
+        case_id=str(uuid.uuid4()),
+        friendly_id="echo-3",
+        event_name="emfcamp2026",
+        urgency="urgent",
+        status="new",
+        location_hint="Near the bar",
+        created_at=datetime.datetime.now(tz=datetime.timezone.utc),
+    )
+    msg = _build_message(alert)
+    assert "Near the bar" in msg
+    assert "urgent" in msg
+
+
+@pytest.mark.asyncio
+async def test_emf_phone_routing_always_mode(
+    mock_session: AsyncMock,
+    sample_alert: CaseAlert,
+) -> None:
+    from datetime import date
+    from emf_shared.config import AppConfig, EMFPhoneTarget, EventConfig, SmtpConfig
+    from router.channels.emf_phone import EMFPhoneAdapter
+
+    cfg = AppConfig(
+        events=[
+            EventConfig(
+                name="emfcamp2026",
+                start_date=date(2026, 5, 28),
+                end_date=date(2026, 5, 31),
+                emf_phone_mode="always",
+                emf_phone_targets=[
+                    EMFPhoneTarget(number=7483, description="site", order=1)
+                ],
+            )
+        ],
+        conduct_emails=["team@emf.camp"],
+        smtp=SmtpConfig(from_addr="conduct@emf.camp"),
+        panel_base_url="http://localhost",
+    )
+
+    email = _make_mock_adapter()
+    phone = EMFPhoneAdapter(
+        api_url="http://sip.example.com:3000",
+        api_key="secret",
+        targets=[EMFPhoneTarget(number=7483, description="site", order=1)],
+        router_self_url="http://router:8002",
+        router_internal_secret="internal",
+    )
+
+    router = AlertRouter(
+        config=cfg,
+        email_adapter=email,
+        signal_adapter=None,
+        mattermost_adapter=None,
+        slack_adapter=None,
+        phone_adapter=phone,
+    )
+
+    with (
+        patch("router.alert_router.current_phase") as mock_phase,
+        patch("asyncio.create_task") as mock_task,
+        patch.object(phone, "is_available", new=AsyncMock(return_value=True)),
+    ):
+        from emf_shared.phase import Phase
+
+        mock_phase.return_value = Phase.EVENT_TIME
+        await router.route(sample_alert, mock_session)
+
+    assert mock_task.call_count == 2  # email + telephony
+
+
+@pytest.mark.asyncio
+async def test_emf_phone_routing_high_priority_only_skips_low(
+    mock_session: AsyncMock,
+    sample_alert: CaseAlert,
+) -> None:
+    from datetime import date
+    from emf_shared.config import AppConfig, EMFPhoneTarget, EventConfig, SmtpConfig
+    from router.channels.emf_phone import EMFPhoneAdapter
+
+    cfg = AppConfig(
+        events=[
+            EventConfig(
+                name="emfcamp2026",
+                start_date=date(2026, 5, 28),
+                end_date=date(2026, 5, 31),
+                emf_phone_mode="high_priority_only",
+                emf_phone_targets=[
+                    EMFPhoneTarget(number=7483, description="site", order=1)
+                ],
+            )
+        ],
+        conduct_emails=["team@emf.camp"],
+        smtp=SmtpConfig(from_addr="conduct@emf.camp"),
+        panel_base_url="http://localhost",
+    )
+
+    low_alert = CaseAlert(
+        case_id=sample_alert.case_id,
+        friendly_id=sample_alert.friendly_id,
+        event_name="emfcamp2026",
+        urgency="low",
+        status="new",
+        location_hint=None,
+        created_at=sample_alert.created_at,
+    )
+
+    email = _make_mock_adapter()
+    phone = EMFPhoneAdapter(
+        api_url="http://sip.example.com:3000",
+        api_key="secret",
+        targets=[EMFPhoneTarget(number=7483, description="site", order=1)],
+        router_self_url="http://router:8002",
+        router_internal_secret="internal",
+    )
+
+    router = AlertRouter(
+        config=cfg,
+        email_adapter=email,
+        signal_adapter=None,
+        mattermost_adapter=None,
+        slack_adapter=None,
+        phone_adapter=phone,
+    )
+
+    with (
+        patch("router.alert_router.current_phase") as mock_phase,
+        patch("asyncio.create_task") as mock_task,
+        patch.object(phone, "is_available", new=AsyncMock(return_value=True)),
+    ):
+        from emf_shared.phase import Phase
+
+        mock_phase.return_value = Phase.EVENT_TIME
+        await router.route(low_alert, mock_session)
+
+    assert mock_task.call_count == 1  # email only
+
+
+# ---------------------------------------------------------------------------
 # T — Jambonz auto-call routing
 # ---------------------------------------------------------------------------
 

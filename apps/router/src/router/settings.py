@@ -23,5 +23,7 @@ class Settings(SharedSettings):
     ack_base_url: str = ""
     router_self_url: str = "http://msg-router:8002"
     resend_api_key: str = ""
+    emf_phone_api_url: str = ""
+    emf_phone_api_key: str = ""
 
     model_config = {"env_file": ".env"}

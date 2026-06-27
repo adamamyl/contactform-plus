@@ -23,6 +23,7 @@ from emf_shared.tracing import new_trace_id, set_trace_id
 from router.ack.tokens import decode_ack_token
 from router.alert_router import AlertRouter
 from router.channels.email import EmailAdapter
+from router.channels.emf_phone import EMFPhoneAdapter
 from router.channels.mattermost import MattermostAdapter
 from router.channels.signal import SignalAdapter
 from router.channels.slack import SlackAdapter
@@ -173,26 +174,36 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     if cfg.slack_webhook:
         slack_adapter = SlackAdapter(cfg.slack_webhook, cfg.panel_base_url)
 
-    jambonz_vars = [
-        settings.jambonz_api_url,
-        settings.jambonz_api_key,
-        settings.jambonz_account_sid,
-        settings.jambonz_application_sid,
-        settings.jambonz_from_number,
-    ]
-    phone_adapter: TelephonyAdapter | None = None
-    if all(jambonz_vars):
-        phone_adapter = TelephonyAdapter(
-            api_url=settings.jambonz_api_url,
-            api_key=settings.jambonz_api_key,
-            account_sid=settings.jambonz_account_sid,
-            application_sid=settings.jambonz_application_sid,
-            tts_service_url=settings.tts_service_url,
-            from_number=settings.jambonz_from_number,
-            to_number=ev.call_group_number if ev else None,
-            tts_audio_base_url=settings.tts_audio_base_url,
-            webhook_base_url=settings.jambonz_webhook_base_url,
+    ev_targets = sorted(ev.emf_phone_targets, key=lambda t: t.order) if ev else []
+    phone_adapter: EMFPhoneAdapter | TelephonyAdapter | None = None
+    if settings.emf_phone_api_url and settings.emf_phone_api_key and ev_targets:
+        phone_adapter = EMFPhoneAdapter(
+            api_url=settings.emf_phone_api_url,
+            api_key=settings.emf_phone_api_key,
+            targets=ev_targets,
+            router_self_url=settings.router_self_url,
+            router_internal_secret=settings.router_internal_secret,
         )
+    else:
+        jambonz_vars = [
+            settings.jambonz_api_url,
+            settings.jambonz_api_key,
+            settings.jambonz_account_sid,
+            settings.jambonz_application_sid,
+            settings.jambonz_from_number,
+        ]
+        if all(jambonz_vars):
+            phone_adapter = TelephonyAdapter(
+                api_url=settings.jambonz_api_url,
+                api_key=settings.jambonz_api_key,
+                account_sid=settings.jambonz_account_sid,
+                application_sid=settings.jambonz_application_sid,
+                tts_service_url=settings.tts_service_url,
+                from_number=settings.jambonz_from_number,
+                to_number=ev.call_group_number if ev else None,
+                tts_audio_base_url=settings.tts_audio_base_url,
+                webhook_base_url=settings.jambonz_webhook_base_url,
+            )
 
     recipients = []
     for event in cfg.events:
