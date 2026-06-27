@@ -21,8 +21,3 @@ scrape_configs:
     static_configs:
       - targets: ["tts:8003"]
     metrics_path: /metrics
-
-  - job_name: emf-jambonz
-    static_configs:
-      - targets: ["jambonz-adapter:8004"]
-    metrics_path: /metrics

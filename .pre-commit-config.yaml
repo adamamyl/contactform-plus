@@ -71,10 +71,6 @@ repos:
         name: bandit (tts)
         files: ^apps/tts/src/
         args: [-ll]
-      - id: bandit
-        name: bandit (jambonz)
-        files: ^apps/jambonz/src/
-        args: [-ll]
 
   # ── Mypy + pytest + pip-audit (push stage — matches CI exactly) ───────────
   - repo: local
@@ -119,14 +115,6 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
-      - id: mypy-jambonz
-        name: mypy (jambonz)
-        entry: bash -c 'cd apps/jambonz && uv run python -m mypy src/ --strict'
-        language: system
-        files: ^apps/jambonz/
-        pass_filenames: false
-        stages: [pre-push]
-
       - id: pytest-shared
         name: pytest (shared)
         entry: bash -c 'cd shared && uv run pytest tests/ -q'
@@ -167,14 +155,6 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
-      - id: pytest-jambonz
-        name: pytest (jambonz)
-        entry: bash -c 'cd apps/jambonz && uv run pytest tests/ -q'
-        language: system
-        files: ^apps/jambonz/
-        pass_filenames: false
-        stages: [pre-push]
-
       - id: pip-audit-shared
         name: pip-audit (shared)
         entry: bash -c 'cd shared && uv run pip-audit'
@@ -212,13 +192,5 @@ repos:
         entry: bash -c 'cd apps/tts && uv run pip-audit'
         language: system
         files: ^apps/tts/
-        pass_filenames: false
-        stages: [pre-push]
-
-      - id: pip-audit-jambonz
-        name: pip-audit (jambonz)
-        entry: bash -c 'cd apps/jambonz && uv run pip-audit'
-        language: system
-        files: ^apps/jambonz/
         pass_filenames: false
         stages: [pre-push]

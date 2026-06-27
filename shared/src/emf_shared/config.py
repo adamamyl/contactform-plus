@@ -27,8 +27,6 @@ class EventConfig(BaseModel):
     signal_group_id: str | None = None
     signal_mode: str = "fallback_only"
     signal_padding: SignalPadding = SignalPadding()
-    jambonz_mode: str = "disabled"
-    call_group_number: str | None = None
     emf_phone_mode: str = "disabled"
     emf_phone_targets: list[EMFPhoneTarget] = []
     dispatcher_emails: list[str] = []
