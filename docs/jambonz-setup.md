@@ -1,8 +1,12 @@
 # Jambonz Setup
 
-> **Note:** For EMF events, the EMF Phone System is now preferred over Jambonz. See [emf-phone-setup.md](emf-phone-setup.md). Jambonz remains supported as a fallback for non-EMF deployments and is used automatically when `EMF_PHONE_API_URL` is not set.
+> **Deprecated and removed in [PR #63](https://github.com/adamamyl/contactform-plus/pull/63).**
+> Jambonz has been replaced by the EMF phone system adapter (added in
+> [PR #62](https://github.com/adamamyl/contactform-plus/pull/62)).
+> See [docs/emf-phone-setup.md](emf-phone-setup.md) for the current telephony setup.
+> This document is retained for historical reference only.
 
-Jambonz handles outbound phone calls to conduct team members when a new case arrives. The `jambonz-adapter` service bridges the EMF notification router and the Jambonz telephony API.
+Jambonz handled outbound phone calls to conduct team members when a new case arrived. The `jambonz-adapter` service bridged the EMF notification router and the Jambonz telephony API.
 
 ## Overview
 
