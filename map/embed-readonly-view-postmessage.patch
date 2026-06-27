@@ -1,95 +1,437 @@
-From 1f61c184250ec627dde0b647ea224c45a1d32af0 Mon Sep 17 00:00:00 2001
+From 9d16d9abef986c7fe734a69e3ba634ac1b0ba7b8 Mon Sep 17 00:00:00 2001
 From: Adam McGreggor <adam@adamamyl.com>
-Date: Sat, 7 Mar 2026 20:23:18 +0000
-Subject: [PATCH] feat(embed): add readonly mode and view postMessage for embed
+Date: Sat, 27 Jun 2026 22:08:55 +0100
+Subject: [PATCH] feat(embed): readonly mode, postMessage handshake, origin
+ validation
 
-- ?readonly=true in embed mode suppresses click-to-pin so the marker
-  stays fixed (used by panel case detail and dispatcher views)
-- postMessage emf-view event sent on map load/moveend so parent frames
-  can display current zoom/centre in a status bar
-- ?marker=lat,lon query param pre-sets pin on load via setURLString()
-- map.on('load') calls resize() to fix WebGL green-box in embed mode
+Adds embed mode for use as a trusted iframe:
+- ?embed=true hides header and enables postMessage API
+- ?readonly=true suppresses click-to-pin (view-only)
+- ?marker=lat,lon pre-sets a pin on load
+- resize() on load fixes WebGL green-box in iframe context
+
+Handshake: parent sends emf-embed-init from its origin, map validates
+origin against EMBED_ALLOWED_ORIGINS (production) or *.*.internal
+wildcard (local dev), then activates click-to-pin and emf-marker/emf-view
+postMessage reporting.
+
+Uses boolean embedActivated flag (not { once: true }) so spurious
+messages from extensions/Workbox/URLHash don't consume the listener.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014M1TEnDwcEFgmTbzkySSXn
 ---
- web/src/index.ts           | 23 +++++++++++++++++++++++
- web/src/marker.ts          |  4 ++++
- web/src/style/map_style.ts |  2 +-
- 3 files changed, 28 insertions(+), 1 deletion(-)
+ web/src/map.ts    | 234 ++++++++++++++++++++++++++++++++++++++++++++++
+ web/src/marker.ts | 140 ++++++++++++++-------------
+ 2 files changed, 302 insertions(+), 72 deletions(-)
+ create mode 100644 web/src/map.ts
 
-diff --git a/web/src/index.ts b/web/src/index.ts
-index 6e1b309..cd3143d 100644
---- a/web/src/index.ts
-+++ b/web/src/index.ts
-@@ -115,6 +115,7 @@ class EventMap {
-
-     const url = new URL(window.location.href)
-     const embed = url.searchParams.get('embed') == 'true'
-+    const readonly = url.searchParams.get('readonly') == 'true'
-
-     if (!embed) {
-       this.map.addControl(new maplibregl.NavigationControl(), 'top-right')
-@@ -146,11 +147,33 @@ class EventMap {
-       }
-     } else {
-       document.querySelector('header')!.style.display = 'none'
+diff --git a/web/src/map.ts b/web/src/map.ts
+new file mode 100644
+index 0000000..336a6ca
+--- /dev/null
++++ b/web/src/map.ts
+@@ -0,0 +1,234 @@
++import './index.css'
++import maplibregl from 'maplibre-gl'
++import map_style from './style/map_style.ts'
++import Marker from './marker'
++import { Layer, LayerGroup, LayerSwitcher, URLHash } from '@russss/maplibregl-layer-switcher'
++import DistanceMeasure from './distancemeasure'
++import ContextMenu from './contextmenu'
++import VillagesEditor from './villages'
++import { roundPosition } from './util'
++import InstallControl from './installcontrol'
++import TransitInfo from './transit'
++import ExportControl from './export/export'
++import { manifest } from 'virtual:render-svg'
++import { GridPosition } from './grid.ts'
++import { setupPhones } from './phones'
++
++async function loadIcons(map: maplibregl.Map) {
++  const ratio = Math.min(Math.round(window.devicePixelRatio), 2)
++  const icons = manifest[ratio.toString()]
++
++  const images = [
++    'camping',
++    'no-access',
++    'water',
++    'water-point',
++    'tree',
++    'toilet',
++    'datenklo',
++    'datenklo_active',
++    'datenklo_down',
++    'marker',
++    'marker-light',
++    'power-distro',
++    'power-generator',
++    'network-switch',
++    'network-switch-active',
++    'network-switch-down',
++    'phone',
++  ]
++
++  Promise.all(
++    images
++      .map((image) => async () => {
++        const img = await map.loadImage(icons[image])
++        map.addImage(image, img.data, { pixelRatio: ratio })
++      })
++      .map((f) => f())
++  )
++
++  const sdfs = ['telehandler', 'golf-buggy', 'cherrypicker']
++
++  for (const sdf of sdfs) {
++    const img = await map.loadImage(`/sdf/${sdf}.png`)
++    map.addImage(sdf, img.data, { sdf: true })
++  }
++}
++
++const EMBED_ALLOWED_ORIGINS = ['https://report.emf.camp', 'https://panel.emf.camp']
++
++const isAllowedEmbedOrigin = (origin: string): boolean => {
++  if (EMBED_ALLOWED_ORIGINS.includes(origin)) return true
++  try {
++    const { hostname } = new URL(origin)
++    // allow *.*.internal (e.g. report.emf-forms.internal) for local dev
++    return hostname.endsWith('.internal') && hostname.split('.').length >= 3
++  } catch {
++    return false
++  }
++}
++
++interface EventMapOptions {
++  embed: boolean
++  readonly?: boolean
++}
++
++export class EventMap {
++  layers: (Layer | LayerGroup)[] = [
++    new Layer('g', 'Grid', 'grid_'),
++    new LayerGroup('Background', [
++      new Layer('b', 'Map', 'background_', 'background', true),
++      new Layer('s', 'Slope', 'slope', 'background'),
++      new Layer('h', 'Hillshade', 'hillshade', 'background'),
++      new Layer('o', 'Aerial imagery', 'ortho', 'background'),
++    ]),
++    new LayerGroup('EMF', [
++      new Layer('a', 'Labels', 'labels_', true),
++      new Layer('t', 'Structures', 'structures_', true),
++      new Layer('p', 'Paths', 'paths_', true),
++      new Layer('v', 'Villages', 'villages_', true),
++      new Layer('r', 'Phones', 'phones_', true),
++    ]),
++    new LayerGroup('Infrastructure', [
++      new Layer('w', 'Power', 'power_'),
++      new Layer('n', 'Network', 'network_'),
++      new Layer('l', 'Lighting', 'lighting_'),
++    ]),
++    new Layer('bs', 'Buried services', 'services_'),
++  ]
++  map?: maplibregl.Map
++  layer_switcher?: LayerSwitcher
++  url_hash?: URLHash
++  marker?: Marker
++  transit_info?: TransitInfo
++
++  init(
++    options: EventMapOptions = {
++      embed: false,
++    }
++  ) {
++    this.layer_switcher = new LayerSwitcher(this.layers)
++
++    this.url_hash = new URLHash(this.layer_switcher)
++    this.layer_switcher.urlhash = this.url_hash
++    this.marker = new Marker(this.url_hash)
++
++    this.layer_switcher.setInitialVisibility(map_style)
++    this.map = new maplibregl.Map(
++      this.url_hash.init({
++        container: 'map',
++        style: map_style,
++        maxBounds: [-3.284912, 51.547329, -1.494141, 52.477539],
++        pitchWithRotate: false,
++        dragRotate: false,
++      })
++    )
++    loadIcons(this.map)
++    setupPhones(this.map)
++
++    this.map.touchZoomRotate.disableRotation()
++
++    if (options.embed) {
++      document.querySelector('header')!.style.display = 'none'
 +      this.map.on('load', () => {
 +        this.map!.resize()
 +      })
-+      if (!readonly) {
-+        this.map.on('click', (e: maplibregl.MapMouseEvent) => {
-+          this.marker!.setLocation(e.lngLat)
++
++      // Wait for parent to send emf-embed-init; validate origin before activating postMessage
++      const activateEmbed = (embedOrigin: string) => {
++        if (!options.readonly) {
++          this.map!.on('click', (e: maplibregl.MapMouseEvent) => {
++            this.marker!.setLocation(e.lngLat)
++          })
++        }
++        const sendView = () => {
++          const c = this.map!.getCenter()
++          window.parent.postMessage(
++            { type: 'emf-view', zoom: this.map!.getZoom(), lat: c.lat, lon: c.lng },
++            embedOrigin,
++          )
++        }
++        this.map!.on('moveend', sendView)
++        if (this.map!.loaded()) {
++          sendView()
++        } else {
++          this.map!.on('load', sendView)
++        }
++        this.marker!.parentOrigin = embedOrigin
++      }
++
++      let embedActivated = false
++      window.addEventListener('message', (e: MessageEvent) => {
++        if (!embedActivated && e.data?.type === 'emf-embed-init' && isAllowedEmbedOrigin(e.origin)) {
++          embedActivated = true
++          activateEmbed(e.origin)
++        }
++      })
++    } else {
++      this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
++
++      this.map.addControl(
++        new maplibregl.GeolocateControl({
++          positionOptions: {
++            enableHighAccuracy: true,
++          },
++          trackUserLocation: true,
 +        })
++      )
++
++      this.map.addControl(
++        new maplibregl.ScaleControl({
++          maxWidth: 200,
++          unit: 'metric',
++        })
++      )
++
++      this.map.addControl(new DistanceMeasure(), 'top-right')
++      this.map.addControl(new InstallControl(), 'top-left')
++
++      this.map.addControl(new VillagesEditor('villages', 'villages_symbol'), 'top-right')
++
++      // Display export control only on browsers which are likely to be desktop browsers
++      if (window.matchMedia('(min-width: 600px)').matches) {
++        this.map.addControl(new ExportControl(loadIcons), 'top-right')
 +      }
-+      const sendView = () => {
-+        const c = this.map!.getCenter()
-+        window.parent.postMessage(
-+          { type: 'emf-view', zoom: this.map!.getZoom(), lat: c.lat, lon: c.lng },
-+          '*',
-+        )
-+      }
-+      this.map.on('moveend', sendView)
-+      this.map.on('load', sendView)
-     }
-
-     this.map.addControl(this.layer_switcher, 'top-right')
-     this.url_hash.enable(this.map)
-
-+    const markerParam = url.searchParams.get('marker')
++    }
++    this.map.addControl(this.layer_switcher, 'top-right')
++
++    this.url_hash.enable(this.map)
++
++    this.map.addControl(this.marker, 'top-right')
++    this.map.addControl(new GridPosition('gridsquares'), 'bottom-right')
++
++    const markerParam = new URL(window.location.href).searchParams.get('marker')
 +    if (markerParam) {
 +      this.marker!.setURLString(markerParam)
 +    }
 +
-     this.map.addControl(this.marker, 'top-right')
-
-     const contextMenu = new ContextMenu(this.map)
++    this.initContextMenu(!options.embed)
++  }
++
++  initContextMenu(markers: boolean) {
++    const contextMenu = new ContextMenu(this.map!)
++    if (markers) {
++      contextMenu.addItem('Set marker', (_e, coords) => {
++        this.marker!.setLocation(coords)
++      })
++      contextMenu.addItem(
++        'Clear marker',
++        () => {
++          this.marker!.setLocation(null)
++        },
++        () => this.marker!.location != null
++      )
++    }
++    contextMenu.addItem('Copy coordinates', (e, coords) => {
++      const [lng, lat] = roundPosition([coords.lng, coords.lat], this.map!.getZoom())
++      if (e.shiftKey) {
++        navigator.clipboard.writeText(lng + ', ' + lat)
++      } else {
++        navigator.clipboard.writeText(lat + ', ' + lng)
++      }
++    })
++  }
++}
 diff --git a/web/src/marker.ts b/web/src/marker.ts
-index 4ad4472..decde32 100644
+index decde32..d69f842 100644
 --- a/web/src/marker.ts
 +++ b/web/src/marker.ts
-@@ -58,6 +58,10 @@ class Marker implements maplibregl.IControl {
-         }
-         this.updateLocation()
-         this.urlHash.setParameter('m', this.getURLString())
-+        window.parent.postMessage(
-+            { type: 'emf-marker', lat: this.location ? this.location[1] : null, lon: this.location ? this.location[0] : null },
-+            '*',
-+        )
+@@ -4,94 +4,90 @@ import maplibregl from 'maplibre-gl'
+ import { roundPosition } from './util'
+
+ class Marker implements maplibregl.IControl {
+-    location: any | null
+-    marker: any | null
+-    _map: maplibregl.Map | undefined
+-    urlHash: URLHash
++  location: any | null
++  marker: any | null
++  _map: maplibregl.Map | undefined
++  urlHash: URLHash
++  parentOrigin: string | null = null
+
+-    constructor(urlHash: URLHash) {
+-        this.location = null
+-        this.marker = null
+-        this.urlHash = urlHash
+-        this.urlHash.registerHandler('m', (string: string) => this.setURLString(string))
+-    }
++  constructor(urlHash: URLHash) {
++    this.location = null
++    this.marker = null
++    this.urlHash = urlHash
++    this.urlHash.registerHandler('m', (string: string) => this.setURLString(string))
++  }
+
+-    getURLString() {
+-        if (this.location) {
+-            return `${this.location[1]},${this.location[0]}`
+-        } else {
+-            return null
+-        }
++  getURLString() {
++    if (this.location) {
++      return `${this.location[1]},${this.location[0]}`
++    } else {
++      return null
+     }
++  }
+
+-    setURLString(string: string) {
+-        let location
+-        try {
+-            const parts = string.split(',')
+-            location = [parseFloat(parts[1]), parseFloat(parts[0])]
+-
+-            if (!location[0] || !location[1]) {
+-                location = null
+-            }
+-        } catch {
+-            location = null
+-        }
++  setURLString(string: string) {
++    let location
++    try {
++      const parts = string.split(',')
++      location = [parseFloat(parts[1]), parseFloat(parts[0])]
+
+-        if (
+-            !this.location ||
+-            !location ||
+-            this.location[0] != location[0] ||
+-            this.location[1] != location[1]
+-        ) {
+-            this.location = location
+-            this.updateLocation()
+-        }
++      if (!location[0] || !location[1]) {
++        location = null
++      }
++    } catch {
++      location = null
      }
 
-     updateLocation() {
-diff --git a/web/src/style/map_style.ts b/web/src/style/map_style.ts
-index e761971..34179af 100644
---- a/web/src/style/map_style.ts
-+++ b/web/src/style/map_style.ts
-@@ -779,7 +779,7 @@ const style: StyleSpecification = {
-     },
-   },
-   sprite: 'https://openmaptiles.github.io/positron-gl-style/sprite',
--  glyphs: 'https://map.emfcamp.org/tiles/font/{fontstack}/{range}',
-+  glyphs: 'https://map.emfcamp.org/fonts/{fontstack}/{range}.pbf',
-   layers: sortBy(layers, [(item) => item.zindex || 0]).map((item) => {
-     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-     const { zindex: _, ...new_item } = item
+-    setLocation(location: maplibregl.LngLat | null) {
+-        if (!this._map) return
+-
+-        if (location) {
+-            this.location = roundPosition([location.lng, location.lat], this._map.getZoom())
+-        } else {
+-            this.location = null
+-        }
+-        this.updateLocation()
+-        this.urlHash.setParameter('m', this.getURLString())
+-        window.parent.postMessage(
+-            { type: 'emf-marker', lat: this.location ? this.location[1] : null, lon: this.location ? this.location[0] : null },
+-            '*',
+-        )
++    if (!this.location || !location || this.location[0] != location[0] || this.location[1] != location[1]) {
++      this.location = location
++      this.updateLocation()
+     }
++  }
+
+-    updateLocation() {
+-        if (!this._map) {
+-            return
+-        }
++  setLocation(location: maplibregl.LngLat | null) {
++    if (!this._map) return
+
+-        if (this.marker) {
+-            this.marker.remove()
+-            this.marker = null
+-        }
++    if (location) {
++      this.location = roundPosition([location.lng, location.lat], this._map.getZoom())
++    } else {
++      this.location = null
++    }
++    this.updateLocation()
++    this.urlHash.setParameter('m', this.getURLString())
++    if (this.parentOrigin) {
++      window.parent.postMessage(
++        { type: 'emf-marker', lat: this.location ? this.location[1] : null, lon: this.location ? this.location[0] : null },
++        this.parentOrigin,
++      )
++    }
++  }
+
+-        if (this.location) {
+-            this.marker = new maplibregl.Marker({ color: '#BA0000' })
+-                .setLngLat(this.location)
+-                .addTo(this._map)
+-        }
++  updateLocation() {
++    if (!this._map) {
++      return
+     }
+
+-    onAdd(map: maplibregl.Map) {
+-        this._map = map
+-        this._map.on('load', () => {
+-            this.updateLocation()
+-        })
+-        return el('div')
++    if (this.marker) {
++      this.marker.remove()
++      this.marker = null
+     }
+
+-    onRemove() {
+-        this._map = undefined
++    if (this.location) {
++      this.marker = new maplibregl.Marker({ color: '#BA0000' }).setLngLat(this.location).addTo(this._map)
+     }
++  }
++
++  onAdd(map: maplibregl.Map) {
++    this._map = map
++    this._map.on('load', () => {
++      this.updateLocation()
++    })
++    return el('div')
++  }
++
++  onRemove() {
++    this._map = undefined
++  }
+ }
+
+ export default Marker
 --
 2.54.0
