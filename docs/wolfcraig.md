@@ -2,6 +2,8 @@
 
 wolfcraig (`wolfcraig.amyl.org.uk`, `176.126.244.197`) is a persistent staging server used to test the EMF Conduct System before events. It runs alongside an existing Ghost blog instance managed by [ghost-docker](https://github.com/adamamyl/ghost-docker).
 
+> **Reverse proxy note**: wolfcraig uses ghost-docker's **Caddy** instance for TLS termination (shared with the Ghost blog). If this server were migrated to Traefik (see [adamamyl/traefik-proxy](https://github.com/adamamyl/traefik-proxy)), the `caddy-proxy` network references below would become a Traefik external network instead, and the Caddyfile vhosts would become Traefik router labels.
+
 ## Architecture
 
 ```

@@ -28,11 +28,11 @@ This document covers deploying the EMF Conduct System on a fresh server, includi
 - 2 vCPU, 4 GB RAM minimum (8 GB recommended for full stack with Mattermost)
 - 20 GB disk (more if storing TTS audio or attachments)
 - Docker ≥ 26 and Docker Compose ≥ 2.24
-- Ports 80 and 443 open inbound (Caddy handles TLS termination)
+- Ports 80 and 443 open inbound (reverse proxy handles TLS termination — see §9)
 
 ### DNS
 
-All hostnames must resolve to the server's public IP before Caddy can obtain TLS certificates. Caddy uses Let's Encrypt by default. Required records (substitute your actual domain):
+All hostnames must resolve to the server's public IP before your reverse proxy can obtain TLS certificates. Required records (substitute your actual domain):
 
 | Hostname | Notes |
 |----------|-------|
@@ -406,37 +406,68 @@ All should return `{"status": "ok", ...}`.
 
 ---
 
-## 9. DNS, TLS, and Caddyfile generation
+## 9. DNS, TLS, and reverse proxy
 
 ### DNS
 
-Caddy obtains Let's Encrypt certificates automatically when DNS records are in place and ports 80/443 are reachable. Check the Caddy logs if certificates aren't issued:
+DNS records must be in place and ports 80/443 reachable before your reverse proxy can obtain TLS certificates via Let's Encrypt.
+
+### Reverse proxy options
+
+The stack ships with a Caddy container but can also run behind an external Traefik instance (preferred if you already run Traefik on the host).
+
+#### Option A — Traefik (recommended if already running)
+
+If you run Traefik as your host-level reverse proxy (see [adamamyl/traefik-proxy](https://github.com/adamamyl/traefik-proxy) for a reference setup), disable the stack's own Caddy container and attach the service containers to Traefik's external network instead. Add Traefik labels to each service in an override compose file, e.g.:
+
+```yaml
+services:
+  form:
+    networks:
+      - traefik-proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.emf-form.rule=Host(`report.example.org`)"
+      - "traefik.http.routers.emf-form.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.emf-form.entrypoints=websecure"
+      - "traefik.http.services.emf-form.loadbalancer.server.port=8000"
+  caddy:
+    profiles: [disabled]  # exclude Caddy when using Traefik
+
+networks:
+  traefik-proxy:
+    external: true
+```
+
+> **CSP headers**: The Caddyfile generator sets Content-Security-Policy headers. When using Traefik, replicate the CSP headers as Traefik middlewares or at the application layer.
+
+#### Option B — Caddy (bundled)
+
+Caddy is included in the stack and handles TLS automatically via Let's Encrypt. Check logs if certificates aren't issued:
 
 ```bash
 docker compose -f infra/docker-compose.yml logs caddy
 ```
 
-### Generating the Caddyfile
-
-The Caddyfile includes Content-Security-Policy headers that reference your deployment's hostnames (e.g. `frame-src`, `frame-ancestors`). Rather than editing these by hand, generate them from the `domains` section of `config.json`:
+Generate the Caddyfile from `config.json` (includes correct CSP headers for your hostnames):
 
 ```bash
 uv run scripts/generate_caddyfile.py
 ```
 
-This writes `infra/caddy/Caddyfile.wolfcraig`. Re-run whenever you change `config.json domains`, then restart Caddy to apply:
+This writes `infra/caddy/Caddyfile.wolfcraig`. Re-run whenever you change `config.json domains`, then restart Caddy:
 
 ```bash
 docker compose -f infra/docker-compose.yml restart caddy
 ```
 
-> **Note**: For wolfcraig (staging), a Caddy *restart* (not just `reload`) is required because `Caddyfile.wolfcraig` is bind-mounted — Caddy does not re-read bind-mount changes on reload.
+> **Note**: A *restart* (not `reload`) is required when `Caddyfile.wolfcraig` is bind-mounted — Caddy does not re-read bind-mount changes on reload.
 
-**If using custom TLS certificates** (e.g. internal CA): mount them into the Caddy container and add a `tls /path/to/cert /path/to/key` directive to the generated Caddyfile.
+**Custom TLS certificates** (e.g. internal CA): mount them into the Caddy container and add a `tls /path/to/cert /path/to/key` directive to the generated Caddyfile.
 
 ### Trusting the Caddy local CA on macOS (local dev)
 
-When running locally, Caddy generates a self-signed local CA. Extract and trust it with:
+When running locally with Caddy, it generates a self-signed local CA. Extract and trust it:
 
 ```bash
 docker run --rm -v infra_caddy_data:/data alpine cat /data/caddy/pki/authorities/local/root.crt > /tmp/caddy-root.crt \
