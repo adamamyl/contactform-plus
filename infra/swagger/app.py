@@ -17,7 +17,6 @@ _SERVICES: dict[str, str] = {
     "team": os.environ.get("PANEL_URL", "http://panel:8001"),
     "router": os.environ.get("ROUTER_URL", "http://msg-router:8002"),
     "tts": os.environ.get("TTS_URL", "http://tts:8003"),
-    "jambonz": os.environ.get("JAMBONZ_URL", "http://jambonz-adapter:8004"),
 }
 
 _OIDC_ISSUER: str = os.environ.get("OIDC_ISSUER", "http://oidc.emf-forms.internal/default")
@@ -27,7 +26,6 @@ _TITLES: dict[str, str] = {
     "team": "Panel",
     "router": "Message Router (internal)",
     "tts": "Text-to-Speech",
-    "jambonz": "Jambonz Adapter (internal)",
 }
 
 _LOCAL_SERVER_URLS: dict[str, str] = {
@@ -58,7 +56,7 @@ _PUBLIC_URLS: dict[str, str] = _load_public_urls()
 _PATHS: dict[str, list[str]] = {
     "form": ["form"],
     "team": ["team"],
-    "dispatch": ["router", "jambonz"],
+    "dispatch": ["router"],
     "tts": ["tts"],
 }
 
@@ -100,7 +98,7 @@ def _inject_spec_extras(spec: dict[str, object], service: str) -> dict[str, obje
                 }
             },
         }
-    elif service in ("router", "jambonz"):
+    elif service == "router":
         schemes["internalSecret"] = {
             "type": "apiKey",
             "in": "header",

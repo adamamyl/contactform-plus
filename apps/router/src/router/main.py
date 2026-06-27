@@ -27,7 +27,6 @@ from router.channels.emf_phone import EMFPhoneAdapter
 from router.channels.mattermost import MattermostAdapter
 from router.channels.signal import SignalAdapter
 from router.channels.slack import SlackAdapter
-from router.channels.telephony import TelephonyAdapter
 from router.listener import listen_for_cases
 from router.models import Notification
 from router.settings import Settings
@@ -175,7 +174,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         slack_adapter = SlackAdapter(cfg.slack_webhook, cfg.panel_base_url)
 
     ev_targets = sorted(ev.emf_phone_targets, key=lambda t: t.order) if ev else []
-    phone_adapter: EMFPhoneAdapter | TelephonyAdapter | None = None
+    phone_adapter: EMFPhoneAdapter | None = None
     if settings.emf_phone_api_url and settings.emf_phone_api_key and ev_targets:
         phone_adapter = EMFPhoneAdapter(
             api_url=settings.emf_phone_api_url,
@@ -184,26 +183,6 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             router_self_url=settings.router_self_url,
             router_internal_secret=settings.router_internal_secret,
         )
-    else:
-        jambonz_vars = [
-            settings.jambonz_api_url,
-            settings.jambonz_api_key,
-            settings.jambonz_account_sid,
-            settings.jambonz_application_sid,
-            settings.jambonz_from_number,
-        ]
-        if all(jambonz_vars):
-            phone_adapter = TelephonyAdapter(
-                api_url=settings.jambonz_api_url,
-                api_key=settings.jambonz_api_key,
-                account_sid=settings.jambonz_account_sid,
-                application_sid=settings.jambonz_application_sid,
-                tts_service_url=settings.tts_service_url,
-                from_number=settings.jambonz_from_number,
-                to_number=ev.call_group_number if ev else None,
-                tts_audio_base_url=settings.tts_audio_base_url,
-                webhook_base_url=settings.jambonz_webhook_base_url,
-            )
 
     recipients = []
     for event in cfg.events:

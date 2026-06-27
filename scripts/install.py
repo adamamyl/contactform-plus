@@ -29,7 +29,6 @@ _PREFERRED_PORTS: dict[str, int] = {
     "PANEL_PORT": 8001,
     "ROUTER_PORT": 8002,
     "TTS_PORT": 8003,
-    "JAMBONZ_PORT": 8004,
     "SWAGGER_PORT": 8080,
 }
 
@@ -97,7 +96,7 @@ def parse_args() -> argparse.Namespace:
 
 def select_components() -> list[str]:
     print("\nSelect components to install:")
-    components = ["form", "panel", "router", "tts", "jambonz"]
+    components = ["form", "panel", "router", "tts"]
     selected = []
     for comp in components:
         answer = input(f"  Install {comp}? [Y/n]: ").strip().lower()

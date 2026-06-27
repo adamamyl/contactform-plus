@@ -43,17 +43,6 @@ services:
       - traefik.http.routers.emf-panel.middlewares=security-headers@file
       - traefik.http.services.emf-panel.loadbalancer.server.port=8001
 
-  jambonz-adapter:
-    container_name: emf-jambonz
-    ports: !reset []
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.emf-jambonz-panel.rule=Host(`panel.emf.thisparish.org`) && (PathPrefix(`/webhook/jambonz`) || PathPrefix(`/audio/`))
-      - traefik.http.routers.emf-jambonz-panel.entrypoints=websecure
-      - traefik.http.routers.emf-jambonz-panel.tls=true
-      - traefik.http.routers.emf-jambonz-panel.tls.certresolver=leprod
-      - traefik.http.services.emf-jambonz.loadbalancer.server.port=8004
-
   signal-api:
     ports: !reset []
 

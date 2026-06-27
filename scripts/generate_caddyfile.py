@@ -89,15 +89,7 @@ def _panel_block(panel: str, map_domain: str | None) -> str:
 \t\t-Server
 \t}}
 \tencode gzip
-\thandle /webhook/jambonz* {{
-\t\treverse_proxy emf-jambonz:8004
-\t}}
-\thandle /audio/* {{
-\t\treverse_proxy emf-jambonz:8004
-\t}}
-\thandle {{
-\t\treverse_proxy emf-panel:8001
-\t}}
+\treverse_proxy emf-panel:8001
 }}"""
 
 

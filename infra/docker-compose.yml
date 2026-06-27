@@ -104,31 +104,6 @@ services:
     networks:
       - contactform
 
-  jambonz-adapter:
-    build:
-      context: ..
-      dockerfile: apps/jambonz/Dockerfile
-    restart: unless-stopped
-    env_file: ../.env
-    environment:
-      CONFIG_PATH: /app/config.json
-    volumes:
-      - ../config.json:/app/config.json:ro
-    depends_on:
-      - msg-router
-      - tts
-    networks:
-      - contactform
-      - traefik-public
-    labels:
-      - traefik.enable=true
-      # Jambonz webhook + audio paths on the panel vhost
-      # Longer rule → higher priority than emf-panel router automatically
-      - traefik.http.routers.emf-jambonz-panel.rule=Host(`panel.emf-forms.internal`) && (PathPrefix(`/webhook/jambonz`) || PathPrefix(`/audio/`))
-      - traefik.http.routers.emf-jambonz-panel.entrypoints=websecure
-      - traefik.http.routers.emf-jambonz-panel.tls=true
-      - traefik.http.services.emf-jambonz.loadbalancer.server.port=8004
-
   emf-map:
     build:
       context: ${EMF_MAP_PATH:-../../emf/map/web}
@@ -159,13 +134,11 @@ services:
       - panel
       - msg-router
       - tts
-      - jambonz-adapter
     environment:
       FORM_URL: http://form:8000
       PANEL_URL: http://panel:8001
       ROUTER_URL: http://msg-router:8002
       TTS_URL: http://tts:8003
-      JAMBONZ_URL: http://jambonz-adapter:8004
       CONFIG_PATH: /app/config.json
       OIDC_ISSUER: ${OIDC_ISSUER:-https://oidc.emf-forms.internal/default}
     volumes:

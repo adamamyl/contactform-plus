@@ -103,12 +103,7 @@ class AlertRouter:
             channels.append(("slack", self._slack))
 
         if self._phone is not None and await self._phone.is_available():
-            from router.channels.emf_phone import EMFPhoneAdapter
-
-            if isinstance(self._phone, EMFPhoneAdapter):
-                phone_mode = ev.emf_phone_mode if ev else "disabled"
-            else:
-                phone_mode = ev.jambonz_mode if ev else "disabled"
+            phone_mode = ev.emf_phone_mode if ev else "disabled"
             if phone_mode == "always" or (
                 phone_mode == "high_priority_only"
                 and alert.urgency in ("high", "urgent")
