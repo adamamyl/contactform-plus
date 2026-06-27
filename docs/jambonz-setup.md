@@ -1,5 +1,7 @@
 # Jambonz Setup
 
+> **Note:** For EMF events, the EMF Phone System is now preferred over Jambonz. See [emf-phone-setup.md](emf-phone-setup.md). Jambonz remains supported as a fallback for non-EMF deployments and is used automatically when `EMF_PHONE_API_URL` is not set.
+
 Jambonz handles outbound phone calls to conduct team members when a new case arrives. The `jambonz-adapter` service bridges the EMF notification router and the Jambonz telephony API.
 
 ## Overview

@@ -13,6 +13,13 @@ class SignalPadding(BaseModel):
     after_event_days: int = 2
 
 
+class EMFPhoneTarget(BaseModel):
+    number: int
+    description: str
+    order: int
+    delay_seconds: int = 0
+
+
 class EventConfig(BaseModel):
     name: str
     start_date: date
@@ -22,6 +29,8 @@ class EventConfig(BaseModel):
     signal_padding: SignalPadding = SignalPadding()
     jambonz_mode: str = "disabled"
     call_group_number: str | None = None
+    emf_phone_mode: str = "disabled"
+    emf_phone_targets: list[EMFPhoneTarget] = []
     dispatcher_emails: list[str] = []
     dispatcher_session_ttl_hours: int = 8
     dispatcher_session_max_devices: int = 2
