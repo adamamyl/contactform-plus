@@ -5,7 +5,7 @@ This document covers deploying the EMF Conduct System on a fresh server, includi
 ## Table of contents
 
 1. [Prerequisites](#1-prerequisites)
-2. [Third-party service sign-ups](#2-third-party-service-sign-ups) (Resend, EMF Phone / Jambonz, Signal, Mattermost, Safe Browsing, OIDC)
+2. [Third-party service sign-ups](#2-third-party-service-sign-ups) (Resend, EMF phone system, Signal, Mattermost, Safe Browsing, OIDC)
 3. [Server setup](#3-server-setup)
 4. [Clone and configure](#4-clone-and-configure)
 5. [Generate secrets](#5-generate-secrets)
@@ -65,65 +65,36 @@ All incident notifications and ACK confirmations are sent via [Resend](https://r
 
 > **SMTP fallback**: If you prefer SMTP (e.g. a self-hosted mail server), you can skip Resend and set `smtp.*` values in `config.json` plus `SMTP_PASSWORD` in `.env`. Resend takes priority if `RESEND_API_KEY` is set.
 
-### 2b. Telephony — optional but recommended for urgent cases
+### 2b. EMF phone system (telephony) — optional but recommended for urgent cases
 
-Outbound calls are placed when a case is marked `urgent` or `high`. Two adapters are available; **EMF Phone System is preferred** for EMF events.
+> **Replaced Jambonz in [PR #63](https://github.com/adamamyl/contactform-plus/pull/63).**
+> Jambonz was a self-hosted SIP/telephony service; it has been removed and replaced with a
+> direct integration against the EMF phone system API (added in
+> [PR #62](https://github.com/adamamyl/contactform-plus/pull/62)).
+> See [docs/emf-phone-setup.md](emf-phone-setup.md) for full details.
 
-#### Option A — EMF Phone System (preferred for EMF events)
-
-The EMF phone system (`sip2.ix1.inferno.tel`) is operated by the EMF network team. It handles TTS and DTMF itself — no audio hosting or webhook setup required.
-
-1. Contact the EMF infra team for the bearer token and the SIP extension numbers to use.
-2. Set in `.env`:
-   ```
-   EMF_PHONE_API_URL=http://sip2.ix1.inferno.tel:3000
-   EMF_PHONE_API_KEY=<bearer-token>
-   ```
-3. Set in `config.json` under the active event:
-   ```json
-   "emf_phone_mode": "high_priority_only",
-   "emf_phone_targets": [
-     {"number": 7483, "description": "site",   "order": 1, "delay_seconds": 0},
-     {"number": 2326, "description": "adam",   "order": 2, "delay_seconds": 120},
-     {"number": 9999, "description": "backup", "order": 3, "delay_seconds": 300}
-   ]
-   ```
-
-See [docs/emf-phone-setup.md](emf-phone-setup.md) for full details including escalation behaviour and troubleshooting.
-
-#### Option B — Jambonz (fallback / non-EMF deployments)
-
-Jambonz is used automatically if `EMF_PHONE_API_URL` / `EMF_PHONE_API_KEY` are not set.
-
-1. Sign up at https://jambonz.cloud
-2. **Account SID**: Accounts → your account → note the **SID** (a UUID)
-3. **Application**: Applications → New Application
-   - Calling Webhook: `https://panel.<your-domain>/webhook/jambonz/call`
-   - Call status webhook: `https://panel.<your-domain>/webhook/jambonz/status`
-4. **API Key**: Settings → API Keys → Create
-5. **Phone number**: Phone Numbers → provision a DID (E.164 format)
-6. **SIP user** (for softphones): SIP Realm → Add SIP User → note `username@realm`
+The router calls the EMF phone system API (`sip2.ix1.inferno.tel:3000`) to place outbound calls
+when a case is marked `urgent` or `high`. The service is synchronous — no webhooks or Caddy proxy
+rules are needed. ACKNOWLEDGE responses auto-ack the case.
 
 Set in `.env`:
 ```
-JAMBONZ_API_URL=https://api.jambonz.cloud
-JAMBONZ_API_KEY=<key>
-JAMBONZ_ACCOUNT_SID=<uuid>
-JAMBONZ_APPLICATION_SID=<app-sid>
-JAMBONZ_FROM_NUMBER=+441234567890
-TTS_AUDIO_BASE_URL=https://panel.<your-domain>
-JAMBONZ_WEBHOOK_BASE_URL=https://panel.<your-domain>
+EMF_PHONE_API_URL=http://sip2.ix1.inferno.tel:3000
+EMF_PHONE_API_KEY=<key from EMF infra team>
 ```
 
 Set in `config.json` under the active event:
 ```json
-"jambonz_mode": "always",
-"call_group_number": "username@sip-realm-host"
+"emf_phone_mode": "high_priority_only",
+"emf_phone_targets": [
+  {"number": 7483, "description": "Site desk", "order": 1, "delay_seconds": 0},
+  {"number": 2326, "description": "Lead on call", "order": 2, "delay_seconds": 30}
+]
 ```
 
-See [docs/jambonz-setup.md](jambonz-setup.md) for full details.
+`emf_phone_mode` values: `"disabled"` (default), `"high_priority_only"`, `"always"`.
 
-**Skipping telephony entirely**: leave all `JAMBONZ_*` and `EMF_PHONE_*` vars unset.
+**Skipping telephony**: Leave `EMF_PHONE_API_URL` unset (or `emf_phone_mode` as `"disabled"`). No calls will be made.
 
 ### 2c. Signal (messaging) — optional
 
@@ -237,11 +208,7 @@ Then open `.env` and fill in the values that can't be auto-generated:
 | `RESEND_API_KEY` | Resend dashboard (§2a) |
 | `SMTP_PASSWORD` | Your SMTP provider (if not using Resend) |
 | `SIGNAL_SENDER` | The phone number registered with Signal (E.164) |
-| `EMF_PHONE_API_KEY` | EMF infra team (§2b option A) |
-| `JAMBONZ_API_KEY` | Jambonz dashboard (§2b option B) |
-| `JAMBONZ_ACCOUNT_SID` | Jambonz dashboard (§2b option B) |
-| `JAMBONZ_APPLICATION_SID` | Jambonz dashboard (§2b option B) |
-| `JAMBONZ_FROM_NUMBER` | Jambonz phone number (§2b option B) |
+| `EMF_PHONE_API_KEY` | EMF infra team (§2b) |
 | `MATTERMOST_TOKEN` | Mattermost bot account (§2d) |
 | `MATTERMOST_CHANNEL_ID` | Mattermost channel API (§2d) |
 | `GOOGLE_SAFE_BROWSING_API_KEY` | Google Cloud Console — Safe Browsing API key (§2e, optional) |
@@ -384,7 +351,7 @@ docker compose -f infra/docker-compose.yml --profile map up -d emf-map
 ```bash
 cd /opt/emf-conduct
 
-# Core stack (form, panel, router, tts, jambonz, postgres, caddy, redis, signal-api)
+# Core stack (form, panel, router, tts, postgres, caddy, redis, signal-api)
 docker compose -f infra/docker-compose.yml up -d
 
 # Check all services are healthy
@@ -506,7 +473,7 @@ Replace `report.emfcamp.org` / `panel.emfcamp.org` with your actual hostnames fr
 - [ ] ACK link in email marks the case as acknowledged in the panel
 - [ ] Signal message arrives in the configured group (if `signal_group_id` is set)
 - [ ] Mattermost Acknowledge button works (if Mattermost is configured)
-- [ ] Phone call is placed for an `urgent` test case (if telephony is configured); pressing 1 ACKs the case — see [emf-phone-setup.md](emf-phone-setup.md) or [jambonz-setup.md](jambonz-setup.md)
+- [ ] EMF phone call is placed for an `urgent` test case (if `emf_phone_mode` is set and `EMF_PHONE_API_KEY` is configured); ACKNOWLEDGE response auto-acks the case
 - [ ] Dispatcher page loads at `https://panel.emfcamp.org/dispatcher`
 - [ ] `docker compose ps` shows all containers as healthy (no restart loops)
 - [ ] `curl https://report.emfcamp.org/health` shows `"safe_browsing": "configured"` (if key is set) and `"clamav": "ok"` (if ClamAV profile is active)
