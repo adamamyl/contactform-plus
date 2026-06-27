@@ -423,6 +423,11 @@
         }
       }, { rootMargin: "200px" });
       io.observe(mapIframe);
+      mapIframe.addEventListener("load", function () {
+        if (mapIframe.contentWindow && mapIframe.src) {
+          mapIframe.contentWindow.postMessage({ type: "emf-embed-init" }, new URL(mapIframe.src).origin);
+        }
+      });
     }
     var latInput = getById("location_lat");
     var lonInput = getById("location_lon");
