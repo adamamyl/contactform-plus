@@ -49,15 +49,14 @@ done
 cd "${REPO_ROOT}"
 
 # --- Compose file detection ---
-COMPOSE_FILES="-f infra/docker-compose.yml"
-if [[ -f infra/docker-compose.wolfcraig.yml ]]; then
+COMPOSE=(docker compose -f "${REPO_ROOT}/infra/docker-compose.yml")
+if [[ -f "${REPO_ROOT}/infra/docker-compose.wolfcraig.yml" ]]; then
   if hostname | grep -qi "wolfcraig" || [[ "${WOLFCRAIG:-}" == "1" ]]; then
-    COMPOSE_FILES="${COMPOSE_FILES} -f infra/docker-compose.wolfcraig.yml"
+    COMPOSE+=(-f "${REPO_ROOT}/infra/docker-compose.wolfcraig.yml")
     info "wolfcraig detected — using wolfcraig compose override"
   fi
 fi
-COMPOSE="docker compose ${COMPOSE_FILES}"
-[[ $VERBOSE -eq 1 ]] && COMPOSE="${COMPOSE} --progress=plain"
+[[ $VERBOSE -eq 1 ]] && COMPOSE+=(--progress=plain)
 
 # --- 1. Git pull ---
 if [[ $SKIP_PULL -eq 0 ]]; then
@@ -67,7 +66,7 @@ fi
 
 # --- 2. Map patch ---
 if [[ $SKIP_PATCH -eq 0 ]]; then
-  MAP_PATH="${EMF_MAP_PATH:-${REPO_ROOT}/../emf/map/web}"
+  MAP_PATH="${EMF_MAP_PATH:-$(cd "${REPO_ROOT}/../emf/map/web" 2>/dev/null && pwd)}"
   if [[ ! -d "${MAP_PATH}" ]]; then
     echo "warn: map path '${MAP_PATH}' not found — skipping patch (set EMF_MAP_PATH to override)" >&2
   else
@@ -124,10 +123,10 @@ BUILD_ARGS=""
 [[ $NO_CACHE -eq 1 ]] && BUILD_ARGS="--no-cache"
 
 info "Building all services..."
-run ${COMPOSE} build ${BUILD_ARGS}
+run "${COMPOSE[@]}" build ${BUILD_ARGS}
 
 # --- 5. Up ---
 info "Starting services..."
-run ${COMPOSE} up -d
+run "${COMPOSE[@]}" up -d
 
 info "Done."
