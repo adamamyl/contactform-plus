@@ -8,9 +8,8 @@ A multi-service system for managing conduct and accessibility reports at EMF Fes
 |---------|------|-------------|
 | `form` | 8000 | Public incident report form |
 | `panel` | 8001 | Conduct team case management panel |
-| `msg-router` | 8002 | Notification router (email, Signal, Mattermost/Slack) |
+| `msg-router` | 8002 | Notification router (email, Signal, Mattermost/Slack, EMF phone) |
 | `tts` | 8003 | Text-to-speech synthesis (Piper) |
-| `jambonz-adapter` | 8004 | Jambonz telephony escalation adapter |
 | `swagger` | — | API docs aggregator (local/swagger profile; served via Caddy) |
 
 ## Architecture
@@ -21,7 +20,7 @@ User → Caddy → form (8000)
              msg-router (8002) → email
                                → Signal
                                → Mattermost / Slack
-                               → jambonz-adapter (8004) → TTS (8003) → Jambonz
+                               → EMF phone API → TTS (8003)
 Conduct team → Caddy → panel (8001)
 ```
 
@@ -51,7 +50,7 @@ urgency selector) regardless of whether the event window is active. Remove or se
 `false` when deploying to production.
 
 ```bash
-# Core stack (form, panel, router, tts, jambonz, postgres, caddy, signal-api, redis)
+# Core stack (form, panel, router, tts, postgres, caddy, signal-api, redis)
 docker compose -f infra/docker-compose.yml up -d
 
 # With local extras (mock OIDC + Swagger UI at swagger.emf-forms.internal)
@@ -102,7 +101,7 @@ uv run ruff format src/        # format
 Run everything at once across all services:
 
 ```bash
-for svc in shared apps/form apps/panel apps/router apps/tts apps/jambonz; do
+for svc in shared apps/form apps/panel apps/router apps/tts; do
   echo "=== $svc ===" && (cd $svc && uv run pytest tests/ -q && uv run python -m mypy src/ --strict)
 done
 ```
@@ -231,10 +230,10 @@ Available under the `local` or `swagger` Docker Compose profile at `https://swag
 | `/sysadmin` | Merged view of every `/health` and `/metrics` endpoint across all services |
 | `/form` | Report Form API only |
 | `/team` | Panel API only |
-| `/dispatch` | Message Router + Jambonz Adapter (internal services) |
+| `/dispatch` | Message Router (internal service) |
 | `/tts` | Text-to-Speech API only |
 
-**Auth:** the Panel spec exposes an OAuth2 authorization-code flow pointing at the OIDC issuer; the Router and Jambonz specs expose an `X-Internal-Secret` API-key scheme. Click **Authorize** in Swagger UI to set credentials before using "Try it out".
+**Auth:** the Panel spec exposes an OAuth2 authorization-code flow pointing at the OIDC issuer; the Router spec exposes an `X-Internal-Secret` API-key scheme. Click **Authorize** in Swagger UI to set credentials before using "Try it out".
 
 **Adding future ops endpoints to `/sysadmin`:** tag the route with `tags=["ops"]` and it appears automatically on next swagger restart. The `/metrics` endpoint (added by prometheus-fastapi-instrumentator) is always included regardless of tags.
 
