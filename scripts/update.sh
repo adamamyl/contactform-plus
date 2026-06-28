@@ -118,14 +118,18 @@ if [[ $SKIP_ENV -eq 0 ]]; then
   fi
 fi
 
-# --- 4. Build ---
+# --- 4. Pull pre-built images ---
+info "Pulling pre-built service images..."
+run "${COMPOSE[@]}" pull --ignore-buildable
+
+# --- 5. Build ---
 BUILD_ARGS=""
 [[ $NO_CACHE -eq 1 ]] && BUILD_ARGS="--no-cache"
 
 info "Building all services..."
 run "${COMPOSE[@]}" build ${BUILD_ARGS}
 
-# --- 5. Up ---
+# --- 6. Up ---
 info "Starting services..."
 run "${COMPOSE[@]}" up -d
 
