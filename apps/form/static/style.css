@@ -1,27 +1,108 @@
-/* EMF Conduct Form — Material Design 3 inspired, system fonts, mobile-first */
+/* EMF Conduct Form — EMF 2026 dark theme, self-hosted fonts */
+
+/* -------------------------------------------------------------------------
+   Fonts
+   ------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: "Raleway";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/raleway-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Raleway";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/raleway-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Raleway";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/fonts/raleway-700.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Open Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/open-sans-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Open Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/open-sans-500.woff2") format("woff2");
+}
+
+/* -------------------------------------------------------------------------
+   Design tokens — EMF 2026 palette
+   ------------------------------------------------------------------------- */
 
 :root {
-  --color-primary: #1B5E20;
-  --color-primary-container: #C8E6C9;
-  --color-on-primary: #ffffff;
-  --color-surface: #FAFAFA;
-  --color-on-surface: #1C1B1F;
-  --color-outline: #79747E;
-  --color-error: #B3261E;
-  --color-error-container: #F9DEDC;
-  --color-warning-bg: #FF8F00;
-  --color-warning-text: #1C1B1F;
-  --color-reference-bg: #E8F5E9;
-  --color-reference-border: #2E7D32;
-  --font-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --radius: 4px;
+  /* Brand */
+  --emf-orange:      #f77f02;
+  --emf-coral:       #f5515e;
+  --emf-yellow:      #f9e200;
+  --emf-green:       #2ae28c;
+  --emf-light-blue:  #2eadd9;
+  --emf-mid-blue:    #005d96;
+  --emf-dark-blue:   #000730;
+
+  /* Surface */
+  --color-surface:         #0f0f0f;
+  --color-surface-input:   #272727;
+  --color-surface-raised:  #343434;
+  --color-surface-header:  #0d0e0e;
+  --color-surface-footer:  #0d0e0e;
+
+  /* Text */
+  --color-on-surface:      #dcdcdc;
+  --color-on-surface-dim:  #999999;
+  --color-heading:         #ffffff;
+
+  /* Accent */
+  --color-primary:         var(--emf-orange);
+  --color-primary-hover:   #d96e02;
+  --color-on-primary:      #000000;
+  --color-primary-muted:   rgba(247, 127, 2, 0.15);
+
+  /* Semantic */
+  --color-outline:         var(--emf-mid-blue);
+  --color-outline-dim:     #1a3a5c;
+  --color-error:           var(--emf-coral);
+  --color-error-muted:     rgba(245, 81, 94, 0.15);
+  --color-success:         var(--emf-green);
+  --color-success-muted:   rgba(42, 226, 140, 0.12);
+  --color-warning-bg:      #7a4000;
+  --color-warning-text:    #f9c97a;
+
+  /* Typography */
+  --font-heading: "Raleway", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-base:    "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  /* Spacing */
+  --radius:    4px;
   --radius-lg: 8px;
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
 }
+
+/* -------------------------------------------------------------------------
+   Reset / base
+   ------------------------------------------------------------------------- */
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -48,7 +129,10 @@ main {
   flex: 1;
 }
 
-/* Skip link */
+/* -------------------------------------------------------------------------
+   Skip link
+   ------------------------------------------------------------------------- */
+
 .skip-link {
   position: absolute;
   top: -40px;
@@ -58,31 +142,41 @@ main {
   padding: var(--space-sm) var(--space-md);
   z-index: 100;
   text-decoration: none;
+  font-family: var(--font-base);
 }
 .skip-link:focus {
   top: 0;
 }
 
-/* Header */
+/* -------------------------------------------------------------------------
+   Header
+   ------------------------------------------------------------------------- */
+
 .site-header {
-  background-color: var(--color-primary);
+  background-color: var(--color-surface-header);
   padding: var(--space-md);
+  border-bottom: 2px solid var(--emf-mid-blue);
 }
 
 .home-link {
-  color: var(--color-on-primary);
+  color: var(--emf-orange);
   text-decoration: none;
+  font-family: var(--font-heading);
   font-size: 1.125rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .home-link:hover,
 .home-link:focus {
+  color: var(--color-heading);
   text-decoration: underline;
 }
 
-/* Container */
+/* -------------------------------------------------------------------------
+   Layout
+   ------------------------------------------------------------------------- */
+
 .container {
   width: min(80%, 960px);
   min-width: 280px;
@@ -90,7 +184,10 @@ main {
   padding: var(--space-lg) var(--space-md);
 }
 
-/* Alert banners */
+/* -------------------------------------------------------------------------
+   Alert banners
+   ------------------------------------------------------------------------- */
+
 .alert {
   padding: var(--space-md);
   border-radius: var(--radius);
@@ -100,10 +197,18 @@ main {
 .alert--event {
   background-color: var(--color-warning-bg);
   color: var(--color-warning-text);
-  border-left: 4px solid #E65100;
+  border-left: 4px solid var(--emf-orange);
 }
 
-/* Typography */
+/* -------------------------------------------------------------------------
+   Typography
+   ------------------------------------------------------------------------- */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  color: var(--color-heading);
+}
+
 h1 {
   font-size: 1.75rem;
   margin-top: 0;
@@ -119,11 +224,14 @@ h2 {
 
 .lead {
   font-size: 1.0625rem;
-  color: #49454F;
+  color: var(--color-on-surface-dim);
   margin-bottom: var(--space-xl);
 }
 
-/* Form elements */
+/* -------------------------------------------------------------------------
+   Form sections
+   ------------------------------------------------------------------------- */
+
 .form-section {
   border: none;
   padding: 0;
@@ -131,12 +239,13 @@ h2 {
 }
 
 .section-legend {
+  font-family: var(--font-heading);
   font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--color-primary);
+  font-weight: 700;
+  color: var(--emf-orange);
   padding: 0;
   margin-bottom: var(--space-lg);
-  border-bottom: 2px solid var(--color-primary-container);
+  border-bottom: 2px solid var(--emf-mid-blue);
   padding-bottom: var(--space-sm);
   width: 100%;
 }
@@ -150,11 +259,16 @@ h2 {
   font-weight: 500;
   margin-bottom: var(--space-xs);
   font-size: 0.9375rem;
+  color: var(--color-on-surface);
 }
 
 .required {
-  color: var(--color-error);
+  color: var(--emf-coral);
 }
+
+/* -------------------------------------------------------------------------
+   Inputs
+   ------------------------------------------------------------------------- */
 
 .form-control {
   display: block;
@@ -164,8 +278,8 @@ h2 {
   font-family: var(--font-base);
   line-height: 1.5;
   color: var(--color-on-surface);
-  background-color: #ffffff;
-  border: 1px solid var(--color-outline);
+  background-color: var(--color-surface-input);
+  border: 1px solid var(--color-outline-dim);
   border-radius: var(--radius);
   appearance: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -173,8 +287,8 @@ h2 {
 
 .form-control:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(27, 94, 32, 0.2);
+  border-color: var(--emf-orange);
+  box-shadow: 0 0 0 3px rgba(247, 127, 2, 0.25);
 }
 
 .form-control:invalid:not(:placeholder-shown) {
@@ -191,11 +305,15 @@ textarea.form-control {
 }
 
 select.form-control {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath fill='%2379747E' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath fill='%23999999' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right var(--space-sm) center;
   padding-right: var(--space-xl);
 }
+
+/* -------------------------------------------------------------------------
+   Form layout helpers
+   ------------------------------------------------------------------------- */
 
 .form-row {
   display: grid;
@@ -211,7 +329,7 @@ select.form-control {
 
 .field-hint {
   font-size: 0.875rem;
-  color: #49454F;
+  color: var(--color-on-surface-dim);
   margin-top: var(--space-xs);
 }
 
@@ -224,17 +342,20 @@ select.form-control {
 
 .char-count {
   font-size: 0.8125rem;
-  color: #49454F;
+  color: var(--color-on-surface-dim);
   text-align: right;
   margin-top: var(--space-xs);
 }
 
 .char-count.near-limit {
-  color: #E65100;
+  color: var(--emf-orange);
   font-weight: 500;
 }
 
-/* Radio buttons */
+/* -------------------------------------------------------------------------
+   Radio buttons
+   ------------------------------------------------------------------------- */
+
 .radio-group {
   display: flex;
   flex-wrap: wrap;
@@ -254,12 +375,15 @@ select.form-control {
   width: 20px;
   height: 20px;
   cursor: pointer;
-  accent-color: var(--color-primary);
+  accent-color: var(--emf-orange);
 }
 
-/* Map container */
+/* -------------------------------------------------------------------------
+   Map
+   ------------------------------------------------------------------------- */
+
 .map-container {
-  border: 1px solid var(--color-outline);
+  border: 1px solid var(--color-outline-dim);
   border-radius: var(--radius);
   margin-bottom: var(--space-md);
   overflow: hidden;
@@ -268,18 +392,21 @@ select.form-control {
 .map-instruction {
   margin: 0;
   padding: 0.5rem 0.75rem;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--emf-dark-blue);
+  color: var(--color-on-surface);
   font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
 
-/* Submit area */
+/* -------------------------------------------------------------------------
+   Submit
+   ------------------------------------------------------------------------- */
+
 .form-actions {
   margin-top: var(--space-xl);
   padding-top: var(--space-lg);
-  border-top: 1px solid var(--color-primary-container);
+  border-top: 1px solid var(--color-outline-dim);
 }
 
 .btn {
@@ -288,32 +415,34 @@ select.form-control {
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-xl);
   font-size: 1rem;
-  font-family: var(--font-base);
-  font-weight: 500;
+  font-family: var(--font-heading);
+  font-weight: 700;
   border: none;
   border-radius: var(--radius-lg);
   cursor: pointer;
   text-decoration: none;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  letter-spacing: 0.02em;
 }
 
 .btn--primary {
-  background-color: var(--color-primary);
+  background-color: var(--emf-orange);
   color: var(--color-on-primary);
 }
 
 .btn--primary:hover {
-  background-color: #2E7D32;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background-color: var(--color-primary-hover);
+  box-shadow: 0 2px 12px rgba(247, 127, 2, 0.4);
 }
 
 .btn--primary:focus {
-  outline: 3px solid rgba(27, 94, 32, 0.4);
+  outline: 3px solid rgba(247, 127, 2, 0.5);
   outline-offset: 2px;
 }
 
 .btn--primary:disabled {
-  background-color: #9E9E9E;
+  background-color: #444;
+  color: #888;
   cursor: not-allowed;
   box-shadow: none;
 }
@@ -322,8 +451,8 @@ select.form-control {
   display: inline-block;
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #ffffff;
+  border: 2px solid rgba(0, 0, 0, 0.3);
+  border-top-color: #000000;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -343,10 +472,13 @@ select.form-control {
   min-height: 1.5rem;
 }
 
-/* Success page */
+/* -------------------------------------------------------------------------
+   Success page
+   ------------------------------------------------------------------------- */
+
 .reference-box {
-  background-color: var(--color-reference-bg);
-  border: 2px solid var(--color-reference-border);
+  background-color: var(--color-success-muted);
+  border: 2px solid var(--emf-green);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   margin: var(--space-xl) 0;
@@ -354,18 +486,20 @@ select.form-control {
 }
 
 .reference-label {
+  font-family: var(--font-heading);
   font-size: 0.875rem;
-  font-weight: 500;
-  color: #2E7D32;
+  font-weight: 700;
+  color: var(--emf-green);
   margin: 0 0 var(--space-sm);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
 }
 
 .reference-id {
+  font-family: var(--font-heading);
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-on-surface);
+  color: var(--color-heading);
   margin: 0 0 var(--space-sm);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
@@ -373,7 +507,7 @@ select.form-control {
 
 .reference-hint {
   font-size: 0.875rem;
-  color: #49454F;
+  color: var(--color-on-surface-dim);
   margin: 0;
 }
 
@@ -389,7 +523,10 @@ select.form-control {
   margin-bottom: var(--space-sm);
 }
 
-/* Visually hidden (accessible) */
+/* -------------------------------------------------------------------------
+   Accessibility
+   ------------------------------------------------------------------------- */
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -402,10 +539,13 @@ select.form-control {
   border: 0;
 }
 
-/* Footer */
+/* -------------------------------------------------------------------------
+   Footer
+   ------------------------------------------------------------------------- */
+
 .site-footer {
-  background-color: #F5F5F5;
-  border-top: 1px solid #E0E0E0;
+  background-color: var(--color-surface-footer);
+  border-top: 1px solid var(--color-outline-dim);
   padding: var(--space-md);
   margin-top: auto;
 }
@@ -420,21 +560,25 @@ select.form-control {
 }
 
 .site-footer a {
-  color: var(--color-primary);
+  color: var(--emf-light-blue);
   text-decoration: none;
 }
 
 .site-footer a:hover {
+  color: var(--emf-orange);
   text-decoration: underline;
 }
 
 .site-footer span[aria-hidden="true"] {
-  color: var(--color-outline);
+  color: var(--color-on-surface-dim);
 }
 
-/* Accordion (details/summary) — event time form */
+/* -------------------------------------------------------------------------
+   Accordion
+   ------------------------------------------------------------------------- */
+
 .form-details {
-  border: 1px solid var(--color-outline);
+  border: 1px solid var(--color-outline-dim);
   border-radius: var(--radius);
   margin-bottom: var(--space-lg);
 }
@@ -442,9 +586,10 @@ select.form-control {
 .form-details > summary {
   padding: var(--space-sm) var(--space-md);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
+  font-family: var(--font-heading);
   font-size: 0.9375rem;
-  color: var(--color-primary);
+  color: var(--emf-orange);
   list-style: none;
   display: flex;
   align-items: center;
@@ -470,11 +615,11 @@ select.form-control {
 
 .form-details > summary:hover,
 .form-details > summary:focus-visible {
-  background-color: var(--color-primary-container);
+  background-color: var(--color-primary-muted);
 }
 
 .form-details[open] > summary {
-  border-bottom: 1px solid var(--color-primary-container);
+  border-bottom: 1px solid var(--color-outline-dim);
   border-radius: var(--radius) var(--radius) 0 0;
 }
 
@@ -482,18 +627,25 @@ select.form-control {
   padding: var(--space-md) var(--space-md) var(--space-xs);
 }
 
-/* Contact fields reveal */
+/* -------------------------------------------------------------------------
+   Contact fields
+   ------------------------------------------------------------------------- */
+
 #contact-fields {
   padding: var(--space-sm) 0;
 }
 
-/* Highlight the "what happened" textarea until it has content */
+/* -------------------------------------------------------------------------
+   What happened highlight
+   ------------------------------------------------------------------------- */
+
 #what_happened:not(.has-value) {
-  background-color: #FFFDE7;
-  border-color: #F9A825;
+  background-color: #1a0e00;
+  border-color: var(--emf-orange);
 }
 
 #what_happened:not(.has-value):focus {
-  background-color: #FFFDE7;
-  border-color: var(--color-primary);
+  background-color: #1a0e00;
+  border-color: var(--emf-yellow);
+  box-shadow: 0 0 0 3px rgba(249, 226, 0, 0.2);
 }
