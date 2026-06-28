@@ -442,10 +442,10 @@ index cd3143d..07f0d00 100644
  }
 diff --git a/web/src/map.ts b/web/src/map.ts
 new file mode 100644
-index 0000000..15c0892
+index 0000000..50bce51
 --- /dev/null
 +++ b/web/src/map.ts
-@@ -0,0 +1,234 @@
+@@ -0,0 +1,233 @@
 +import './index.css'
 +import maplibregl from 'maplibre-gl'
 +import map_style from './style/map_style.ts'
@@ -582,34 +582,33 @@ index 0000000..15c0892
 +        this.map!.resize()
 +      })
 +
-+      // Wait for parent to send emf-embed-init; validate origin before activating postMessage
-+      const activateEmbed = (embedOrigin: string) => {
-+        if (!options.readonly) {
-+          this.map!.on('click', (e: maplibregl.MapMouseEvent) => {
-+            this.marker!.setLocation(e.lngLat)
-+          })
-+        }
-+        const sendView = () => {
-+          const c = this.map!.getCenter()
-+          window.parent.postMessage(
-+            { type: 'emf-view', zoom: this.map!.getZoom(), lat: c.lat, lon: c.lng },
-+            embedOrigin
-+          )
-+        }
-+        this.map!.on('moveend', sendView)
-+        if (this.map!.loaded()) {
-+          sendView()
-+        } else {
-+          this.map!.on('load', sendView)
-+        }
-+        this.marker!.parentOrigin = embedOrigin
++      // Attach click-to-pin immediately; no handshake needed to gate this
++      if (!options.readonly) {
++        this.map.on('click', (e: maplibregl.MapMouseEvent) => {
++          this.marker!.setLocation(e.lngLat)
++        })
 +      }
 +
++      const sendView = (origin: string) => {
++        const c = this.map!.getCenter()
++        window.parent.postMessage(
++          { type: 'emf-view', zoom: this.map!.getZoom(), lat: c.lat, lon: c.lng },
++          origin
++        )
++      }
++
++      // Handshake validates parent origin for targeted postMessage replies
 +      let embedActivated = false
 +      window.addEventListener('message', (e: MessageEvent) => {
 +        if (!embedActivated && e.data?.type === 'emf-embed-init' && isAllowedEmbedOrigin(e.origin)) {
 +          embedActivated = true
-+          activateEmbed(e.origin)
++          this.marker!.parentOrigin = e.origin
++          this.map!.on('moveend', () => sendView(e.origin))
++          if (this.map!.loaded()) {
++            sendView(e.origin)
++          } else {
++            this.map!.on('load', () => sendView(e.origin))
++          }
 +        }
 +      })
 +    } else {
@@ -681,10 +680,10 @@ index 0000000..15c0892
 +  }
 +}
 diff --git a/web/src/marker.ts b/web/src/marker.ts
-index decde32..b5b4810 100644
+index decde32..e71983a 100644
 --- a/web/src/marker.ts
 +++ b/web/src/marker.ts
-@@ -4,94 +4,94 @@ import maplibregl from 'maplibre-gl'
+@@ -4,94 +4,92 @@ import maplibregl from 'maplibre-gl'
  import { roundPosition } from './util'
 
  class Marker implements maplibregl.IControl {
@@ -797,16 +796,14 @@ index decde32..b5b4810 100644
 +    }
 +    this.updateLocation()
 +    this.urlHash.setParameter('m', this.getURLString())
-+    if (this.parentOrigin) {
-+      window.parent.postMessage(
-+        {
-+          type: 'emf-marker',
-+          lat: this.location ? this.location[1] : null,
-+          lon: this.location ? this.location[0] : null,
-+        },
-+        this.parentOrigin
-+      )
-+    }
++    window.parent.postMessage(
++      {
++        type: 'emf-marker',
++        lat: this.location ? this.location[1] : null,
++        lon: this.location ? this.location[0] : null,
++      },
++      this.parentOrigin ?? '*'
++    )
 +  }
 
 -        if (this.location) {
