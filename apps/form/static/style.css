@@ -234,20 +234,24 @@ h2 {
 
 .form-section {
   border: none;
-  padding: 0;
+  border-top: 2px solid var(--emf-mid-blue);
+  padding: var(--space-lg) 0 0;
   margin: 0 0 var(--space-xl);
 }
 
+.form-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
 .section-legend {
+  display: block;
   font-family: var(--font-heading);
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--emf-orange);
-  padding: 0;
+  padding: 0 0 var(--space-sm);
   margin-bottom: var(--space-lg);
-  border-bottom: 2px solid var(--emf-mid-blue);
-  padding-bottom: var(--space-sm);
-  width: 100%;
 }
 
 .form-group {
