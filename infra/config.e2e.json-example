@@ -1,0 +1,78 @@
+{
+  "events": [
+    {
+      "name": "EMF 2026",
+      "start_date": "2026-03-01",
+      "end_date": "2026-07-20",
+      "signal_padding": {
+        "before_event_days": 2,
+        "after_event_days": 2
+      },
+      "signal_group_id": "REPLACE_WITH_SIGNAL_GROUP_ID",
+      "signal_mode": "always",
+      "dispatcher_emails": [
+        "conduct@example.org"
+      ],
+      "dispatcher_session_ttl_hours": 8,
+      "dispatcher_session_max_devices": 2,
+      "emf_phone_mode": "high_priority_only",
+      "emf_phone_targets": [
+        {"number": 9001, "description": "primary-e2e", "order": 1, "delay_seconds": 0},
+        {"number": 9002, "description": "secondary-e2e", "order": 2, "delay_seconds": 0}
+      ]
+    },
+    {
+      "name": "EMF 2024",
+      "start_date": "2024-05-30",
+      "end_date": "2024-06-02"
+    }
+  ],
+  "conduct_emails": [
+    "conduct@example.org"
+  ],
+  "urgency_levels": [
+    "low",
+    "medium",
+    "high",
+    "urgent"
+  ],
+  "pronouns": [
+    "Ze/Zir/Zirs",
+    "Xe/Xem/Xyrs",
+    "Fae/Faer/Faerself",
+    "Fur/Furs/Furself",
+    "He/Him/His",
+    "She/Her/Hers",
+    "They/Them/Theirs",
+    "It/Its"
+  ],
+  "site_map": {
+    "lat": 52.04166,
+    "lon": -2.37767,
+    "zoom": 15.63
+  },
+  "smtp": {
+    "host": "smtp.example.org",
+    "port": 587,
+    "from_addr": "conduct@example.org",
+    "use_tls": true,
+    "username": "conduct@example.org"
+  },
+  "_comment_smtp": "smtp_password goes in .env as SMTP_PASSWORD — never in config.json",
+  "domains": {
+    "report": "report.emf-forms.internal",
+    "panel": "panel.emf-forms.internal",
+    "map": "map.emf-forms.internal",
+    "swagger": "swagger.emf-forms.internal"
+  },
+  "panel_base_url": "https://panel.emf-forms.internal",
+  "mattermost_url": "http://mattermost:8065",
+  "mattermost_channel_id": "REPLACE_WITH_MATTERMOST_CHANNEL_ID",
+  "mattermost_webhook": null,
+  "slack_webhook": null,
+  "attachment_backend": "local",
+  "attachment_max_bytes": 10485760,
+  "attachment_max_per_case": 3,
+  "rate_limit_per_minute": 5,
+  "rate_limit_per_hour": 20
+}
