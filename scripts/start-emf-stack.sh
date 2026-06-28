@@ -21,7 +21,6 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-COMPOSE="docker compose -f infra/docker-compose.yml -f infra/docker-compose.wolfcraig.yml"
 
 DRY_RUN=0
 DEBUG=0
@@ -54,14 +53,23 @@ done
 [[ $DEBUG -eq 1 ]] && set -x
 [[ $VERBOSE -eq 1 ]] && COMPOSE="$COMPOSE --progress=plain"
 
+
+COMPOSE=(docker compose -f infra/docker-compose.yml)
+# Conditionally append wolfcraig flag safely
+[[ $(hostname -s) == "wolfcraig" ]] && COMPOSE+=(-f infra/docker-compose.wolfcraig.yml) || true
+# Append all incoming script arguments directly to the array
+COMPOSE+=("$@")
+"${COMPOSE[@]}"
+
 cd "$REPO_ROOT"
 
-CMD="$COMPOSE $*"
-
 if [[ $DRY_RUN -eq 1 ]]; then
-  echo "$CMD"
+  echo "${COMPOSE[*]}"
   exit 0
 fi
 
-[[ $SILENT -eq 0 ]] && echo "+ $CMD"
-eval "$CMD"
+if [[ $SILENT -eq 0 ]]; then
+  echo "+ ${COMPOSE[*]}"
+fi
+
+"${COMPOSE[@]}"
