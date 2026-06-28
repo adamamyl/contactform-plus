@@ -55,8 +55,8 @@ done
 cd "$REPO_ROOT"
 
 COMPOSE=(docker compose -f infra/docker-compose.yml)
-[[ $VERBOSE -eq 1 ]] && COMPOSE+=(--progress=plain)
 [[ $(hostname -s) == "wolfcraig" ]] && COMPOSE+=(-f infra/docker-compose.wolfcraig.yml) || true
+[[ $VERBOSE -eq 1 ]] && COMPOSE+=(--progress=plain)
 COMPOSE+=("$@")
 
 if [[ $DRY_RUN -eq 1 ]]; then
