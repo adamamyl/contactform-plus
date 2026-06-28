@@ -1,4 +1,4 @@
-From 91c0713738755cfe913d20dacc4033cedb56123b Mon Sep 17 00:00:00 2001
+From 5ae6491651663cf90ca9ac4b67e3fe59503dfe60 Mon Sep 17 00:00:00 2001
 From: Adam McGreggor <adam@adamamyl.com>
 Date: Sat, 27 Jun 2026 22:19:45 +0100
 Subject: [PATCH] feat(embed): readonly mode, postMessage handshake, origin
@@ -21,44 +21,11 @@ Closes #61
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_014M1TEnDwcEFgmTbzkySSXn
 ---
- web/src/index.css | 24 ++++++++++++++++++++
  web/src/index.ts  |  9 ++++++--
  web/src/map.ts    | 56 ++++++++++++++++++++++++++++++++++++++++++++++-
  web/src/marker.ts |  9 ++++++++
- 4 files changed, 95 insertions(+), 3 deletions(-)
+ 3 files changed, 71 insertions(+), 3 deletions(-)
 
-diff --git a/web/src/index.css b/web/src/index.css
-index e5ec744..76cf45e 100644
---- a/web/src/index.css
-+++ b/web/src/index.css
-@@ -97,3 +97,27 @@ p {
-   background-color: white;
-   border-radius: 4px;
- }
-+
-+.layer-switcher-list {
-+  font-size: 10px;
-+  padding-left: 5px;
-+  padding-right: 5px;
-+  min-width: 60px;
-+  max-width: 130px;
-+}
-+
-+.layer-switcher-list h3 {
-+  margin-top: 3px;
-+}
-+
-+.layer-switcher-list h4 {
-+  margin-bottom: 0.3rem;
-+}
-+
-+.layer-switcher-list ul {
-+  margin-bottom: 2px;
-+}
-+
-+.layer-switcher-group + li {
-+  padding-top: 5px;
-+}
 diff --git a/web/src/index.ts b/web/src/index.ts
 index 1c0ae64..07f0d00 100644
 --- a/web/src/index.ts
