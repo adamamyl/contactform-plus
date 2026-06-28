@@ -71,13 +71,15 @@ if [[ $SKIP_PATCH -eq 0 ]]; then
   if [[ ! -d "${MAP_PATH}" ]]; then
     echo "warn: map path '${MAP_PATH}' not found — skipping patch (set EMF_MAP_PATH to override)" >&2
   else
-    info "Checking map patch..."
-    if git -C "${MAP_PATH}" apply --check "${PATCH_FILE}" 2>/dev/null; then
-      info "Applying map patch..."
-      run git -C "${MAP_PATH}" apply "${PATCH_FILE}"
-    else
-      info "Map patch already applied — skipping"
+    info "Pulling map repo..."
+    # Reset any previously applied patch before pulling, then re-apply
+    if ! git -C "${MAP_PATH}" apply --check "${PATCH_FILE}" 2>/dev/null; then
+      info "Resetting map patch before pull..."
+      run git -C "${MAP_PATH}" apply --reverse "${PATCH_FILE}"
     fi
+    run git -C "${MAP_PATH}" pull --ff-only
+    info "Applying map patch..."
+    run git -C "${MAP_PATH}" apply "${PATCH_FILE}"
   fi
 fi
 
