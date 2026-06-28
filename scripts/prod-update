@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# scripts/prod-update — pull latest main, overlay prod config, rebuild, restart
+#
+# Usage:
+#   scripts/prod-update [OPTIONS]
+#
+# Options:
+#   --no-cache     Pass --no-cache to docker compose build
+#   -n, --dry-run  Print actions without running them
+#   -v, --verbose  Verbose build output (--progress=plain)
+#   -h, --help     Show this help
+#
+# The prod git branch holds overrides to infra/docker-compose.yml
+# (prod hostnames, real OIDC issuer, signal-api port, etc.). This
+# script resets those files before pulling so the merge is clean,
+# then restores the prod versions before rebuilding.
+
+set -euo pipefail; IFS=$'\n\t'
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+COMPOSE_FILE="infra/docker-compose.yml"
+
+# Files managed by the prod branch — reset before pull, restore after
+PROD_FILES=("${COMPOSE_FILE}")
+
+NO_CACHE=0
+DRY_RUN=0
+VERBOSE=0
+
+usage() { sed -n '2,16p' "$0" | sed 's/^# \?//'; exit 0; }
+die()   { echo "error: $*" >&2; exit 1; }
+info()  { echo "==> $*"; }
+run()   { if [[ $DRY_RUN -eq 1 ]]; then echo "[dry-run] $*"; else "$@"; fi; }
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)    usage ;;
+    --no-cache)   NO_CACHE=1;  shift ;;
+    -n|--dry-run) DRY_RUN=1;   shift ;;
+    -v|--verbose) VERBOSE=1;   shift ;;
+    *) die "unknown option: $1" ;;
+  esac
+done
+
+cd "${REPO_ROOT}"
+
+# Verify prod branch exists
+if ! git rev-parse --verify prod >/dev/null 2>&1; then
+  die "'prod' branch not found — run: git fetch origin prod:prod"
+fi
+
+COMPOSE=(docker compose -f "${REPO_ROOT}/${COMPOSE_FILE}")
+[[ $VERBOSE -eq 1 ]] && COMPOSE+=(--progress=plain)
+
+# --- 1. Reset prod-managed files so pull is clean ---
+info "Resetting prod-managed files to origin/main..."
+for f in "${PROD_FILES[@]}"; do
+  run git checkout HEAD -- "${f}"
+done
+
+# --- 2. Pull ---
+info "Pulling latest from origin/main..."
+run git pull --ff-only
+
+# --- 3. Restore prod overrides ---
+info "Restoring prod config from 'prod' branch..."
+for f in "${PROD_FILES[@]}"; do
+  run git restore --source=prod "${f}"
+done
+
+# --- 4. Build ---
+BUILD_ARGS=()
+[[ $NO_CACHE -eq 1 ]] && BUILD_ARGS+=(--no-cache)
+
+info "Building all services..."
+run "${COMPOSE[@]}" build "${BUILD_ARGS[@]}"
+
+# --- 5. Up ---
+info "Starting services..."
+run "${COMPOSE[@]}" up -d
+
+info "Done. Run '${COMPOSE[*]} ps' to check service status."
