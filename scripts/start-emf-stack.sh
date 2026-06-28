@@ -51,12 +51,11 @@ done
   && die "--silent conflicts with --verbose / --debug"
 
 [[ $DEBUG -eq 1 ]] && set -x
-[[ $VERBOSE -eq 1 ]] && COMPOSE="$COMPOSE --progress=plain"
-
 
 cd "$REPO_ROOT"
 
 COMPOSE=(docker compose -f infra/docker-compose.yml)
+[[ $VERBOSE -eq 1 ]] && COMPOSE+=(--progress=plain)
 [[ $(hostname -s) == "wolfcraig" ]] && COMPOSE+=(-f infra/docker-compose.wolfcraig.yml) || true
 COMPOSE+=("$@")
 
