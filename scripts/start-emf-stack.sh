@@ -54,14 +54,11 @@ done
 [[ $VERBOSE -eq 1 ]] && COMPOSE="$COMPOSE --progress=plain"
 
 
-COMPOSE=(docker compose -f infra/docker-compose.yml)
-# Conditionally append wolfcraig flag safely
-[[ $(hostname -s) == "wolfcraig" ]] && COMPOSE+=(-f infra/docker-compose.wolfcraig.yml) || true
-# Append all incoming script arguments directly to the array
-COMPOSE+=("$@")
-"${COMPOSE[@]}"
-
 cd "$REPO_ROOT"
+
+COMPOSE=(docker compose -f infra/docker-compose.yml)
+[[ $(hostname -s) == "wolfcraig" ]] && COMPOSE+=(-f infra/docker-compose.wolfcraig.yml) || true
+COMPOSE+=("$@")
 
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "${COMPOSE[*]}"
