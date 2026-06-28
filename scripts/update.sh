@@ -105,9 +105,7 @@ if [[ $SKIP_ENV -eq 0 ]]; then
         if [[ $DRY_RUN -eq 1 ]]; then
           echo "[dry-run] would add to .env: ${line}"
         else
-          echo "" >> "${ENV_FILE}"
-          echo "# Added by update.sh — review and set a real value" >> "${ENV_FILE}"
-          echo "${line}" >> "${ENV_FILE}"
+          { echo ""; echo "# Added by update.sh — review and set a real value"; echo "${line}"; } >> "${ENV_FILE}"
         fi
         added=$((added + 1))
       fi
