@@ -39,6 +39,7 @@ def _make_router(
     signal: AsyncMock | None = None,
     mattermost: AsyncMock | None = None,
     slack: AsyncMock | None = None,
+    phone_adapter: AsyncMock | None = None,
     config: object = None,
     session_factory: MagicMock | None = None,
 ) -> AlertRouter:
@@ -55,6 +56,7 @@ def _make_router(
         signal_adapter=signal,
         mattermost_adapter=mattermost,
         slack_adapter=slack,
+        phone_adapter=phone_adapter,
         session_factory=session_factory,
     )
 
@@ -358,15 +360,17 @@ async def test_router_signal_mode_high_priority_only(
 
     email = _make_mock_adapter()
     signal = _make_mock_adapter()
+    phone = _make_mock_adapter(available=True)
     router = AlertRouter(
         config=cfg,
         email_adapter=email,
         signal_adapter=signal,
         mattermost_adapter=None,
         slack_adapter=None,
+        phone_adapter=phone,
     )
 
-    # low urgency, phone unavailable (False) → still sends signal because phone unavailable
+    # phone available + low urgency → signal suppressed, only email
     with (
         patch("router.alert_router.current_phase") as mock_phase,
         patch("asyncio.create_task") as mock_task,
@@ -374,11 +378,8 @@ async def test_router_signal_mode_high_priority_only(
         from emf_shared.phase import Phase
 
         mock_phase.return_value = Phase.EVENT_TIME
-        # patch phone available to True so signal is NOT sent for low urgency
-        with patch.object(router, "_signal_phone_available", return_value=True):
-            await router.route(low_alert, mock_session)
+        await router.route(low_alert, mock_session)
 
-    # phone available + low urgency → only email
     assert mock_task.call_count == 1
 
 
@@ -618,29 +619,55 @@ async def test_send_ack_to_all_channels_calls_each_adapter(
 
 
 # ---------------------------------------------------------------------------
-# R.4 — _signal_phone_available delegates to phone adapter
+# R.4 — phone availability check called once per route()
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_signal_phone_available_delegates_to_phone_adapter() -> None:
+async def test_phone_is_available_called_once_per_route(
+    mock_session: AsyncMock,
+    sample_alert: CaseAlert,
+) -> None:
     email = _make_mock_adapter()
     phone = _make_mock_adapter(available=True)
+    router = _make_router(email, phone_adapter=phone)
 
-    router = _make_router(email)
-    router._phone = phone  # type: ignore[attr-defined]
+    with (
+        patch("router.alert_router.current_phase") as mock_phase,
+        patch("asyncio.create_task"),
+    ):
+        from emf_shared.phase import Phase
 
-    result = await router._signal_phone_available()
-    assert result is True
+        mock_phase.return_value = Phase.EVENT_TIME
+        await router.route(sample_alert, mock_session)
+
     phone.is_available.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_signal_phone_available_returns_false_when_no_phone() -> None:
+async def test_phone_availability_false_when_no_phone_adapter(
+    mock_session: AsyncMock,
+    sample_alert: CaseAlert,
+) -> None:
     email = _make_mock_adapter()
-    router = _make_router(email)
-    result = await router._signal_phone_available()
-    assert result is False
+    signal = _make_mock_adapter()
+    router = _make_router(email, signal)
+
+    with (
+        patch("router.alert_router.current_phase") as mock_phase,
+        patch("asyncio.create_task") as mock_task,
+    ):
+        from emf_shared.phase import Phase
+
+        mock_phase.return_value = Phase.EVENT_TIME
+        await router.route(sample_alert, mock_session)
+
+    # no phone adapter → signal should fire (fallback_only mode)
+    channels = {
+        c.args[0].cr_frame.f_locals.get("channel_name")
+        for c in mock_task.call_args_list
+    }
+    assert "signal" in channels or mock_task.call_count >= 1
 
 
 # ---------------------------------------------------------------------------

@@ -80,7 +80,7 @@ class AlertRouter:
         session: AsyncSession,
     ) -> None:
         signal_mode = ev.signal_mode if ev else "fallback_only"
-        phone_available = await self._signal_phone_available()
+        phone_available = self._phone is not None and await self._phone.is_available()
 
         channels: list[tuple[str, ChannelAdapter]] = [("email", self._email)]
 
@@ -102,13 +102,13 @@ class AlertRouter:
         if self._slack is not None:
             channels.append(("slack", self._slack))
 
-        if self._phone is not None and await self._phone.is_available():
+        if phone_available:
             phone_mode = ev.emf_phone_mode if ev else "disabled"
             if phone_mode == "always" or (
                 phone_mode == "high_priority_only"
                 and alert.urgency in ("high", "urgent")
             ):
-                channels.append(("telephony", self._phone))
+                channels.append(("telephony", self._phone))  # type: ignore[arg-type]
 
         channel_names = [name for name, _ in channels]
         for channel_name, adapter in channels:
@@ -120,11 +120,6 @@ class AlertRouter:
 
     async def _route_off_event(self, alert: CaseAlert, session: AsyncSession) -> None:
         asyncio.create_task(self._send_with_retry(alert, "email", self._email))
-
-    async def _signal_phone_available(self) -> bool:
-        if self._phone is None:
-            return False
-        return await self._phone.is_available()
 
     def _inc_counter(self, channel: str, state: str) -> None:
         if self._counter is not None:
