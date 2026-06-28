@@ -2,7 +2,7 @@ From 9d16d9abef986c7fe734a69e3ba634ac1b0ba7b8 Mon Sep 17 00:00:00 2001
 From: Adam McGreggor <adam@adamamyl.com>
 Date: Sat, 27 Jun 2026 22:08:55 +0100
 Subject: [PATCH] feat(embed): readonly mode, postMessage handshake, origin
- validation
+ validation; fix URL param wiring; shrink layers popup
 
 Adds embed mode for use as a trusted iframe:
 - ?embed=true hides header and enables postMessage API
@@ -18,17 +18,431 @@ postMessage reporting.
 Uses boolean embedActivated flag (not { once: true }) so spurious
 messages from extensions/Workbox/URLHash don't consume the listener.
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_014M1TEnDwcEFgmTbzkySSXn
----
- web/src/map.ts    | 234 ++++++++++++++++++++++++++++++++++++++++++++++
- web/src/marker.ts | 140 ++++++++++++++-------------
- 2 files changed, 302 insertions(+), 72 deletions(-)
- create mode 100644 web/src/map.ts
+index.ts: parse ?embed and ?readonly from URL and pass to em.init() so
+embed mode actually activates (was always false — broke click-to-pin).
+Also fixes DOMContentLoaded callback binding via arrow function.
 
+index.css: reduce layer-switcher popup size ~50% via CSS overrides.
+
+---
+diff --git a/web/src/index.css b/web/src/index.css
+index e3ec0a3..9efa49d 100644
+--- a/web/src/index.css
++++ b/web/src/index.css
+@@ -1,99 +1,122 @@
+ @import 'maplibre-gl/dist/maplibre-gl.css';
+
+ html {
+-    width: 100%;
+-    height: 100%;
+-    margin: 0;
+-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+-    color: #333;
+-    background-color: #dbe8a5;
++  width: 100%;
++  height: 100%;
++  margin: 0;
++  font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
++  color: #333;
++  background-color: #dbe8a5;
+ }
+ body {
+-    width: 100%;
+-    height: 100%;
+-    margin: 0;
+-    overflow: hidden;
++  width: 100%;
++  height: 100%;
++  margin: 0;
++  overflow: hidden;
+ }
+ header {
+-    display: block;
+-    position: absolute;
+-    top: 0;
+-    left: 0;
+-    z-index: 2;
+-    padding: 4px;
+-    padding-top: 2px;
+-    background-color: rgba(255, 255, 255, 0.75);
+-    border-radius: 0px 0px 4px 0px;
+-    border-right: 1px #ddd solid;
+-    border-bottom: 1px #ddd solid;
+-    font-size: 10px;
++  display: block;
++  position: absolute;
++  top: 0;
++  left: 0;
++  z-index: 2;
++  padding: 4px;
++  padding-top: 2px;
++  background-color: rgba(255, 255, 255, 0.75);
++  border-radius: 0px 0px 4px 0px;
++  border-right: 1px #ddd solid;
++  border-bottom: 1px #ddd solid;
++  font-size: 10px;
+ }
+
+ #map {
+-    width: 100%;
+-    height: 100%;
++  width: 100%;
++  height: 100%;
+ }
+
+ header,
+ .maplibregl-ctrl.maplibregl-ctrl-attrib {
+-    backdrop-filter: blur(3px) saturate(80%);
++  backdrop-filter: blur(3px) saturate(80%);
+ }
+
+ @media all and (display-mode: standalone) {
+-    /* Hide header in PWA mode */
+-    header {
+-        display: none;
+-    }
++  /* Hide header in PWA mode */
++  header {
++    display: none;
++  }
+ }
+
+ @media (max-height: 750px) {
+-    #subtitle {
+-        display: none;
+-    }
++  #subtitle {
++    display: none;
++  }
+ }
+
+ h1 {
+-    margin: 0px;
+-    font-size: 20px;
+-    font-family: 'Raleway', sans-serif;
++  margin: 0px;
++  font-size: 20px;
++  font-family: 'Raleway', sans-serif;
+ }
+ h1 a {
+-    color: #333;
+-    text-decoration: none;
++  color: #333;
++  text-decoration: none;
+ }
+
+ p {
+-    margin-top: 1px;
+-    margin-bottom: 4px;
++  margin-top: 1px;
++  margin-bottom: 4px;
+ }
+
+ .maplibregl-ctrl-attrib {
+-    font-size: 10px;
++  font-size: 10px;
+ }
+
+ #install-prompt {
+-    margin-left: 2px;
+-    position: absolute;
+-    margin-right: 50px;
+-    max-width: 250px;
+-    min-width: 200px;
+-    padding: 4px;
+-    top: 50px;
+-    border-radius: 4px;
+-    border: 1px #ddd solid;
+-    background-color: rgba(255, 255, 255, 0.8);
++  margin-left: 2px;
++  position: absolute;
++  margin-right: 50px;
++  max-width: 250px;
++  min-width: 200px;
++  padding: 4px;
++  top: 50px;
++  border-radius: 4px;
++  border: 1px #ddd solid;
++  background-color: rgba(255, 255, 255, 0.8);
+ }
+
+ #install-button {
+-    float: left;
++  float: left;
+ }
+
+ #install-close {
+-    float: right;
++  float: right;
+ }
+
+ .btn {
+-    font-size: 1.1em;
+-    background-color: white;
+-    border-radius: 4px;
++  font-size: 1.1em;
++  background-color: white;
++  border-radius: 4px;
++}
++
++.layer-switcher-list {
++  font-size: 10px;
++  padding-left: 5px;
++  padding-right: 5px;
++  min-width: 60px;
++}
++
++.layer-switcher-list h3 {
++  margin-top: 3px;
++}
++
++.layer-switcher-list h4 {
++  margin-bottom: 0.3rem;
++}
++
++.layer-switcher-list ul {
++  margin-bottom: 2px;
++}
++
++.layer-switcher-group + li {
++  padding-top: 5px;
+ }
+diff --git a/web/src/index.ts b/web/src/index.ts
+index cd3143d..07f0d00 100644
+--- a/web/src/index.ts
++++ b/web/src/index.ts
+@@ -1,219 +1,18 @@
+ import './index.css'
++import { EventMap } from './map.ts'
+ import { registerSW } from 'virtual:pwa-register'
+-import maplibregl from 'maplibre-gl'
+-import map_style from './style/map_style.ts'
+-import Marker from './marker'
+-import LayerSwitcher from '@russss/maplibregl-layer-switcher'
+-import URLHash from '@russss/maplibregl-layer-switcher/urlhash'
+-import DistanceMeasure from './distancemeasure'
+-import ContextMenu from './contextmenu'
+-import VillagesEditor from './villages'
+-import { roundPosition, fetchWithTimeout } from './util'
+-import InstallControl from './installcontrol'
+-import TransitInfo from './transit'
+-import ExportControl from './export/export'
+-import { manifest } from 'virtual:render-svg'
+
+-/*
+-if (import.meta.env.DEV) {
+-    map_style.sources.villages.data = 'http://localhost:2342/api/villages.geojson'
+-    map_style.sources.site_plan.url = 'http://localhost:8888/capabilities/buildmap'
+-    map_style.glyphs = 'http://localhost:8080/fonts/{fontstack}/{range}.pbf'
+-}
+-
+-*/
+-
+-async function loadIcons(map: maplibregl.Map) {
+-  const ratio = Math.min(Math.round(window.devicePixelRatio), 2)
+-  const icons = manifest[ratio.toString()]
+-
+-  const images = ['camping', 'no-access', 'water', 'tree', 'datenklo', 'datenklo_active', 'datenklo_down']
+-
+-  Promise.all(
+-    images
+-      .map((image) => async () => {
+-        const img = await map.loadImage(icons[image])
+-        map.addImage(image, img.data, { pixelRatio: ratio })
+-      })
+-      .map((f) => f())
+-  )
+-
+-  const sdfs = ['telehandler', 'golf-buggy', 'cherrypicker']
+-
+-  for (const sdf of sdfs) {
+-    const img = await map.loadImage(`/sdf/${sdf}.png`)
+-    map.addImage(sdf, img.data, { sdf: true })
+-  }
+-}
+-
+-let lastSuccessfulFetch = 0
+-
+-function updateVehicles(map: maplibregl.Map) {
+-  if (map.getLayer('vehicles')?.visibility == 'none') return
+-
+-  fetchWithTimeout('https://geojson.thinkl33t.co.uk/')
+-    .then((response) => response.json())
+-    .then((data) => {
+-      const source = map.getSource('vehicles') as maplibregl.GeoJSONSource
+-      if (!source) return
+-      source.setData(data)
+-      lastSuccessfulFetch = Date.now()
+-    })
+-    .catch((error) => {
+-      console.error(error)
+-      if (Date.now() - lastSuccessfulFetch < 60000) return
+-      const source = map.getSource('vehicles') as maplibregl.GeoJSONSource
+-      if (!source) return
+-      source.setData({ type: 'FeatureCollection', features: [] })
+-    })
+-}
+-
+-function initVehicles(map: maplibregl.Map) {
+-  window.setTimeout(() => updateVehicles(map), 0)
+-  window.setInterval(() => updateVehicles(map), 20000)
+-}
+-
+-class EventMap {
+-  layers: Record<string, string> = {
+-    Background: 'background_',
+-    Slope: 'slope',
+-    Hillshade: 'hillshade',
+-    'Aerial Imagery': 'ortho',
+-    Structures: 'structures_',
+-    Paths: 'paths_',
+-    'Buried Services': 'services_',
+-    Lighting: 'lighting_',
+-  }
+-  map?: maplibregl.Map
+-  layer_switcher?: LayerSwitcher
+-  url_hash?: URLHash
+-  marker?: Marker
+-  transit_info?: TransitInfo
+-
+-  init() {
+-    registerSW({ immediate: true })
+-    const layers_enabled = ['Background', 'Structures', 'Paths']
+-    this.layer_switcher = new LayerSwitcher(this.layers, layers_enabled)
+-
+-    this.url_hash = new URLHash(this.layer_switcher)
+-    this.layer_switcher.urlhash = this.url_hash
+-    this.marker = new Marker(this.url_hash)
+-
+-    this.layer_switcher.setInitialVisibility(map_style)
+-    this.map = new maplibregl.Map(
+-      this.url_hash.init({
+-        container: 'map',
+-        style: map_style,
+-        maxBounds: [-3.284912, 51.547329, -1.494141, 52.477539],
+-        pitchWithRotate: false,
+-        dragRotate: false,
+-      })
+-    )
+-    loadIcons(this.map)
+-
+-    this.map.touchZoomRotate.disableRotation()
+-
+-    const url = new URL(window.location.href)
+-    const embed = url.searchParams.get('embed') == 'true'
+-    const readonly = url.searchParams.get('readonly') == 'true'
+-
+-    if (!embed) {
+-      this.map.addControl(new maplibregl.NavigationControl(), 'top-right')
+-
+-      this.map.addControl(
+-        new maplibregl.GeolocateControl({
+-          positionOptions: {
+-            enableHighAccuracy: true,
+-          },
+-          trackUserLocation: true,
+-        })
+-      )
+-
+-      this.map.addControl(
+-        new maplibregl.ScaleControl({
+-          maxWidth: 200,
+-          unit: 'metric',
+-        })
+-      )
+-
+-      this.map.addControl(new DistanceMeasure(), 'top-right')
+-      this.map.addControl(new InstallControl(), 'top-left')
+-
+-      this.map.addControl(new VillagesEditor('villages', 'villages_symbol'), 'top-right')
+-
+-      // Display edit control only on browsers which are likely to be desktop browsers
+-      if (window.matchMedia('(min-width: 600px)').matches) {
+-        this.map.addControl(new ExportControl(loadIcons), 'top-right')
+-      }
+-    } else {
+-      document.querySelector('header')!.style.display = 'none'
+-      this.map.on('load', () => {
+-        this.map!.resize()
+-      })
+-      if (!readonly) {
+-        this.map.on('click', (e: maplibregl.MapMouseEvent) => {
+-          this.marker!.setLocation(e.lngLat)
+-        })
+-      }
+-      const sendView = () => {
+-        const c = this.map!.getCenter()
+-        window.parent.postMessage(
+-          { type: 'emf-view', zoom: this.map!.getZoom(), lat: c.lat, lon: c.lng },
+-          '*',
+-        )
+-      }
+-      this.map.on('moveend', sendView)
+-      this.map.on('load', sendView)
+-    }
+-
+-    this.map.addControl(this.layer_switcher, 'top-right')
+-    this.url_hash.enable(this.map)
+-
+-    const markerParam = url.searchParams.get('marker')
+-    if (markerParam) {
+-      this.marker!.setURLString(markerParam)
+-    }
+-
+-    this.map.addControl(this.marker, 'top-right')
+-
+-    const contextMenu = new ContextMenu(this.map)
+-    contextMenu.addItem('Set marker', (_e, coords) => {
+-      this.marker!.setLocation(coords)
+-    })
+-    contextMenu.addItem(
+-      'Clear marker',
+-      () => {
+-        this.marker!.setLocation(null)
+-      },
+-      () => this.marker!.location != null
+-    )
+-
+-    contextMenu.addItem('Copy coordinates', (e, coords) => {
+-      const [lng, lat] = roundPosition([coords.lng, coords.lat], this.map!.getZoom())
+-      if (e.shiftKey) {
+-        navigator.clipboard.writeText(lng + ', ' + lat)
+-      } else {
+-        navigator.clipboard.writeText(lat + ', ' + lng)
+-      }
+-    })
+-
+-    /*
+-        initVehicles(this.map)
+-
+-
+-        this.map.on('styledata', () => {
+-            updateVehicles(this.map!)
+-        })
+-
+-        this.transit_info = new TransitInfo(this.map)
+-        */
+-  }
+-}
++registerSW({ immediate: true })
+
+ const em = new EventMap()
++const params = new URLSearchParams(window.location.search)
++const initOptions = {
++  embed: params.get('embed') === 'true',
++  readonly: params.get('readonly') === 'true',
++}
+
+ if (document.readyState != 'loading') {
+-  em.init()
++  em.init(initOptions)
+ } else {
+-  document.addEventListener('DOMContentLoaded', em.init)
++  document.addEventListener('DOMContentLoaded', () => em.init(initOptions))
+ }
 diff --git a/web/src/map.ts b/web/src/map.ts
 new file mode 100644
-index 0000000..336a6ca
+index 0000000..15c0892
 --- /dev/null
 +++ b/web/src/map.ts
 @@ -0,0 +1,234 @@
@@ -179,7 +593,7 @@ index 0000000..336a6ca
 +          const c = this.map!.getCenter()
 +          window.parent.postMessage(
 +            { type: 'emf-view', zoom: this.map!.getZoom(), lat: c.lat, lon: c.lng },
-+            embedOrigin,
++            embedOrigin
 +          )
 +        }
 +        this.map!.on('moveend', sendView)
@@ -267,10 +681,10 @@ index 0000000..336a6ca
 +  }
 +}
 diff --git a/web/src/marker.ts b/web/src/marker.ts
-index decde32..d69f842 100644
+index decde32..b5b4810 100644
 --- a/web/src/marker.ts
 +++ b/web/src/marker.ts
-@@ -4,94 +4,90 @@ import maplibregl from 'maplibre-gl'
+@@ -4,94 +4,94 @@ import maplibregl from 'maplibre-gl'
  import { roundPosition } from './util'
 
  class Marker implements maplibregl.IControl {
@@ -385,8 +799,12 @@ index decde32..d69f842 100644
 +    this.urlHash.setParameter('m', this.getURLString())
 +    if (this.parentOrigin) {
 +      window.parent.postMessage(
-+        { type: 'emf-marker', lat: this.location ? this.location[1] : null, lon: this.location ? this.location[0] : null },
-+        this.parentOrigin,
++        {
++          type: 'emf-marker',
++          lat: this.location ? this.location[1] : null,
++          lon: this.location ? this.location[0] : null,
++        },
++        this.parentOrigin
 +      )
 +    }
 +  }
@@ -433,5 +851,3 @@ index decde32..d69f842 100644
  }
 
  export default Marker
---
-2.54.0
