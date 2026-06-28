@@ -41,7 +41,7 @@ services:
       - traefik-public
     labels:
       - traefik.enable=true
-      - traefik.http.routers.emf-form.rule=Host(`report.emf-forms.internal`)
+      - traefik.http.routers.emf-form.rule=Host(`${FORM_HOST:-report.emf-forms.internal}`)
       - traefik.http.routers.emf-form.entrypoints=websecure
       - traefik.http.routers.emf-form.tls=true
       - traefik.http.routers.emf-form.middlewares=security-headers@file
@@ -72,7 +72,7 @@ services:
       - traefik-public
     labels:
       - traefik.enable=true
-      - traefik.http.routers.emf-panel.rule=Host(`panel.emf-forms.internal`)
+      - traefik.http.routers.emf-panel.rule=Host(`${PANEL_HOST:-panel.emf-forms.internal}`)
       - traefik.http.routers.emf-panel.entrypoints=websecure
       - traefik.http.routers.emf-panel.tls=true
       - traefik.http.routers.emf-panel.middlewares=security-headers@file
@@ -117,7 +117,7 @@ services:
       - traefik-public
     labels:
       - traefik.enable=true
-      - traefik.http.routers.emf-map.rule=Host(`map.emf-forms.internal`)
+      - traefik.http.routers.emf-map.rule=Host(`${MAP_HOST:-map.emf-forms.internal}`)
       - traefik.http.routers.emf-map.entrypoints=websecure
       - traefik.http.routers.emf-map.tls=true
       - traefik.http.services.emf-map.loadbalancer.server.port=8080
@@ -148,7 +148,7 @@ services:
       - traefik-public
     labels:
       - traefik.enable=true
-      - traefik.http.routers.emf-swagger.rule=Host(`swagger.emf-forms.internal`)
+      - traefik.http.routers.emf-swagger.rule=Host(`${SWAGGER_HOST:-swagger.emf-forms.internal}`)
       - traefik.http.routers.emf-swagger.entrypoints=websecure
       - traefik.http.routers.emf-swagger.tls=true
       - traefik.http.services.emf-swagger.loadbalancer.server.port=8080
@@ -165,7 +165,7 @@ services:
       - traefik-public
     labels:
       - traefik.enable=true
-      - traefik.http.routers.emf-mock-oidc.rule=Host(`oidc.emf-forms.internal`)
+      - traefik.http.routers.emf-mock-oidc.rule=Host(`${OIDC_HOST:-oidc.emf-forms.internal}`)
       - traefik.http.routers.emf-mock-oidc.entrypoints=websecure
       - traefik.http.routers.emf-mock-oidc.tls=true
       - traefik.http.services.emf-mock-oidc.loadbalancer.server.port=8080
