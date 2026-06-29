@@ -128,7 +128,18 @@ async def auth_callback(request: Request) -> RedirectResponse:
         if request.session.get("user"):
             return RedirectResponse(url="/", status_code=302)
         return RedirectResponse(url="/login", status_code=302)
-    user: dict[str, object] = token.get("userinfo", {})
+    # id_token claims always include requestMapping claims (e.g. groups); the
+    # userinfo endpoint may omit custom claims depending on the IdP. parse_id_token
+    # verifies signature, issuer, audience, expiry and nonce via JWKS before
+    # returning claims — safe to merge into the session.
+    id_claims: dict[str, object] = {}
+    if token.get("id_token"):
+        try:
+            parsed = await oauth.emf.parse_id_token(request, token)
+            id_claims = dict(parsed) if parsed else {}
+        except Exception:
+            log.warning("id_token parse failed; falling back to userinfo only")
+    user: dict[str, object] = {**id_claims, **(token.get("userinfo") or {})}
     request.session["user"] = user
     return RedirectResponse(url="/", status_code=302)
 

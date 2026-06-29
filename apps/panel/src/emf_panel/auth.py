@@ -16,13 +16,16 @@ oauth: OAuth = OAuth()
 
 
 def configure_oauth(settings: Settings) -> None:
-    oauth.register(
-        name="emf",
-        server_metadata_url=f"{settings.oidc_issuer}/.well-known/openid-configuration",
-        client_id=settings.oidc_client_id,
-        client_secret=settings.oidc_client_secret,
-        client_kwargs={"scope": "openid email profile groups"},
-    )
+    kwargs: dict[str, object] = {
+        "server_metadata_url": settings.oidc_server_metadata_url
+        or f"{settings.oidc_issuer}/.well-known/openid-configuration",
+        "client_id": settings.oidc_client_id,
+        "client_secret": settings.oidc_client_secret,
+        "client_kwargs": {"scope": "openid email profile groups"},
+    }
+    if settings.oidc_authorize_url:
+        kwargs["authorize_url"] = settings.oidc_authorize_url
+    oauth.register(name="emf", **kwargs)
 
 
 @lru_cache(maxsize=8)
