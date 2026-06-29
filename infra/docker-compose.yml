@@ -59,6 +59,12 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-panel}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-secret}
       JWKS_URI: ${JWKS_URI:-http://mock-oidc:8080/default/jwks}
+      # Internal metadata URL so panel can reach mock-oidc from inside Docker.
+      # On prod leave unset — OIDC_ISSUER is reachable from the server directly.
+      OIDC_SERVER_METADATA_URL: ${OIDC_SERVER_METADATA_URL:-http://mock-oidc:8080/default/.well-known/openid-configuration}
+      # External authorize URL so the browser redirect goes to the right place.
+      # On prod leave unset — authlib discovers it from the metadata.
+      OIDC_AUTHORIZE_URL: ${OIDC_AUTHORIZE_URL:-https://oidc.emf-forms.internal/default/authorize}
       CONFIG_PATH: /app/config.json
       BASE_URL: ${PANEL_BASE_URL:-https://panel.emf-forms.internal}
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
