@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "emf_map.html" as emfmap %}
 {% block title %}Report an Incident — EMF Conduct{% endblock %}
 {% block head %}
 {% endblock %}
@@ -159,13 +160,8 @@
         </div>
         {% if config.site_map %}
         <div id="map-container" class="map-container">
-          <p class="map-instruction">Click anywhere on the map to activate it, then click to pin a location.</p>
-          <iframe
-            id="location-map"
-            data-src="{{ config.site_map.map_url }}/?embed=true#{{ config.site_map.zoom }}/{{ config.site_map.lat }}/{{ config.site_map.lon }}"
-            style="width: 100%; height: 600px; border: 0; display: block;"
-            title="Site map — click to set a location pin"
-          ></iframe>
+          <p class="map-instruction">Click anywhere on the map to pin a location.</p>
+          {{ emfmap.emf_map(config.site_map.map_url, config.site_map.lat, config.site_map.lon, zoom=config.site_map.zoom, click_for_marker=true) }}
           <div id="location-pin-status" class="field-hint" style="padding: 0.25rem 0.75rem; min-height: 1.5em;"></div>
         </div>
         {% endif %}
@@ -314,13 +310,8 @@
 
       {% if config.site_map %}
       <div id="map-container" class="map-container">
-        <p class="map-instruction">Click anywhere on the map to activate it, then click to pin a location.</p>
-        <iframe
-          id="location-map"
-          data-src="{{ config.site_map.map_url }}/?embed=true#{{ config.site_map.zoom }}/{{ config.site_map.lat }}/{{ config.site_map.lon }}"
-          style="width: 100%; height: 600px; border: 0; display: block;"
-          title="Site map — click to set a location pin"
-        ></iframe>
+        <p class="map-instruction">Click anywhere on the map to pin a location.</p>
+        {{ emfmap.emf_map(config.site_map.map_url, config.site_map.lat, config.site_map.lon, zoom=config.site_map.zoom, click_for_marker=true) }}
         <div id="location-pin-status" class="field-hint" style="padding: 0.25rem 0.75rem; min-height: 1.5em;"></div>
       </div>
       {% endif %}

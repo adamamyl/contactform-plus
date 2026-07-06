@@ -18,6 +18,9 @@ build/
 
 # uv
 uv.lock          # committed per-service; ignored at root
+
+# Node
+node_modules/
 .python-version
 
 # Test / coverage artefacts

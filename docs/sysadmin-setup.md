@@ -297,37 +297,14 @@ The container must stay running during the scan. Once linked, the number is regi
 
 ## 7a. EMF site map service (optional)
 
-The `emf-map` Docker service embeds the [EMF site map](https://github.com/emfcamp/map) inside the report form, allowing reporters to pin their location. It is gated behind the `map` Compose profile and is only needed if `site_map.enabled` is `true` in `config.json`.
+The `emf-map` Docker service serves the [EMF site map](https://github.com/emfcamp/map) as a web component (`<emf-map>`, loaded from `component.js`), embedded directly in the report form and panel pages. It is gated behind the `map` Compose profile and is only needed if `site_map.enabled` is `true` in `config.json`.
 
-### Patch requirements
-
-The upstream map repo needs two small patches to support embed mode:
-
-- `?embed=true` — hides the header
-- `?readonly=true` — suppresses click-to-pin (used in panel case detail)
-- `postMessage` `emf-marker` / `emf-view` — lets the parent frame receive coordinates and map state
-- `?marker=lat,lon` — pre-sets the pin on load
-
-The patch file is at `map/embed-readonly-view-postmessage.patch` in this repo. It applies against upstream commit `c96be26` (or later).
+No patching required — upstream ships the web component natively (see [map.emfcamp.org/component.html](https://map.emfcamp.org/component.html)). Clone it unmodified:
 
 ### Setup
 
 ```bash
-# Clone the upstream map repo
 git clone https://github.com/emfcamp/map.git /opt/emf-map
-
-# Apply our embed patch
-cd /opt/emf-map
-git am /opt/emf-conduct/map/embed-readonly-view-postmessage.patch
-```
-
-If the patch doesn't apply cleanly (upstream has moved on), rebase manually:
-
-```bash
-git fetch origin
-git rebase origin/main
-# resolve any conflicts in web/src/index.ts — our additions are in the embed else-block
-# and the ?marker= param block just before this.map.addControl(this.marker, ...)
 ```
 
 ### Compose
@@ -466,7 +443,7 @@ Work through this list after the first deployment:
 Replace `report.emfcamp.org` / `panel.emfcamp.org` with your actual hostnames from `config.json domains`.
 
 - [ ] `https://report.emfcamp.org` loads the report form
-- [ ] Site map iframe loads inside the report form (check browser console for CSP errors)
+- [ ] Site map component loads inside the report form (check browser console for CSP errors)
 - [ ] Submit a test report; confirm it appears in the panel at `https://panel.emfcamp.org`
 - [ ] Panel login works via OIDC; non-`team_conduct` users are rejected
 - [ ] Notification email arrives (check spam folder; check Resend dashboard for delivery status)

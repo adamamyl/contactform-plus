@@ -51,11 +51,17 @@ def _hsts() -> str:
 
 
 def _report_block(report: str, map_domain: str | None) -> str:
-    frame_src = f"https://{map_domain}" if map_domain else "'none'"
+    # emf-map is now a same-origin web component (script-src/worker-src/connect-src),
+    # not a sandboxed iframe — only wire these up when the map is actually configured.
+    map_script = f" https://{map_domain}" if map_domain else ""
+    worker_src = " worker-src blob:;" if map_domain else ""
+    map_font = f" {_MAP_EXTERNAL_FONT}" if map_domain else ""
+    map_connect = f" {_MAP_EXTERNAL_CONNECT}" if map_domain else ""
     csp = (
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-        f"img-src 'self' data: https://*.tile.openstreetmap.org; font-src 'self'; "
-        f"connect-src 'self'; frame-src {frame_src}"
+        f"default-src 'self'; script-src 'self'{map_script} blob:;{worker_src} "
+        "style-src 'self' 'unsafe-inline'; "
+        f"img-src 'self' blob: data: https://*.tile.openstreetmap.org; font-src 'self'{map_font}; "
+        f"connect-src 'self'{map_connect}"
     )
     return f"""{report} {{
 \theader {{
@@ -73,10 +79,15 @@ def _report_block(report: str, map_domain: str | None) -> str:
 
 
 def _panel_block(panel: str, map_domain: str | None) -> str:
-    frame_src = f"; frame-src https://{map_domain}" if map_domain else ""
+    map_script = f" https://{map_domain}" if map_domain else ""
+    worker_src = " worker-src blob:;" if map_domain else ""
+    map_font = f" {_MAP_EXTERNAL_FONT}" if map_domain else ""
+    map_connect = f" {_MAP_EXTERNAL_CONNECT}" if map_domain else ""
     csp = (
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-        f"img-src 'self' data:; font-src 'self'{frame_src}"
+        f"default-src 'self'; script-src 'self'{map_script} blob:;{worker_src} "
+        "style-src 'self' 'unsafe-inline'; "
+        f"img-src 'self' blob: data:; font-src 'self'{map_font}; "
+        f"connect-src 'self'{map_connect}"
     )
     return f"""{panel} {{
 \theader {{
@@ -99,14 +110,14 @@ def _auth_block(auth: str) -> str:
 }}"""
 
 
-def _map_block(map_domain: str, report: str, panel: str) -> str:
-    frame_ancestors = f"https://{report} https://{panel}"
+def _map_block(map_domain: str) -> str:
+    # No longer embedded as an iframe by report/panel — served standalone only.
     csp = (
         "default-src 'self'; script-src 'self' blob:; worker-src blob:; "
         "style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; "
         f"font-src 'self' {_MAP_EXTERNAL_FONT}; "
         f"connect-src 'self' {_MAP_EXTERNAL_CONNECT}; "
-        f"frame-ancestors {frame_ancestors}"
+        "frame-ancestors 'none'"
     )
     return f"""{map_domain} {{
 \theader {{
@@ -155,7 +166,7 @@ def generate(domains: dict[str, str]) -> str:
         blocks += ["", _auth_block(auth_domain)]
 
     if map_domain:
-        blocks += ["", _map_block(map_domain, report, panel)]
+        blocks += ["", _map_block(map_domain)]
 
     if swagger_domain:
         blocks += ["", _swagger_block(swagger_domain)]

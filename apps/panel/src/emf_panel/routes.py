@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, cast
 
+import emf_shared
 import httpx
 import redis.asyncio as aioredis
 from authlib.integrations.base_client.errors import MismatchingStateError
@@ -15,6 +16,7 @@ from emf_shared.tracing import outbound_headers
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import ChoiceLoader, FileSystemLoader
 from pydantic import BaseModel
 from sqlalchemy import case as sa_case
 from sqlalchemy import exists, func, select, text, update
@@ -42,7 +44,12 @@ def _map_base_url(settings: Settings) -> str:
 
 
 router = APIRouter()
+_shared_templates_dir = str(Path(emf_shared.__file__).parent / "templates")
 templates = Jinja2Templates(directory="templates")
+_original_loader = templates.env.loader
+if _original_loader is None:
+    raise RuntimeError("Jinja2Templates did not configure a loader")
+templates.env.loader = ChoiceLoader([_original_loader, FileSystemLoader(_shared_templates_dir)])
 
 _ASSIGNEES_KEY = "panel:assignees"
 

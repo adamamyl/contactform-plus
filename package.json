@@ -1,0 +1,13 @@
+{
+  "name": "emf-conduct",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint:js": "eslint apps/form/static apps/panel/static"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^9.39.4",
+    "globals": "^17.7.0"
+  }
+}
