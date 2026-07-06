@@ -12,7 +12,7 @@ services:
       - ./postgres:/docker-entrypoint-initdb.d:ro
       - ./postgres/certs:/var/lib/postgresql/certs:ro
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h localhost -d emf_forms"]
       interval: 10s
@@ -266,7 +266,7 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     depends_on:
       - prometheus
     profiles:
