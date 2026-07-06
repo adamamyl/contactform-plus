@@ -2,6 +2,7 @@
   "name": "emf-conduct",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "lint:js": "eslint apps/form/static apps/panel/static"
   },
