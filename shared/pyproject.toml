@@ -22,7 +22,7 @@ packages = ["src/emf_shared"]
 [dependency-groups]
 dev = [
     "anyio[trio]>=4.0",
-    "bandit[toml]>=1.8",
+    "bandit[toml]>=1.9.4",
     "httpx>=0.27",
     "mypy>=1.13",
     "pip-audit>=2.7",
