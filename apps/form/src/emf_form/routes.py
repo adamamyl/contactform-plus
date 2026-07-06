@@ -4,8 +4,10 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated
 
+import emf_shared
 import httpx
 from emf_shared.db import get_session
 from emf_shared.friendly_id import generate_unique
@@ -13,6 +15,7 @@ from emf_shared.phase import Phase, current_phase, events_for_form, is_active_ro
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import ChoiceLoader, FileSystemLoader
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select, text
@@ -25,7 +28,12 @@ from .settings import Settings, get_settings
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 log = logging.getLogger(__name__)
+_shared_templates_dir = str(Path(emf_shared.__file__).parent / "templates")
 templates = Jinja2Templates(directory="templates")
+_original_loader = templates.env.loader
+if _original_loader is None:
+    raise RuntimeError("Jinja2Templates did not configure a loader")
+templates.env.loader = ChoiceLoader([_original_loader, FileSystemLoader(_shared_templates_dir)])
 
 _SAFE_BROWSING_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
 

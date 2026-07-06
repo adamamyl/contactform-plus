@@ -3401,3 +3401,9 @@ Replaced broken SMTP (Outlook.com blocks SMTP auth; host.docker.internal unreach
 #### X.5 — Tests (`shared/tests/`)
 - [x] `test_tracing.py`: trace ID format, uniqueness, set/get, `outbound_headers`, task isolation (ContextVar is per-task), child task inherits parent trace, `_TraceFilter` injects fields
 - [x] `test_middleware.py`: generates ID when none provided, echoes incoming ID, ID available in route handler, unique per request, no bleed between requests
+
+---
+
+### Backlog — not scheduled
+
+- [ ] **Remove Caddy entirely.** Traefik (`security-headers@file` middleware, external to this repo) is the only proxy actually used in wolfcraig/prod deployments. `scripts/generate_caddyfile.py`, `scripts/install.py`'s `caddy` proxy option, `infra/caddy/`, and Caddy CSP references in `docs/sysadmin-setup.md` are legacy/local-dev-only at this point. Do not do this now — flagged during the emf-map web-component migration (2026-07-06) while double-checking CSP delivery paths.

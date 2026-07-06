@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "emf_map.html" as emfmap %}
 {% block title %}{{ case.friendly_id }} — EMF Conduct Panel{% endblock %}
 {% block content %}
 <a href="/" class="back-link">← All cases</a>
@@ -31,10 +32,7 @@
 {% set loc = case.form_data.get('location') if case.form_data else None %}
 {% if loc and loc.lat is not none and loc.lon is not none %}
 <div class="case-map-container">
-  <iframe
-    src="{{ map_base_url }}/?embed=true&readonly=true&marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}"
-    style="width:100%;height:300px;border:0;display:block;"
-    title="Case location"></iframe>
+  {{ emfmap.emf_map(map_base_url, loc.lat, loc.lon, zoom=16, marker_lat=loc.lat, marker_lon=loc.lon, height='300px') }}
   <p class="hint" style="padding:0.25rem 0.75rem;">Zoom in/out to find the pin — it won't move.</p>
 </div>
 {% endif %}

@@ -1,0 +1,23 @@
+{% macro emf_map(map_url, lat, lon, zoom=16, marker_lat=none, marker_lon=none, click_for_marker=false, nav_controls=true, url_hash=false, element_id='location-map', height='600px') %}
+<script type="module" src="{{ map_url.rstrip('/') }}/component.js"></script>
+<emf-map
+  id="{{ element_id }}"
+  center="{{ lon }},{{ lat }}"
+  zoom="{{ zoom }}"
+  {%- if marker_lat is not none and marker_lon is not none %}
+  marker="{{ marker_lon }},{{ marker_lat }}"
+  {%- endif %}
+  {#- emf-map declares these as plain Lit @property() (String converter, not Boolean) —
+      a bare boolean attribute resolves to "" (falsy), so an explicit "true" is required. #}
+  {%- if click_for_marker %}
+  clickForMarker="true"
+  {%- endif %}
+  {%- if nav_controls %}
+  navControls="true"
+  {%- endif %}
+  {%- if url_hash %}
+  urlHash="true"
+  {%- endif %}
+  style="width:100%;height:{{ height }};display:block;"
+></emf-map>
+{% endmacro %}

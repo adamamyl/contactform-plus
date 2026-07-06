@@ -414,47 +414,42 @@
   }
 
   function initMap() {
-    var mapIframe = getById("location-map");
-    if (mapIframe && mapIframe.dataset.src) {
-      var io = new IntersectionObserver(function (entries, observer) {
-        if (entries[0].isIntersecting) {
-          mapIframe.src = mapIframe.dataset.src;
-          observer.disconnect();
-        }
-      }, { rootMargin: "200px" });
-      io.observe(mapIframe);
-      mapIframe.addEventListener("load", function () {
-        if (mapIframe.contentWindow && mapIframe.src) {
-          mapIframe.contentWindow.postMessage({ type: "emf-embed-init" }, new URL(mapIframe.src).origin);
-        }
-      });
-    }
+    var mapEl = getById("location-map");
     var latInput = getById("location_lat");
     var lonInput = getById("location_lon");
     var pinStatus = getById("location-pin-status");
-    if (!latInput || !lonInput) return;
+    if (!mapEl || !latInput || !lonInput) return;
 
-    window.addEventListener("message", function (e) {
-      if (!e.data) return;
-      if (e.data.type === "emf-view") {
-        if (!pinStatus) return;
-        var z = e.data.zoom !== undefined ? (+e.data.zoom).toFixed(2) : "?";
-        var lat = e.data.lat !== undefined ? (+e.data.lat).toFixed(5) : "?";
-        var lon = e.data.lon !== undefined ? (+e.data.lon).toFixed(5) : "?";
-        var pinned = latInput.value ? " · pin: " + latInput.value + ", " + lonInput.value : "";
-        pinStatus.textContent = "zoom: " + z + " · centre: " + lat + ", " + lon + pinned;
-        return;
-      }
-      if (e.data.type !== "emf-marker") return;
-      if (e.data.lat === null || e.data.lon === null) {
+    function renderStatus(mapLibreMap) {
+      if (!pinStatus) return;
+      var center = mapLibreMap.getCenter();
+      var z = mapLibreMap.getZoom().toFixed(2);
+      var lat = center.lat.toFixed(5);
+      var lon = center.lng.toFixed(5);
+      var pinned = latInput.value ? " · pin: " + latInput.value + ", " + lonInput.value : "";
+      pinStatus.textContent = "zoom: " + z + " · centre: " + lat + ", " + lon + pinned;
+    }
+
+    // The emf-map web component exposes the underlying MapLibre instance via
+    // the 'load' event ('load' MapLoadEvent.map) — used for a live zoom/centre readout.
+    mapEl.addEventListener("load", function (e) {
+      var mapLibreMap = e.map;
+      if (!mapLibreMap) return;
+      renderStatus(mapLibreMap);
+      mapLibreMap.on("move", function () { renderStatus(mapLibreMap); });
+      mapLibreMap.on("zoom", function () { renderStatus(mapLibreMap); });
+    });
+
+    // 'marker' MarkerChangeEvent exposes coords directly as {lng, lat} (or undefined to clear).
+    mapEl.addEventListener("marker", function (e) {
+      var coords = e.coords;
+      if (!coords) {
         latInput.value = "";
         lonInput.value = "";
-        if (pinStatus) pinStatus.textContent = "";
-      } else {
-        latInput.value = String(e.data.lat);
-        lonInput.value = String(e.data.lon);
-        if (pinStatus) pinStatus.textContent = "Pinned: " + e.data.lat + ", " + e.data.lon;
+        return;
       }
+      latInput.value = String(coords.lat);
+      lonInput.value = String(coords.lng);
     });
   }
 

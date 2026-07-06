@@ -7,6 +7,16 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  # ── ESLint: static JS (form/panel front-end) ──────────────────────────────
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint (static JS)
+        entry: pnpm run lint:js
+        language: system
+        files: ^apps/(form|panel)/static/.*\.js$
+        pass_filenames: false
+
   # ── Secret scanning ───────────────────────────────────────────────────────
   - repo: https://github.com/betterleaks/betterleaks
     rev: v1.5.0

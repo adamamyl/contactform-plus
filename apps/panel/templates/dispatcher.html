@@ -1,3 +1,4 @@
+{% import "emf_map.html" as emfmap %}
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -98,10 +99,7 @@
             <details>
               <summary style="padding:0.3rem 0.75rem;cursor:pointer;font-size:0.85rem;color:var(--color-hint);">🗺 Show map</summary>
               <div class="case-map-container" style="margin:0;border-radius:0;border-left:0;border-right:0;">
-                <iframe
-                  src="{{ map_base_url }}/?embed=true&readonly=true&marker={{ loc.lat }},{{ loc.lon }}#16/{{ loc.lat }}/{{ loc.lon }}"
-                  style="width:100%;height:300px;border:0;display:block;"
-                  title="Case location" loading="lazy"></iframe>
+                {{ emfmap.emf_map(map_base_url, loc.lat, loc.lon, zoom=16, marker_lat=loc.lat, marker_lon=loc.lon, height='300px') }}
                 <p class="hint" style="padding:0.25rem 0.75rem;">Zoom in/out to find the pin — it won't move.</p>
               </div>
             </details>
