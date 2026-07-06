@@ -345,7 +345,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "ruff", specifier = ">=0.15.4" },
-    { name = "types-authlib", specifier = ">=1.6.8.20260215" },
+    { name = "types-authlib", specifier = ">=1.6.11.20260518" },
 ]
 
 [[package]]
@@ -388,21 +388,21 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "python-json-logger", specifier = ">=3.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.51" },
     { name = "starlette", specifier = ">=0.40" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "anyio", extras = ["trio"], specifier = ">=4.0" },
-    { name = "bandit", extras = ["toml"], specifier = ">=1.8" },
+    { name = "anyio", extras = ["trio"], specifier = ">=4.14.1" },
+    { name = "bandit", extras = ["toml"], specifier = ">=1.9.4" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "mypy", specifier = ">=1.13" },
     { name = "pip-audit", specifier = ">=2.7" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "ruff", specifier = ">=0.8" },
-    { name = "types-jsonschema", specifier = ">=4.23" },
+    { name = "types-jsonschema", specifier = ">=4.26.0.20260518" },
 ]
 
 [[package]]
