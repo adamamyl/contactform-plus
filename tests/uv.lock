@@ -345,7 +345,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "ruff", specifier = ">=0.15.4" },
-    { name = "types-authlib", specifier = ">=1.6.8.20260215" },
+    { name = "types-authlib", specifier = ">=1.6.11.20260518" },
 ]
 
 [[package]]
