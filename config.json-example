@@ -15,8 +15,8 @@
       ],
       "dispatcher_session_ttl_hours": 8,
       "dispatcher_session_max_devices": 2,
-      "jambonz_mode": "always",
-      "call_group_number": "user@ABCDE.sip.jambonz.cloud"
+      "emf_phone_mode": "disabled",
+      "emf_phone_targets": []
     },
     {
       "name": "EMF 2024",
@@ -71,7 +71,8 @@
   "site_map": {
     "lat": 52.04166,
     "lon": -2.37767,
-    "zoom": 15.63
+    "zoom": 15.63,
+    "map_url": "https://map.emfcamp.org"
   },
   "smtp": {
     "host": "host.docker.internal",
