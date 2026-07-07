@@ -7,6 +7,8 @@
 #  - e2e init SQL (no psql variable syntax) replaces the production init
 #  - Port bindings added to form, panel, and postgres so tests can reach them directly
 #  - mock-oidc profile removed so it always starts (needed for panel auth tests)
+#  - panel OIDC_SERVER_METADATA_URL/OIDC_AUTHORIZE_URL pinned to mock-oidc,
+#    since the base compose no longer defaults these (see docker-compose.yml)
 
 services:
   postgres:
@@ -30,6 +32,9 @@ services:
   panel:
     ports:
       - "8001:8001"
+    environment:
+      OIDC_SERVER_METADATA_URL: http://mock-oidc:8080/default/.well-known/openid-configuration
+      OIDC_AUTHORIZE_URL: https://oidc.emf-forms.internal/default/authorize
 
   mock-oidc:
     profiles: []
