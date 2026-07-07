@@ -70,7 +70,7 @@ services:
       # discovers it from the metadata (see note above on empty default).
       OIDC_AUTHORIZE_URL: ${OIDC_AUTHORIZE_URL:-}
       CONFIG_PATH: /app/config.json
-      BASE_URL: ${PANEL_BASE_URL:-https://panel.emf-forms.internal}
+      BASE_URL: https://${PANEL_HOST:-panel.emf-forms.internal}
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
     volumes:
       - ../config.json:/app/config.json:ro
