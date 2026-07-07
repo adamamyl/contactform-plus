@@ -14,7 +14,13 @@ FORM_HOST=report.emf.camp
 PANEL_HOST=panel.emf.camp
 MAP_HOST=conductmap.emf.camp
 SWAGGER_HOST=api.conduct.emf.camp
+LOCAL_DEV=false
 ```
+
+`LOCAL_DEV` defaults to `true` if unset (local-dev convenience), so every real
+deployment must set it to `false` explicitly — otherwise the form shows all
+fields regardless of event dates and the router forces event-time routing
+year-round.
 
 Then deploy:
 
@@ -43,6 +49,7 @@ FORM_HOST=report.emf.thisparish.org
 PANEL_HOST=panel.emf.thisparish.org
 MAP_HOST=map.emf.thisparish.org
 SWAGGER_HOST=swagger.emf.thisparish.org
+LOCAL_DEV=false
 ```
 
 Adjust to whichever subdomains are actually configured in DNS.
