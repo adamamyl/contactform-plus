@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from datetime import date
+from datetime import date, timedelta
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,12 +17,13 @@ from emf_form.settings import Settings
 
 @pytest.fixture()
 def mock_config() -> AppConfig:
+    future_start = date.today() + timedelta(days=365)
     return AppConfig(
         events=[
             EventConfig(
                 name="EMF 2026",
-                start_date=date(2026, 7, 12),
-                end_date=date(2026, 7, 20),
+                start_date=future_start,
+                end_date=future_start + timedelta(days=8),
             )
         ],
         conduct_emails=["conduct@emfcamp.org"],

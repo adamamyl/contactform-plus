@@ -58,6 +58,7 @@ async def _purge_expired() -> None:
     for t in expired:
         path, _, _ = _audio_files.pop(t)
         try:
+
             def _unlink(p: str = path) -> None:
                 os.unlink(p)
 

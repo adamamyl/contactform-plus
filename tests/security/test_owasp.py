@@ -48,9 +48,9 @@ def test_dispatcher_view_excludes_form_data() -> None:
     direct_select = re.search(
         r"\bSELECT\b.*\bform_data\b(?!\s*->)", view_def, re.DOTALL | re.IGNORECASE
     )
-    assert (
-        direct_select is None
-    ), "cases_router view must not expose form_data as a direct column"
+    assert direct_select is None, (
+        "cases_router view must not expose form_data as a direct column"
+    )
 
 
 def test_panel_viewer_grants_no_form_data() -> None:
@@ -60,9 +60,9 @@ def test_panel_viewer_grants_no_form_data() -> None:
     )
     sql = sql_path.read_text()
     # Check that no unconditional form_data grant goes to panel_viewer
-    assert (
-        "form_data" not in sql.split("panel_viewer")[1].split("team_member")[0]
-    ), "panel_viewer must not receive form_data access"
+    assert "form_data" not in sql.split("panel_viewer")[1].split("team_member")[0], (
+        "panel_viewer must not receive form_data access"
+    )
 
 
 def test_form_user_has_no_update_grant() -> None:
@@ -141,13 +141,12 @@ def test_env_example_has_no_real_secrets() -> None:
         if "=" in line and not line.startswith("#"):
             key, _, val = line.partition("=")
             if any(k in key.upper() for k in ("PASSWORD", "SECRET", "KEY", "TOKEN")):
-                assert (
-                    val.strip()
-                    in (
-                        "changeme",
-                        "",
-                    )
-                ), f"{key} in .env-example must be 'changeme' or empty, got '{val.strip()}'"
+                assert val.strip() in (
+                    "changeme",
+                    "",
+                ), (
+                    f"{key} in .env-example must be 'changeme' or empty, got '{val.strip()}'"
+                )
 
 
 def test_config_example_has_no_real_secrets() -> None:
@@ -159,9 +158,9 @@ def test_config_example_has_no_real_secrets() -> None:
     smtp = data.get("smtp", {})
     assert smtp.get("from_addr", "").endswith(
         "@example.com"
-    ) or "emfcamp.org" in smtp.get(
-        "from_addr", ""
-    ), "smtp.from_addr should be a placeholder"
+    ) or "emfcamp.org" in smtp.get("from_addr", ""), (
+        "smtp.from_addr should be a placeholder"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -361,8 +360,11 @@ async def test_expired_dispatcher_token_returns_401() -> None:
     os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     os.environ.setdefault("SECRET_KEY", "test-secret-key-for-owasp-tests-000")
 
+    import fakeredis.aioredis
+
     from emf_panel.main import app
     from emf_panel.dispatcher import create_dispatcher_token
+    from emf_panel.routes import get_redis
     from emf_panel.settings import get_settings, Settings
     from emf_shared.db import get_session
     from httpx import ASGITransport, AsyncClient
@@ -379,8 +381,10 @@ async def test_expired_dispatcher_token_returns_401() -> None:
     expired_token = create_dispatcher_token(settings.secret_key, ttl_hours=-1)
 
     mock_session = AsyncMock()
+    mock_redis = fakeredis.aioredis.FakeRedis()
     app.dependency_overrides[get_session] = lambda: mock_session
     app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_redis] = lambda: mock_redis
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -551,9 +555,9 @@ async def test_url_in_additional_info_stored_not_fetched() -> None:
             )
             # httpx.get must NOT have been called with the ssrf URL
             for call in mock_get.call_args_list:
-                assert ssrf_url not in str(
-                    call
-                ), "SSRF: app fetched URL from user input"
+                assert ssrf_url not in str(call), (
+                    "SSRF: app fetched URL from user input"
+                )
 
     app.dependency_overrides.clear()
     assert resp.status_code in (201, 422)

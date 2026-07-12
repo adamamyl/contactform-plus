@@ -235,7 +235,12 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         listen_for_cases(settings.database_url, _router_instance)
     )
     poll_task: asyncio.Task[None] | None = None
-    if signal_adapter and settings.signal_api_url and settings.signal_sender and not settings.signal_use_webhook:
+    if (
+        signal_adapter
+        and settings.signal_api_url
+        and settings.signal_sender
+        and not settings.signal_use_webhook
+    ):
         poll_task = asyncio.create_task(
             _poll_signal_reactions(
                 settings.signal_api_url,
@@ -323,7 +328,7 @@ async def email_ack(
 ) -> HTMLResponse:
     try:
         notification_id = decode_ack_token(token, settings.secret_key)
-    except (jwt.PyJWTError, ValueError):
+    except jwt.PyJWTError, ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
         )
