@@ -34,8 +34,15 @@ CREATE TABLE IF NOT EXISTS forms.cases (
     tags         JSONB       NOT NULL DEFAULT '[]',
     team_id      UUID,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT cases_urgency_check CHECK (urgency IN ('low', 'medium', 'high', 'urgent')),
+    CONSTRAINT cases_status_check  CHECK (status  IN ('new', 'assigned', 'in_progress', 'action_needed', 'decision_needed', 'closed')),
+    CONSTRAINT cases_phase_check   CHECK (phase   IN ('pre_event', 'event', 'post_event'))
 );
+-- Existing installs: apply constraints manually with:
+--   ALTER TABLE forms.cases ADD CONSTRAINT cases_urgency_check CHECK (urgency IN ('low','medium','high','urgent'));
+--   ALTER TABLE forms.cases ADD CONSTRAINT cases_status_check  CHECK (status  IN ('new','assigned','in_progress','action_needed','decision_needed','closed'));
+--   ALTER TABLE forms.cases ADD CONSTRAINT cases_phase_check   CHECK (phase   IN ('pre_event','event','post_event'));
 
 CREATE INDEX IF NOT EXISTS cases_status_idx  ON forms.cases (status);
 CREATE INDEX IF NOT EXISTS cases_urgency_idx ON forms.cases (urgency);
@@ -43,7 +50,7 @@ CREATE INDEX IF NOT EXISTS cases_team_idx    ON forms.cases (team_id);
 
 CREATE TABLE IF NOT EXISTS forms.case_history (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    case_id     UUID        NOT NULL REFERENCES forms.cases(id),
+    case_id     UUID        NOT NULL REFERENCES forms.cases(id) ON DELETE CASCADE,
     changed_by  VARCHAR(128) NOT NULL,
     field       VARCHAR(64) NOT NULL,
     old_value   TEXT,
@@ -55,7 +62,7 @@ CREATE INDEX IF NOT EXISTS case_history_case_idx ON forms.case_history (case_id)
 
 CREATE TABLE IF NOT EXISTS forms.notifications (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    case_id         UUID        NOT NULL REFERENCES forms.cases(id),
+    case_id         UUID        NOT NULL REFERENCES forms.cases(id) ON DELETE CASCADE,
     channel         VARCHAR(32) NOT NULL,
     state           VARCHAR(16) NOT NULL DEFAULT 'pending',
     attempt_count   INTEGER     NOT NULL DEFAULT 0,
@@ -63,8 +70,14 @@ CREATE TABLE IF NOT EXISTS forms.notifications (
     message_id      VARCHAR(256),
     acked_by        VARCHAR(128),
     acked_at        TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT notifications_state_check   CHECK (state   IN ('pending', 'sent', 'acked', 'failed')),
+    CONSTRAINT notifications_channel_check CHECK (channel IN ('email', 'signal', 'mattermost', 'slack', 'telephony'))
 );
+-- Existing installs:
+--   ALTER TABLE forms.notifications DROP CONSTRAINT notifications_case_id_fkey, ADD CONSTRAINT notifications_case_id_fkey FOREIGN KEY (case_id) REFERENCES forms.cases(id) ON DELETE CASCADE;
+--   ALTER TABLE forms.notifications ADD CONSTRAINT notifications_state_check   CHECK (state   IN ('pending','sent','acked','failed'));
+--   ALTER TABLE forms.notifications ADD CONSTRAINT notifications_channel_check CHECK (channel IN ('email','signal','mattermost','slack','telephony'));
 
 CREATE INDEX IF NOT EXISTS notifications_case_idx  ON forms.notifications (case_id);
 CREATE INDEX IF NOT EXISTS notifications_state_idx ON forms.notifications (state);
@@ -86,9 +99,10 @@ CREATE INDEX IF NOT EXISTS idx_cases_tags_gin ON forms.cases USING gin (tags);
 
 CREATE TABLE IF NOT EXISTS forms.idempotency_tokens (
     token      VARCHAR(64) PRIMARY KEY,
-    case_id    UUID        NOT NULL REFERENCES forms.cases(id),
+    case_id    UUID        NOT NULL REFERENCES forms.cases(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Existing installs: ALTER TABLE forms.idempotency_tokens DROP CONSTRAINT idempotency_tokens_case_id_fkey, ADD CONSTRAINT idempotency_tokens_case_id_fkey FOREIGN KEY (case_id) REFERENCES forms.cases(id) ON DELETE CASCADE;
 
 -- ---------------------------------------------------------------------------
 -- Column-level grants

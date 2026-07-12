@@ -65,3 +65,6 @@ reports/zap/*.json
 *.dump
 *.dump.zst
 *.dump.zst.age
+
+# Audit findings (local only — not for version control)
+findings.md

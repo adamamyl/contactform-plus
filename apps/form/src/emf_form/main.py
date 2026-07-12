@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import cast
 
-from emf_shared.db import init_db
+from emf_shared.db import get_session, init_db
 from emf_shared.logging import configure_logging
 from emf_shared.middleware import TraceIDMiddleware
 from fastapi import FastAPI, Request
@@ -18,6 +18,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import text
 
 from .routes import limiter, router
 from .settings import get_settings
@@ -40,6 +41,15 @@ form_attempts_total = Counter(
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     init_db(settings.database_url)
+    async for session in get_session():
+        await session.execute(
+            text(
+                "DELETE FROM forms.idempotency_tokens"
+                " WHERE created_at < NOW() - INTERVAL '24 hours'"
+            )
+        )
+        await session.commit()
+        break
     yield
 
 
@@ -68,7 +78,8 @@ def _make_serializable(obj: object) -> object:
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    _log.warning("422 on %s: %s", request.url.path, exc.errors())
+    safe_errors = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
+    _log.warning("422 on %s: %s", request.url.path, safe_errors)
     errors = _make_serializable(exc.errors())
     return JSONResponse(status_code=422, content={"detail": errors})
 

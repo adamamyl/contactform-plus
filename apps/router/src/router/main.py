@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import html as _html
+import importlib.metadata
 import logging
+import os
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, status
-from prometheus_client import Counter, Histogram
-from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import HTMLResponse
 import jwt
+from prometheus_client import Counter, Histogram
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +38,13 @@ from router.settings import Settings
 configure_logging("router")
 
 log = logging.getLogger(__name__)
+
+try:
+    _VERSION = importlib.metadata.version("router")
+except importlib.metadata.PackageNotFoundError:
+    _VERSION = os.environ.get("BUILD_VERSION", "dev")
+
+_http_client = httpx.AsyncClient(timeout=15)
 
 notification_dispatch_seconds = Histogram(
     "emf_notification_dispatch_seconds",
@@ -59,16 +69,14 @@ async def _poll_signal_reactions(
     alert_router: AlertRouter,
     session_factory: object,
 ) -> None:
-    import httpx
-    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession as _AS
+    from sqlalchemy.ext.asyncio import AsyncSession as _AS, async_sessionmaker
 
     factory: async_sessionmaker[_AS] = session_factory  # type: ignore[assignment]
     url = f"{api_url.rstrip('/')}/v1/receive/{sender}"
     while True:
         await asyncio.sleep(SIGNAL_POLL_INTERVAL)
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.get(url)
+            resp = await _http_client.get(url)
             if resp.status_code != 200:
                 continue
             messages = resp.json()
@@ -227,7 +235,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         listen_for_cases(settings.database_url, _router_instance)
     )
     poll_task: asyncio.Task[None] | None = None
-    if signal_adapter and settings.signal_api_url and settings.signal_sender:
+    if signal_adapter and settings.signal_api_url and settings.signal_sender and not settings.signal_use_webhook:
         poll_task = asyncio.create_task(
             _poll_signal_reactions(
                 settings.signal_api_url,
@@ -240,6 +248,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     task.cancel()
     if poll_task:
         poll_task.cancel()
+    await _http_client.aclose()
 
 
 app = FastAPI(title="EMF Router Service", lifespan=lifespan)
@@ -507,7 +516,7 @@ async def health(
         checks["signal"] = "ok" if signal_ok else "error"
 
     overall = "ok" if db_ok else "degraded"
-    return {"status": overall, "checks": checks, "version": "0.1.0"}
+    return {"status": overall, "checks": checks, "version": _VERSION}
 
 
 app.include_router(api)
