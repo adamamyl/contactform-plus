@@ -1,8 +1,44 @@
 # EMF Conduct System — Security & Quality Findings
 
-**Date:** 2026-07-11  
-**Scope:** Static code review + architecture analysis  
-**Note:** Live stack unavailable in this environment (no Docker socket); all findings are code/config-based. Re-run with live stack for dynamic tests.
+**Date:** 2026-07-11 → 2026-07-12
+**Status:** ✅ ALL ACTIONABLE FINDINGS RESOLVED (branch `fix/security-and-reliability-findings`)
+**Scope:** Static code review + architecture analysis + live stack testing
+**Skipped:** RLS `team_id` — null correct for single-team, kept as-is
+
+## Resolution summary
+
+| Finding | Status |
+|---|---|
+| Router XSS (html.escape friendly_id) | ✅ fixed |
+| JWT verify_aud enforcement | ✅ fixed |
+| Signal webhook zero-auth | ✅ fixed |
+| Mattermost empty-secret warning | ✅ fixed |
+| resend.Emails.send blocks event loop | ✅ fixed |
+| asyncio.create_task GC (task tracking set) | ✅ fixed |
+| asyncpg listener connection leak | ✅ fixed |
+| asyncpg TCP keepalive | ✅ fixed |
+| Panel unauthed API 401 vs 303 redirect | ✅ fixed |
+| admin_ack missing CaseHistory audit row | ✅ fixed |
+| upload_attachment no case-existence check | ✅ fixed |
+| Null bytes in form text fields | ✅ fixed |
+| Dispatcher _revoked/_active_sessions → Redis | ✅ fixed |
+| PENDING notifications orphaned on restart | ✅ fixed |
+| Redis graceful degradation in panel routes | ✅ fixed |
+| URGENCY_EMOJI/COLOUR dedup → emf_shared | ✅ fixed |
+| Docker healthchecks (form/panel/router/tts) | ✅ fixed |
+| postgres restart: unless-stopped | ✅ fixed |
+| TTS concurrency cap + 429 backpressure | ✅ fixed |
+| Piper hung subprocess timeout (30s / 504) | ✅ fixed |
+| OIDC metadata fetch timeout (10s) | ✅ fixed |
+| Prometheus alert rules | ✅ fixed |
+| settings lru_cache | ✅ fixed |
+| app_config instance-level cache | ✅ fixed |
+| SECRET_KEY startup validation | ✅ fixed |
+| https_only=False in SessionMiddleware | ✅ fixed |
+| Redis pool per-request leak | ✅ fixed |
+| attachments volume in compose | ✅ fixed |
+| Dispatcher happy-path test | ✅ fixed |
+| _handle_new_case dedup guard tests | ✅ fixed |
 
 ---
 
@@ -3289,3 +3325,974 @@ EMF 2024 had approximately 3,000 attendees. "Large-scale" is not defined in UK G
 | G-12 | DPO assessment | MEDIUM | UNASSESSED | Large-scale special category processing may require DPO appointment |
 | G-13 | Pronouns data | LOW | BORDERLINE | Optional collection at submission; defensible but borderline |
 | G-14 | Redis TLS | LOW | MISSING | Internal but no TLS; session/cache data unencrypted in transit |
+
+---
+
+## FastAPI/Python Review
+
+**Date:** 2026-07-12
+
+Reviewed: `apps/form`, `apps/panel`, `apps/router`, `apps/tts`, `shared/`.
+
+### FP-01 — Untracked `asyncio.create_task` in `AlertRouter` — HIGH
+
+**Files:** `apps/router/src/router/alert_router.py:117`, `:122`, `:291`
+
+`_route_event_time`, `_route_off_event`, and `send_ack_to_all_channels` all call `asyncio.create_task(...)` without saving the reference. If the event loop GCs the task before it completes, it is silently discarded — exceptions are also silently dropped (Python 3.12 logs a "Task was destroyed but it is pending!" warning at best). Compare: `listener.py` correctly saves tasks to `_background_tasks` and calls `add_done_callback`. The same pattern must be applied here or send failures will go unlogged.
+
+### FP-02 — Blocking filesystem I/O in async handlers — HIGH
+
+**Files:**
+- `apps/form/src/emf_form/routes.py:331` — `case_dir.mkdir(...)` (sync)
+- `apps/form/src/emf_form/routes.py:345` — `dest.write_bytes(header + rest)` (sync, up to 10 MB)
+- `apps/panel/src/emf_panel/routes.py:326–329` — `attach_dir.is_dir()`, `attach_dir.iterdir()` (sync)
+- `apps/panel/src/emf_panel/routes.py:960` — `path.exists()` (sync)
+- `apps/tts/src/tts/main.py:54,66` — `os.unlink(path)` called from `_purge_expired()` in async handlers
+
+All block the event loop. Uploads up to 10 MB (`dest.write_bytes`) are the most impactful. Use `asyncio.to_thread(dest.write_bytes, data)` or `anyio.to_thread.run_sync`. Directory/stat calls in request paths should also move to `asyncio.to_thread`.
+
+### FP-03 — Dispatcher routes use `= None` with `# type: ignore[assignment]` as `Depends` default — MEDIUM
+
+**File:** `apps/panel/src/emf_panel/routes.py:786–788`, `:853–855`, `:892–894`, `:917–919`
+
+Four dispatcher routes declare `settings/session/redis` with `= None, # type: ignore[assignment]` then manually fall back with `if settings is None: settings = get_settings()`. FastAPI always resolves `Depends(...)` regardless of the default. Remove the `= None` defaults and the manual fallback guards.
+
+### FP-04 — `_check_signal_token` checks wrong header name — MEDIUM
+
+**File:** `apps/router/src/router/main.py:427–435`
+
+FastAPI converts `x_signal_token` to header `x-signal-token`. If the signal webhook sender sends `X-Internal-Secret` (as `_check_internal_secret` expects), this guard always passes when `router_internal_secret` is set because the header names differ. Align header names or use `Header(alias="X-Signal-Token")` explicitly.
+
+### FP-05 — `Depends(...)` as bare default (non-`Annotated`) in dependency functions — MEDIUM
+
+**File:** `apps/router/src/router/main.py:418`, `:429`
+
+`settings: Settings = Depends(get_settings)` without `Annotated` is the old FastAPI v0.x pattern — mypy cannot type-check it. Upgrade to `settings: Annotated[Settings, Depends(get_settings)]` for consistency.
+
+### FP-06 — No `response_model=` on any JSON API route — MEDIUM
+
+**Files:** `apps/panel/src/emf_panel/routes.py` (all `/api/v1/*`), `apps/router/src/router/main.py` (`/webhook/*`, `/internal/*`, `/ack/*`)
+
+All API routes return `dict[str, object]` with no `response_model=`. OpenAPI schema shows `{}` for response bodies; FastAPI performs no output validation; Pydantic serialization optimisations are bypassed. Create lightweight `Response` Pydantic models for at least the mutation endpoints.
+
+### FP-07 — `urgency` validated twice with divergent rule sets — LOW
+
+**Files:** `apps/form/src/emf_form/schemas.py:143` (hardcoded `{"low","medium","high","urgent"}`) and `apps/form/src/emf_form/routes.py:163` (config-driven `config.urgency_levels`)
+
+If `config.urgency_levels` is customised the two validators diverge. Remove the schema-level validator; use config-driven validation in the route as the single source of truth.
+
+### FP-08 — `_app_config_cache` bypasses Pydantic immutability; non-thread-safe — LOW
+
+**File:** `shared/src/emf_shared/config.py:103–111`
+
+Uses `object.__setattr__` to bypass Pydantic model immutability, requires `# type: ignore`, and `hasattr` check has no lock. Since settings are already `lru_cache`d at service level via `get_settings()`, the per-instance cache is redundant. Parse `AppConfig` once in `model_post_init` and store as a proper field.
+
+### FP-09 — `SlackAdapter` defines its own `URGENCY_EMOJI` diverging from shared module — LOW
+
+**File:** `apps/router/src/router/channels/slack.py:13–18`
+
+Defines its own emoji dict (🟢/🟡/🟠/🔴) vs `emf_shared.urgency` (📋/🔔/⚠️/🚨). Either document the intentional per-channel divergence or consolidate into the shared module.
+
+### FP-10 — `_send_with_retry` repeats session open/close and `None`-check patterns — LOW
+
+**File:** `apps/router/src/router/alert_router.py:147–211`
+
+Three separate session context managers per notification with repeated `session.get(Notification, notif_id); if row is not None:` blocks across ~60 lines. Correct for correctness (not holding a session over `asyncio.sleep`), but fragile to maintain. A private `_update_notif_state` helper would reduce duplication.
+
+### FP-11 — Mutable list defaults `[]` suppressed with `noqa: B006` — LOW
+
+**File:** `apps/panel/src/emf_panel/routes.py:223–225`, `:364–365`, `:781`
+
+`= [], # noqa: B006` is safe for FastAPI Query params, but `Query(default_factory=list)` is the idiomatic approach and avoids the suppression.
+
+### FP-12 — `_service_name` global mutable in `emf_shared/logging.py` — LOW
+
+**File:** `shared/src/emf_shared/logging.py:7,18–19`
+
+No impact in production (separate processes). In test suites importing multiple services in one process, the last `configure_logging()` call wins and all log records get the wrong service name.
+
+### FP-13 — `_audio_files` global dict mutated without lock — LOW
+
+**File:** `apps/tts/src/tts/main.py:34`
+
+`synthesise_file` has a TOCTOU race: `if not cache_path.exists(): ... _audio_files[token] = ...` can be entered by two concurrent identical requests. Low severity (idempotent — just wasted `_run_piper` work).
+
+### FP-14 — `require_conduct_team` imports `get_settings` inside function body — LOW
+
+**File:** `apps/panel/src/emf_panel/auth.py:72`
+
+`from .settings import get_settings` is inside the function, triggering a `sys.modules` lookup on every authenticated request. Move to module level.
+
+### Summary
+
+| ID | Finding | Severity |
+|---|---|---|
+| FP-01 | Untracked `create_task` in `AlertRouter` — exceptions silently dropped | HIGH |
+| FP-02 | Blocking filesystem I/O (`write_bytes`, `mkdir`, `iterdir`) in async handlers | HIGH |
+| FP-03 | Dispatcher routes: spurious `= None` default + manual `if None` fallback on `Depends` | MEDIUM |
+| FP-04 | `_check_signal_token` checks wrong header name | MEDIUM |
+| FP-05 | `Depends(...)` as bare default (non-`Annotated`) in dependency functions | MEDIUM |
+| FP-06 | No `response_model=` on any JSON API route | MEDIUM |
+| FP-07 | `urgency` validated twice with divergent rule sets | LOW |
+| FP-08 | `_app_config_cache` bypasses Pydantic immutability; non-thread-safe `hasattr` check | LOW |
+| FP-09 | `SlackAdapter` defines its own `URGENCY_EMOJI` diverging from `emf_shared.urgency` | LOW |
+| FP-10 | `_send_with_retry` repeats session open/close and `None`-check pattern 3 times | LOW |
+| FP-11 | Mutable list defaults `[]` with `noqa: B006` suppression | LOW |
+| FP-12 | `_service_name` global mutable in `logging.py` | LOW |
+| FP-13 | `_audio_files` global dict mutated without lock — TOCTOU race | LOW |
+| FP-14 | `require_conduct_team` imports `get_settings` inside function body | LOW |
+
+---
+
+## Performance Review
+
+**Date:** 2026-07-12
+**Scope:** Static analysis of all service source files, DB schema, and Redis usage patterns
+**Context:** Single-host Docker Compose; peak ~hundreds of concurrent form submitters; ~10–20 panel users
+
+---
+
+### P-01 — Full table scan to generate friendly_id [HIGH]
+
+**File:** `apps/form/src/emf_form/routes.py:210–211`
+
+```python
+existing_ids_result = await session.execute(select(Case.friendly_id))
+existing_ids: set[str] = set(existing_ids_result.scalars().all())
+```
+
+Every form submission fetches **all** `friendly_id` values from the entire `cases` table to build a collision-check set. At festival scale this is a sequential scan returning O(N) rows over the wire just to verify a candidate ID that has ~1:wordlist⁴ collision probability. Fix: drop the pre-fetch entirely. Use a DB-level uniqueness constraint (already present via `UNIQUE` on `friendly_id`) and catch `IntegrityError` on INSERT, retrying with a new candidate. Zero rows transferred per submission.
+
+---
+
+### P-02 — Missing index on `cases.event_name` and `cases.assignee` [HIGH]
+
+**File:** `infra/postgres/00_roles.sql:40–42`
+
+`cases.event_name` is filtered in `dispatcher_view` (line 820) and `dispatcher_cases` (line 863). `cases.assignee` is filtered in `case_list` (line 248) and `dispatcher_view` (line 807). Neither column has an index. Both queries will sequential-scan `cases`.
+
+Missing indexes:
+- `CREATE INDEX cases_event_name_idx ON forms.cases (event_name);`
+- `CREATE INDEX cases_assignee_idx ON forms.cases (assignee);`
+- `CREATE INDEX cases_created_at_idx ON forms.cases (created_at DESC);` — used in all ORDER BY clauses
+
+---
+
+### P-03 — Missing index on `notifications.message_id` [HIGH]
+
+**Files:** `apps/router/src/router/main.py:95, 284`
+
+```python
+select(Notification).where(Notification.message_id == target_ts)
+```
+
+Signal reaction polling runs every 10 seconds and looks up notifications by `message_id`. No index exists on `notifications.message_id` — full table scan on every poll tick.
+
+Fix: `CREATE INDEX notifications_message_id_idx ON forms.notifications (message_id) WHERE message_id IS NOT NULL;`
+
+---
+
+### P-04 — `_ASSIGNEES_KEY` Redis set has no TTL [MEDIUM]
+
+**File:** `apps/panel/src/emf_panel/routes.py:55, 545, 698`
+
+```python
+_ASSIGNEES_KEY = "panel:assignees"
+await redis.sadd(_ASSIGNEES_KEY, body.assignee)
+```
+
+The `panel:assignees` set accumulates assignee names forever — across events, across years. No TTL, no expiry, no pruning. The set will contain stale names from previous events. For `list_assignees` correctness and memory hygiene, this should be scoped per-event or given a rolling TTL. Low memory impact at festival scale, but correctness concern.
+
+---
+
+### P-05 — `httpx.AsyncClient` created per-request in hot paths [MEDIUM]
+
+**Files:**
+- `apps/form/src/emf_form/routes.py:76` (Safe Browsing check per submission)
+- `apps/panel/src/emf_panel/routes.py:659` (`_notify_router_ack` — called on every ACK)
+- `apps/router/src/router/main.py:70` (Signal poll — every 10 s)
+
+Each creates a new `httpx.AsyncClient`, which creates a new TCP connection pool, performs a TCP handshake (and TLS handshake where HTTPS), then discards the pool. This is unnecessary latency and connection churn. Fix: create a module-level or app-state `httpx.AsyncClient` with `keep_alive=True` (the default) and reuse it.
+
+---
+
+### P-06 — Synchronous file I/O in attachment upload (blocks event loop) [MEDIUM]
+
+**File:** `apps/form/src/emf_form/routes.py:331–345`
+
+```python
+case_dir.mkdir(parents=True, exist_ok=True)
+existing = (
+    list(case_dir.glob("*.jpg")) + list(case_dir.glob("*.png")) + ...
+)
+dest.write_bytes(header + rest)
+```
+
+`Path.mkdir`, `Path.glob`, and `Path.write_bytes` are all synchronous blocking calls executed directly in an async handler, blocking the event loop for the duration of filesystem operations. For a 10 MB file write this is significant. Fix: wrap in `asyncio.to_thread(...)` or use `anyio.Path` async variants.
+
+---
+
+### P-07 — `list_tags` does a full JSONB scan with no index [MEDIUM]
+
+**File:** `apps/panel/src/emf_panel/routes.py:641–644`
+
+```python
+text("SELECT DISTINCT jsonb_array_elements_text(tags) AS tag FROM forms.cases ORDER BY tag")
+```
+
+This unnests the `tags` JSONB array from every row in `cases` and deduplicates. No index can help a `jsonb_array_elements_text` function on an unindexed JSONB column without a GIN index. For small datasets this is fine, but it scales O(N). Fix: add `CREATE INDEX cases_tags_gin_idx ON forms.cases USING GIN (tags);` — PostgreSQL can use this for `@>` containment (also used in `case_list` tag filter at line 250) and the function can benefit from the GIN for element extraction.
+
+---
+
+### P-08 — Connection pool shared across all services at minimum size [MEDIUM]
+
+**File:** `shared/src/emf_shared/db.py:21–22`
+
+```python
+pool_size=5,
+max_overflow=10,
+```
+
+All three DB-connected services (form, panel, router) share the same `init_db` defaults: `pool_size=5, max_overflow=10` = 15 max connections each = up to 45 total. PostgreSQL 17's default `max_connections=100` leaves ~55 for overhead. This is adequate at this festival scale, but:
+- No `pool_recycle` set — long-lived connections silently invalidated after PG timeout (default 10 min idle)
+- `pool_pre_ping=True` mitigates this but adds one extra round-trip per checkout after a stale connection
+- Consider `pool_recycle=300` to proactively refresh connections before the server drops them
+
+---
+
+### P-09 — `_send_with_retry` opens a new DB session per retry attempt [MEDIUM]
+
+**File:** `apps/router/src/router/alert_router.py:158–196`
+
+```python
+for attempt_idx, delay_minutes in enumerate(RETRY_DELAYS_MINUTES):
+    ...
+    async with self._session_factory() as session:
+        row = await session.get(Notification, notif_id)
+        row.attempt_count = attempt_idx + 1
+        await session.commit()
+    ...
+    async with self._session_factory() as session:
+        row = await session.get(Notification, notif_id)
+        row.state = NotifState.SENT
+        await session.commit()
+```
+
+Per retry: two separate session open/close cycles, each doing a `SELECT` by PK then `COMMIT`. These could be combined into a single UPDATE statement per attempt, eliminating one session + one SELECT round-trip per retry cycle. Low priority at festival volume (4 retries × N channels), but wasteful.
+
+---
+
+### P-10 — `case_list` HTML page fetches all cases without pagination [MEDIUM]
+
+**File:** `apps/panel/src/emf_panel/routes.py:235–257`
+
+```python
+stmt = select(Case).order_by(sort_expr)
+...
+result = await session.execute(stmt)
+cases = result.scalars().all()
+```
+
+The HTML panel case list has no LIMIT/OFFSET. All matching cases are loaded into Python memory, iterated for map URL generation, then passed to the template. The API endpoint (`api_list_cases`) correctly paginates, but the HTML view does not. At festival scale with hundreds of reports this will slow down significantly and return large HTML responses to the 10–20 panel users.
+
+---
+
+### P-11 — `validate_dispatcher_token` makes 2–3 serial Redis round-trips per request [LOW]
+
+**File:** `apps/panel/src/emf_panel/dispatcher.py:38–54`
+
+```python
+if await redis.exists(f"dispatcher:revoked:{jti}"):     # round-trip 1
+    ...
+is_known = await redis.sismember(devices_key, device_id) # round-trip 2
+if not is_known:
+    count = await redis.scard(devices_key)               # round-trip 3
+    await redis.sadd(devices_key, device_id)             # round-trip 4
+    await redis.expire(devices_key, ttl)                 # round-trip 5
+```
+
+All serial. Use a Redis pipeline or Lua script to collapse into 1–2 round-trips. Called on every dispatcher page load and every dispatcher API call.
+
+---
+
+### P-12 — `synthesise_file` purges expired audio on every request [LOW]
+
+**File:** `apps/tts/src/tts/main.py:151, 168`
+
+`_purge_expired()` is called synchronously at the start of both `synthesise_file` and `serve_audio`. It iterates `_audio_files` dict and calls `os.unlink` — blocking I/O in the async handler. Move to a periodic background task with `asyncio.create_task` in lifespan.
+
+---
+
+### P-13 — `config.json` re-read from disk on first access per process but no hot-reload [LOW]
+
+**File:** `shared/src/emf_shared/config.py:104–111`
+
+`app_config` property caches on the Settings instance, which is itself `lru_cache`'d in each service. This is correct for production. No concern for the load profile, but if `config.json` changes, a process restart is required with no warning or detection. Non-performance, informational.
+
+---
+
+### Summary — Performance Risk Register
+
+| # | Area | Impact | Finding |
+|---|---|---|---|
+| P-01 | DB — full scan | HIGH | Full `friendly_id` table fetch on every form submission |
+| P-02 | DB — missing indexes | HIGH | `event_name`, `assignee`, `created_at` unindexed |
+| P-03 | DB — missing index | HIGH | `notifications.message_id` unindexed; Signal poll hits full scan every 10 s |
+| P-04 | Redis — no TTL | MEDIUM | `panel:assignees` set grows unbounded across events |
+| P-05 | HTTP — connection churn | MEDIUM | New `httpx.AsyncClient` per request in hot paths |
+| P-06 | File I/O — blocks event loop | MEDIUM | Sync `mkdir`/`glob`/`write_bytes` in async attachment handler |
+| P-07 | DB — GIN index missing | MEDIUM | `list_tags` full JSONB scan; tag containment filter also unindexed |
+| P-08 | DB — pool recycle | MEDIUM | No `pool_recycle`; stale connections silently dropped by server |
+| P-09 | DB — extra round-trips | MEDIUM | Retry loop opens redundant sessions; could use single UPDATE |
+| P-10 | Panel — no pagination | MEDIUM | HTML case list returns all cases; no LIMIT |
+| P-11 | Redis — serial round-trips | LOW | Dispatcher token validation: up to 5 serial Redis calls |
+| P-12 | TTS — sync purge in handler | LOW | `_purge_expired` blocks event loop; should be background task |
+| P-13 | Config — no hot-reload | LOW | `config.json` requires process restart to pick up changes |
+
+---
+
+## GDPR/Privacy Review
+
+**Date:** 2026-07-12
+**Reviewer:** Claude (static code analysis)
+**Basis:** Review of current codebase at `/work` — supplemental to the GDPR Compliance Audit above (2026-07-11). Only findings **not already captured** in that audit are listed here.
+
+---
+
+### G-15 — /metrics endpoint publicly accessible (MEDIUM)
+
+All four apps expose unauthenticated Prometheus metrics at `/metrics` via `Instrumentator().instrument(app).expose(app, endpoint="/metrics")`:
+
+- `/work/apps/form/src/emf_form/main.py` line 79
+- `/work/apps/panel/src/emf_panel/main.py` line 62
+- `/work/apps/router/src/router/main.py` line 513
+
+None of the Caddy configs (`/work/infra/caddy/Caddyfile.prod`, `Caddyfile.wolfcraig`) block `/metrics` from public routes — every vhost does a blanket `reverse_proxy` with no path restrictions. Anyone who requests `https://report.emf.camp/metrics` receives submission counts by urgency, phase, and event name (`emf_cases_submitted_total` counter labels at `main.py` lines 27-31), plus HTTP latency histograms and per-path request counts.
+
+While not direct PII, submission volume at specific urgency levels during an event is operationally sensitive and reveals operational information about the conduct team. The ICO considers metadata aggregation a privacy concern where it can allow inference about individuals (e.g. spike in "urgent" submissions at 2am could be inferred as a serious incident).
+
+**Fix:** Block `/metrics` at the Caddy layer in all vhosts (`respond /metrics 404`) and restrict Prometheus scraping to the internal Docker network, which already works (Prometheus scrapes `form:8000`, etc. internally per `/work/infra/prometheus/prometheus.yml`).
+
+---
+
+### G-16 — Dispatcher token in URL query string appears in access logs (LOW-MEDIUM)
+
+`GET /dispatcher?token=<jwt>` and `GET /api/v1/dispatcher/cases?token=<jwt>` pass the dispatcher JWT as a query parameter (defined at `/work/apps/panel/src/emf_panel/routes.py` lines 781 and 851).
+
+Uvicorn's default access log format logs the full request path including query string. If access logs are forwarded to any aggregator (Docker log driver, syslog, Grafana Loki), the JWT is stored in plaintext. While the token has a configurable TTL (default 8 hours per `dispatcher_session_ttl_hours`), it grants case-view access to the dispatcher panel and can be replayed by anyone who reads the logs within the TTL window.
+
+`acked_by` is set to `"dispatcher"` (static string) for dispatcher ACKs so acked-by attribution is not a concern, but the token itself is the access credential.
+
+**Fix:** Move the token to an `Authorization: Bearer` header for API calls, or set it as an `HttpOnly` cookie at first load and use the cookie for subsequent API calls (the `device_id` cookie pattern at line 844 already shows this approach). If query param is kept, explicitly pass `--no-access-log` to uvicorn or ensure log rotation and access controls are covered by the data retention policy.
+
+---
+
+### G-17 — Pydantic v2 `exc.errors()` includes submitted values in WARNING logs (LOW)
+
+`/work/apps/form/src/emf_form/main.py` line 71:
+
+```python
+_log.warning("422 on %s: %s", request.url.path, exc.errors())
+```
+
+In Pydantic v2, `ValidationError.errors()` returns a list of dicts that include an `input` key containing the **actual submitted value** for each failing field. This fires at WARNING level (not DEBUG) on every validation error on the public `/api/submit` endpoint. If a reporter submits an invalid value in `reporter.email` (e.g. `adam.smith@` — truncated address), the string `adam.smith@` appears verbatim in structured logs.
+
+The prior audit noted this at G-11 as a potential concern only at DEBUG level. The more specific finding is that it is a certainty at WARNING level in Pydantic v2 regardless of log level configuration.
+
+**Fix:** Strip `input` from each error before logging:
+
+```python
+scrubbed = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
+_log.warning("422 on %s: %s", request.url.path, scrubbed)
+```
+
+---
+
+### G-18 — Volunteer display names stored indefinitely in audit trail (LOW)
+
+`forms.notifications.acked_by` (VARCHAR 128) and `forms.case_history.changed_by` (VARCHAR 128) store the display name of the conduct team volunteer who handled each action. The value comes from `_username(user)` at `/work/apps/panel/src/emf_panel/routes.py` lines 186-192, which prefers `preferred_username`, then `name`, then `sub`, then `email` from OIDC claims. On EMFcamp's UFFD-based IdP, `name` may be a real full name and `email` a personal address.
+
+These are staff/volunteer personal data and are stored indefinitely alongside case data (no retention mechanism — covered at G-03 for cases, but the volunteer data has its own distinct legal basis and retention question). The conduct team volunteers are not reported as having been notified that their names are recorded per handling action.
+
+**Action:** Include conduct team volunteer data in the internal Article 13/14 notice given to team members at onboarding. Confirm the retention period for `case_history` and `notifications` covers this data and is communicated to volunteers.
+
+---
+
+### G-19 — No disclosure that submitted URLs are checked via Google Safe Browsing (LOW)
+
+`/work/apps/form/src/emf_form/routes.py` lines 197-208 — when `media_links` is present and `GOOGLE_SAFE_BROWSING_API_KEY` is set, each URL submitted by the reporter is sent to `https://safebrowsing.googleapis.com/v4/threatMatches:find` (Google LLC, US). The reporter is not informed of this at submission time.
+
+The `media_links` field could contain URLs that indirectly identify the reporter (e.g. a link to their own social media post submitted as evidence). The form HTML (`/work/apps/form/templates/form.html`) has no disclosure near the `media_links` field about this processing.
+
+The prior audit noted Google Safe Browsing at G-07 as a processor concern (DPA/transfer). This is a distinct Article 13 disclosure gap on the form itself.
+
+**Fix:** Add a one-line hint beneath the `media_links` field in `form.html`: "Links may be checked against Google Safe Browsing for safety."
+
+---
+
+### Supplemental Risk Register
+
+| # | Area | Severity | Finding |
+|---|---|---|---|
+| G-15 | /metrics public | MEDIUM | All apps expose unauthenticated Prometheus metrics through Caddy — no path restriction in prod vhosts |
+| G-16 | Dispatcher token in URL | LOW-MEDIUM | JWT in query string logged by uvicorn access log; replay possible within TTL |
+| G-17 | 422 logs submitted values | LOW | Pydantic v2 `exc.errors()` includes `input` key; fires at WARNING on public form endpoint, not just DEBUG |
+| G-18 | Volunteer names stored indefinitely | LOW | `acked_by`/`changed_by` store real OIDC display names; no separate retention schedule or Article 13 notice to volunteers |
+| G-19 | Safe Browsing disclosure absent | LOW | Reporter not informed submitted URLs are sent to Google API; Article 13 gap on form |
+
+---
+
+## Architecture Review (Pass 2)
+
+**Date:** 2026-07-12
+**Reviewer:** Claude (static code analysis)
+**Scope:** Second-pass architectural review — new findings not already documented in prior sections.
+
+---
+
+### AR2-01 — HIGH: Panel service missing `attachments` volume mount — attachment serving always broken
+
+The `form` service mounts `attachments:/app/attachments` (`infra/docker-compose.yml:37`). The `panel` service has no such mount. Yet `emf_panel/routes.py` reads from `settings.attachment_dir` (default `/app/attachments`) in two routes:
+
+- `case_detail` (line 324): globs attach_dir for filenames
+- `serve_attachment` (line 959): serves `FileResponse` from that path
+
+In the panel container `/app/attachments` does not exist as a shared volume, so `case_detail` always returns an empty attachment list and `serve_attachment` always raises 404. Attachments uploaded via the form are invisible to panel users.
+
+**Fix:** Add `volumes: - attachments:/app/attachments:ro` to the `panel` service block in `infra/docker-compose.yml`. The `:ro` flag is appropriate — panel only reads. The form-service volume mount (RT-BUG-02) must also be present.
+
+---
+
+### AR2-02 — HIGH: `EMFPhoneAdapter._trigger_ack` calls back into its own process via HTTP — latent double-notification risk
+
+`apps/router/src/router/channels/emf_phone.py:136–148` — on phone `ACKNOWLEDGE`, `_trigger_ack` POSTs to `{router_self_url}/internal/ack/{case_id}`. The internal ACK handler then calls `alert_router.send_ack_to_all_channels(...)`, which fires `asyncio.create_task(adapter.send_ack_confirmation(...))` for every channel. `EMFPhoneAdapter.send_ack_confirmation` is currently `pass`, so no loop occurs.
+
+Risk: if `send_ack_confirmation` is ever implemented for phone, or if the `internal/ack` call runs concurrently with another ACK trigger (e.g. the panel conductor ACKs the same case simultaneously), `send_ack_to_all_channels` will fire twice. There is no idempotency key on the `/internal/ack` endpoint. A second call produces a duplicate `CaseHistory` row.
+
+Better design: have `EMFPhoneAdapter.send()` return a sentinel that `_send_with_retry` understands, then call `mark_acked` in-process, eliminating the self-HTTP round-trip entirely.
+
+---
+
+### AR2-03 — MEDIUM: Case list HTML view loads all cases with no pagination
+
+`apps/panel/src/emf_panel/routes.py:235–256` — `stmt = select(Case).order_by(sort_expr)` with no LIMIT. The REST API equivalent (`/api/v1/cases`, line 369) has correct `limit`/`offset` pagination. The HTML view fetches every case row, iterates them for `map_urls`, then issues a second bulk query for `notif_states`. At hundreds of cases this is manageable; at multi-year accumulated data (no retention enforcement per GDPR finding G-03) this becomes a full table scan on every panel page load.
+
+**Fix:** Add `page`/`per_page` query params (default 50) to the HTML view, mirroring the API.
+
+---
+
+### AR2-04 — MEDIUM: `LOCAL_DEV=true` is the default in compose for `form` and `msg-router` — prod routing silently wrong if `.env` is incomplete
+
+`infra/docker-compose.yml` lines 34 and 114:
+```
+LOCAL_DEV: ${LOCAL_DEV:-true}
+```
+
+In `alert_router.py:68`, `LOCAL_DEV=true` forces `phase = Phase.EVENT_TIME` regardless of event dates, enabling all notification channels. The compose defaults to `true`, meaning any deployment that does not explicitly set `LOCAL_DEV=false` in `.env` will route every case through Signal, phone, Mattermost, and email — including pre-event or post-event periods.
+
+**Fix:** Change compose defaults to `${LOCAL_DEV:-false}`. Document `LOCAL_DEV=true` as a dev-only `.env` override in `.env-example`.
+
+---
+
+### AR2-05 — MEDIUM: Version string `"0.1.0"` hardcoded in all four health endpoints
+
+All four services hardcode `"version": "0.1.0"` in their `/health` response (`routes.py:370`, `routes.py:980`, `main.py:509`, `tts/main.py:191`). The value is never updated. This makes it impossible to detect version skew between deployed services from health checks or Grafana.
+
+**Fix:** Read from package metadata via `importlib.metadata.version("emf-form")` etc. at startup, or inject via a `BUILD_VERSION` environment variable set in the Dockerfile `ARG`/`ENV` block.
+
+---
+
+### AR2-06 — MEDIUM: No `UNIQUE (case_id, channel)` constraint on `notifications` — deduplication is application-level TOCTOU
+
+`infra/postgres/00_roles.sql:56–70` — `notifications` has indexes on `case_id` and `state` but no uniqueness constraint on `(case_id, channel)`. The app checks for existing notifications in `_handle_new_case` before routing, but this is a non-atomic read-then-write. Two concurrent `retrigger_case` events (e.g. double-click on the panel "retrigger" button) can both pass the count check and spawn duplicate routing tasks, resulting in two notification rows per channel and double-delivery.
+
+**Fix:** Add `ALTER TABLE forms.notifications ADD CONSTRAINT notifications_case_channel_uq UNIQUE (case_id, channel);` and change the insert to `INSERT ... ON CONFLICT DO NOTHING`. The application guard becomes a performance optimisation rather than a correctness control.
+
+---
+
+### AR2-07 — LOW: Signal polling loop and Signal webhook endpoint both active simultaneously — duplicate ACK processing risk
+
+`apps/router/src/router/main.py:56–113` (`_poll_signal_reactions`) and `@api.post("/webhook/signal")` (lines 263–299) implement the same emoji-reaction ACK logic. Both run concurrently when `signal_api_url` and `signal_sender` are configured. Signal-cli REST API queues messages per-client, so a reaction consumed by the webhook is removed from the poll queue. However under race conditions (webhook fires while a poll is mid-request) both paths can attempt `mark_acked` for the same notification. The second call is a no-op at the DB level, but `send_ack_to_all_channels` would fire twice, sending a duplicate ACK confirmation email/Mattermost message.
+
+**Fix:** Remove the polling loop. The webhook is lower-latency and strictly better. If polling is needed as a fallback for environments without public webhook reachability, gate it on an explicit `SIGNAL_POLL_FALLBACK=true` setting so both are never active simultaneously.
+
+---
+
+### AR2-08 — LOW: `TTS` audio token index is in-process memory — lost on restart, leaving orphaned WAV files
+
+`apps/tts/src/tts/main.py:34`: `_audio_files: dict[str, tuple[str, float, bool]] = {}`. Tokens issued by `/synthesise/file` are valid only while the process is alive. A TTS restart between synthesis and phone playback yields a 404 for the audio URL, silently failing the phone call announcement. The WAV file also remains on disk indefinitely (since cleanup only runs via `lifespan` on clean exit).
+
+The cache path is already content-addressed (`sha256(text)` as filename, line 154). A simpler design: serve audio directly as `/audio/{sha256}` with no token layer — files exist on disk or they do not. The token adds no security value since TTS is unauthenticated anyway.
+
+---
+
+### Summary — New Findings (Pass 2)
+
+| ID | Severity | Finding |
+|---|---|---|
+| AR2-01 | HIGH | Panel `attachments` volume not mounted — all attachment serving broken in production |
+| AR2-02 | HIGH | `EMFPhoneAdapter._trigger_ack` self-HTTP call is a latent double-notify risk |
+| AR2-03 | MEDIUM | Panel case list HTML view has no pagination — full table scan on every load |
+| AR2-04 | MEDIUM | `LOCAL_DEV=true` compose default forces event-time routing in any deployment missing `.env` |
+| AR2-05 | MEDIUM | `"0.1.0"` hardcoded in all health endpoints — version detection impossible post-deploy |
+| AR2-06 | MEDIUM | No `UNIQUE (case_id, channel)` constraint — duplicate notification delivery under concurrent retriggering |
+| AR2-07 | LOW | Signal polling + webhook both active simultaneously — race condition yields duplicate ACK confirmations |
+| AR2-08 | LOW | TTS audio token state lost on restart; content-addressed serving would eliminate the gap |
+
+## PostgreSQL Review
+
+Supplementary findings not covered in the existing `## PostgreSQL Audit` section. All line references are to `infra/postgres/00_roles.sql` unless stated otherwise.
+
+### Summary table
+
+| ID | Severity | Area | Finding |
+|---|---|---|---|
+| PR-01 | HIGH | Schema | `case_history.changed_by`: `NOT NULL` in SQL (line 47), `nullable=True` in both ORM models |
+| PR-02 | HIGH | Schema | `idempotency_tokens.token`: `VARCHAR(64)` in SQL (line 73), `String(256)` in form ORM model |
+| PR-03 | MEDIUM | Index | Missing composite index on `notifications(case_id, state)` — queried together on every case list load |
+| PR-04 | MEDIUM | Index | Missing index on `cases.assignee` — filtered on panel routes lines 248, 807, 864 |
+| PR-05 | MEDIUM | Index | Missing index on `cases.event_name` — filtered on panel routes line 820 (dispatcher view) |
+| PR-06 | MEDIUM | Index | Missing index on `cases.created_at` — used as primary ORDER BY on panel routes lines 369, 817 |
+| PR-07 | MEDIUM | Schema | No CHECK constraints on enum-like VARCHAR columns (`urgency`, `status`, `phase`, `channel`, `state`) |
+| PR-08 | MEDIUM | Schema | `idempotency_tokens` has no TTL or cleanup job; grows forever |
+| PR-09 | LOW | Index | No partial index for the hot `WHERE assignee IS NULL` dispatcher path |
+| PR-10 | LOW | FK | All FK constraints have no `ON DELETE` rule; case deletion requires explicit ordering (relevant to GDPR erasure, G-04) |
+| PR-11 | LOW | Performance | `_NOTIF_SORT` correlated subquery in panel routes executes per case row when sorted by notif |
+| PR-12 | LOW | Role | `service_user` role is granted UPDATE on cases but no service connects as it; dead code with standing privilege |
+
+---
+
+### PR-01 — HIGH: `case_history.changed_by` nullable mismatch — SQL NOT NULL, ORM nullable
+
+**Evidence:**
+
+`infra/postgres/00_roles.sql` line 47:
+```sql
+changed_by  VARCHAR(128) NOT NULL,
+```
+
+`apps/form/src/emf_form/models.py` line 49 and `apps/panel/src/emf_panel/models.py` line 49:
+```python
+changed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+```
+
+**Consequence:** The ORM annotation permits `None`. Any `CaseHistory` construction that omits `changed_by` will attempt to insert `NULL` into a `NOT NULL` column and fail at runtime with a Postgres constraint violation. No current call site triggers this — all pass explicit values — but the annotation is a latent trap for future callers following the type signature.
+
+**Fix:** Change both ORM models: `changed_by: Mapped[str] = mapped_column(String(128), nullable=False)`.
+
+---
+
+### PR-02 — HIGH: `idempotency_tokens.token` column length mismatch — SQL VARCHAR(64), ORM String(256)
+
+**Evidence:**
+
+`infra/postgres/00_roles.sql` line 73:
+```sql
+token      VARCHAR(64) PRIMARY KEY,
+```
+
+`apps/form/src/emf_form/models.py` line 64:
+```python
+token: Mapped[str] = mapped_column(String(256), primary_key=True)
+```
+
+**Consequence:** An `X-Idempotency-Key` header between 65 and 256 characters passes ORM validation but fails at Postgres with `value too long for type character varying(64)`. The mismatch is invisible at the application layer until runtime.
+
+**Fix:** Align definitions. Change ORM to `String(64)` and add `max_length=64` on `x_idempotency_key` in `apps/form/src/emf_form/routes.py`. If longer keys are needed, change the SQL column to `VARCHAR(256)`.
+
+---
+
+### PR-03 — MEDIUM: Missing composite index on `notifications(case_id, state)`
+
+**Evidence:**
+
+Existing separate indexes (`infra/postgres/00_roles.sql` lines 69–70) cover each column alone. All hot query paths filter both columns together:
+- `apps/panel/src/emf_panel/routes.py` lines 202, 241, 681, 904
+- `apps/router/src/router/alert_router.py` lines 238–244
+
+**Consequence:** Postgres picks one single-column index and re-checks the other predicate in memory rather than going directly to matching rows.
+
+**Fix:**
+```sql
+CREATE INDEX notifications_case_state_idx ON forms.notifications (case_id, state);
+DROP INDEX IF EXISTS notifications_case_idx;  -- redundant; leftmost column of composite covers it
+```
+
+---
+
+### PR-04 — MEDIUM: Missing index on `cases.assignee`
+
+**Evidence:**
+
+`apps/panel/src/emf_panel/routes.py`:
+- Line 248: `WHERE assignee = ?` — panel list filtered by name
+- Line 807: `WHERE assignee IS NULL` — dispatcher unassigned list
+- Line 864: `WHERE assignee IS NULL` — dispatcher API
+
+No index on `forms.cases(assignee)` in `infra/postgres/00_roles.sql`.
+
+**Fix:**
+```sql
+CREATE INDEX cases_assignee_idx ON forms.cases (assignee);
+```
+
+---
+
+### PR-05 — MEDIUM: Missing index on `cases.event_name`
+
+**Evidence:**
+
+`apps/panel/src/emf_panel/routes.py` line 820:
+```python
+stmt = stmt.where(Case.event_name == active_event)
+```
+This is the dispatcher hot read path — polled repeatedly. No index on `forms.cases(event_name)` in `infra/postgres/00_roles.sql`.
+
+**Fix:**
+```sql
+CREATE INDEX cases_event_name_idx ON forms.cases (event_name);
+```
+
+---
+
+### PR-06 — MEDIUM: Missing index on `cases.created_at`
+
+**Evidence:**
+
+`apps/panel/src/emf_panel/routes.py`:
+- Line 369: `ORDER BY created_at DESC` — default sort for API list
+- Line 817: `ORDER BY ..., created_at ASC` — dispatcher secondary sort
+
+No index on `forms.cases(created_at)`. Every `ORDER BY created_at` needs a full scan and sort.
+
+**Fix:**
+```sql
+CREATE INDEX cases_created_at_idx ON forms.cases (created_at DESC);
+```
+
+---
+
+### PR-07 — MEDIUM: No CHECK constraints on enum-like VARCHAR columns
+
+**Evidence:**
+
+`infra/postgres/00_roles.sql` uses raw `VARCHAR` for columns with a fixed valid set — no database-level `CHECK` constraints:
+- `cases.urgency VARCHAR(16)` — valid: `low`, `medium`, `high`, `urgent`
+- `cases.status VARCHAR(32)` — valid: `new`, `assigned`, `in_progress`, `action_needed`, `decision_needed`, `closed`
+- `cases.phase VARCHAR(16)` — valid: `pre_event`, `event_time`, `post_event`
+- `notifications.channel VARCHAR(32)` — valid: `email`, `signal`, `mattermost`, `slack`, `telephony`
+- `notifications.state VARCHAR(16)` — valid: `pending`, `sent`, `failed`, `acked`
+
+**Consequence:** Direct `psql` inserts or migration scripts can store arbitrary values. Application-layer guards (`VALID_TRANSITIONS`, Pydantic) are the only enforcement.
+
+**Fix:**
+```sql
+ALTER TABLE forms.cases ADD CONSTRAINT cases_urgency_chk
+    CHECK (urgency IN ('low','medium','high','urgent'));
+ALTER TABLE forms.cases ADD CONSTRAINT cases_status_chk
+    CHECK (status IN ('new','assigned','in_progress','action_needed','decision_needed','closed'));
+ALTER TABLE forms.notifications ADD CONSTRAINT notifs_state_chk
+    CHECK (state IN ('pending','sent','failed','acked'));
+ALTER TABLE forms.notifications ADD CONSTRAINT notifs_channel_chk
+    CHECK (channel IN ('email','signal','mattermost','slack','telephony'));
+```
+
+---
+
+### PR-08 — MEDIUM: `idempotency_tokens` never purged
+
+**Evidence:**
+
+`infra/postgres/00_roles.sql` lines 72–76 — `idempotency_tokens` has `created_at` but no TTL. No application code or script deletes from this table. Tokens accumulate permanently across festival deployments.
+
+**Consequence:** No documented expiry window for clients. Table grows indefinitely; no mechanism for clients to know when a key can be safely reused.
+
+**Fix:** Add a cleanup step to `scripts/backup.py` or a dedicated maintenance script:
+```sql
+DELETE FROM forms.idempotency_tokens WHERE created_at < NOW() - INTERVAL '7 days';
+```
+Document the 7-day window in the API contract for `X-Idempotency-Key`.
+
+---
+
+### PR-09 — LOW: No partial index for `WHERE assignee IS NULL`
+
+**Evidence:** `apps/panel/src/emf_panel/routes.py` lines 807 and 864 both use `WHERE assignee IS NULL AND urgency IN (...)`. The dispatcher path is the most frequent read query. A partial composite index would be smaller and faster.
+
+**Fix (extends PR-04):**
+```sql
+CREATE INDEX cases_unassigned_urgency_idx ON forms.cases (urgency, created_at)
+    WHERE assignee IS NULL;
+```
+Covers `WHERE assignee IS NULL AND urgency IN (...) ORDER BY urgency, created_at` without scanning assigned cases.
+
+---
+
+### PR-10 — LOW: FK constraints have no `ON DELETE` rule; case deletion requires explicit ordering
+
+**Evidence:**
+
+`infra/postgres/00_roles.sql` lines 46, 58, 74 — all three child tables reference `forms.cases(id)` with the default `NO ACTION`. No documented deletion sequence exists in `scripts/` or runbooks.
+
+**Consequence:** A GDPR erasure request (see G-04) hits FK violation errors without a script. Correct deletion order: `idempotency_tokens` → `notifications` → `case_history` → `cases`.
+
+**Fix:** Script and document the deletion sequence. Do not add `ON DELETE CASCADE` to `case_history` — cascade would silently destroy audit evidence on accidental parent deletion.
+
+---
+
+### PR-11 — LOW: `_NOTIF_SORT` correlated subquery executes per row in case list
+
+**Evidence:**
+
+`apps/panel/src/emf_panel/routes.py` lines 200–205:
+```python
+_NOTIF_SORT = (
+    select(func.count())
+    .where(Notification.case_id == Case.id, Notification.state == "acked")
+    .correlate(Case)
+    .scalar_subquery()
+)
+```
+
+When `sort=notif` is requested, Postgres evaluates this subquery once per case row. For 500 cases that is 500 correlated executions against `forms.notifications`. The panel already batch-fetches `notif_states` (routes.py lines 272–284) for display — the sort should use the same aggregation via a join.
+
+**Fix:** Replace the correlated subquery with a lateral join or CTE:
+```sql
+LEFT JOIN (
+    SELECT case_id, COUNT(*) FILTER (WHERE state = 'acked') AS ack_count
+    FROM forms.notifications GROUP BY case_id
+) n ON n.case_id = cases.id
+ORDER BY ack_count
+```
+
+---
+
+### PR-12 — LOW: `service_user` role is dead code with standing UPDATE privilege
+
+**Evidence:**
+
+`infra/postgres/00_roles.sql` lines 102–104 grant `service_user` column-level SELECT and UPDATE on `forms.cases` and INSERT on `forms.case_history`. `infra/postgres/00_init.sh` creates the role with a password (`${SERVICE_DB_PASSWORD}`). No service in `apps/` connects as `service_user`.
+
+**Consequence:** Unused role with UPDATE privileges is a standing attack surface if `SERVICE_DB_PASSWORD` is compromised.
+
+**Fix:** If reserved for a future automation service, document this explicitly. Otherwise:
+```sql
+REVOKE ALL ON forms.cases FROM service_user;
+REVOKE ALL ON forms.case_history FROM service_user;
+DROP ROLE IF EXISTS service_user;
+```
+And remove the corresponding `CREATE ROLE` line from `infra/postgres/00_init.sh`.
+
+---
+
+## SRE Review
+
+**Date:** 2026-07-12
+**Reviewer:** Senior SRE (automated analysis)
+**Scope:** Single-host Docker Compose deployment, 4-day festival event window
+**Context:** Critical system — missed reports mean people in distress don't get help
+
+---
+
+### 1. SLO Candidates
+
+Recommended SLOs for the festival window:
+
+| Signal | Target | Rationale |
+|---|---|---|
+| Form availability (HTTP 2xx on `/health`) | 99.5% (≤43 min downtime/4 days) | Public-facing; must accept reports at all times |
+| Form submission p95 latency | < 3 s | Submitter experience; includes DB write |
+| Notification dispatch p95 latency | < 60 s | Time from pg_notify to first delivery attempt |
+| Notification delivery success rate | ≥ 95% per channel | At least one channel must deliver per case |
+| Panel availability (authenticated users) | 99% (≤58 min/4 days) | Conduct team can tolerate brief outages |
+| Unacknowledged case age p95 | < 5 min | Operational SLO: team must respond fast |
+
+None of these SLOs are currently defined or measured. `emf_notification_dispatch_seconds` histogram is registered but **never observed** — `notification_dispatch_seconds` is created in `router/main.py` lines 39–43 but `.observe()` is never called anywhere in the codebase. `SlowNotificationDispatch` alert will never fire.
+
+---
+
+### 2. Runbook Gaps
+
+**SRE-01 [CRITICAL] — No Alertmanager; alerts are silent**
+
+`prometheus.yml` has no `alerting:` section and no Alertmanager is in the compose file or monitoring profile. Alert rules are evaluated but notifications go nowhere. At 3am, `ListenerSilent` or `ServiceDown` fires and no one is woken up. Fix: add Alertmanager to the monitoring profile with a Mattermost/Signal/email receiver, or wire Prometheus remote-write to an external alerting endpoint.
+
+**SRE-02 [CRITICAL] — `dispatch_seconds` histogram never observed; `SlowNotificationDispatch` alert blind**
+
+`notification_dispatch_seconds` Histogram (`router/main.py:39`) is created but `.observe()` is never called in `_send_with_retry` or anywhere else. The `SlowNotificationDispatch` alert (`alert_rules.yml:63`) will never fire. Fix: wrap the send call in `_send_with_retry` with `with notification_dispatch_seconds.labels(channel=channel_name).time():`.
+
+**SRE-03 [CRITICAL] — `ListenerSilent` alert expression references non-existent metric**
+
+`alert_rules.yml:8` uses `emf_notification_state_total_created` — this metric does not exist. `emf_notification_state_total` is a Counter with labels `channel` and `state` only. The `or absent(emf_notification_state_total)` branch fires immediately on startup (before any notification), causing a spurious CRITICAL alert on every cold start. Fix: use `increase(emf_notification_state_total[1h]) == 0` scoped to the router job, with a startup inhibit window.
+
+**SRE-04 [HIGH] — No restore procedure documented or tested**
+
+`scripts/backup.py` produces encrypted `.dump.zst.age` files. There is no corresponding restore script and no documented procedure anywhere in the repo. A 3am DB corruption event requires ad-hoc improvisation. Fix: add `scripts/restore.py --backup <file>` and document a tested restore drill before the event.
+
+**SRE-05 [HIGH] — PENDING notifications not recovered after router restart**
+
+`_send_with_retry` writes a `PENDING` notification row then dispatches in-memory via `asyncio.create_task`. If the router restarts mid-flight (between PENDING write and SENT update), the notification row stays `PENDING` forever with no retry. The resolution summary lists this as fixed, but the current code in `listener.py` and `alert_router.py` has no startup recovery sweep — no query for `WHERE state = 'pending'` at boot. Either the fix was reverted or never landed. Fix: on router startup, query for PENDING notifications older than 60s and retrigger via `NOTIFY retrigger_case, '<uuid>'`.
+
+**SRE-06 [HIGH] — `docker compose up -d` causes full downtime on every update**
+
+`scripts/prod-update` runs `docker compose up -d` which recreates all containers. Every deploy drops the form and panel for 5–15s per service. During active event hours this risks losing a report submission in progress. Fix: deploy one service at a time with `--no-deps`; add a post-deploy health check.
+
+**SRE-07 [HIGH] — No on-call runbook**
+
+No `runbook.md` or ops guide covers: how to access logs, how to check DB connectivity, how to manually retrigger a notification (`NOTIFY retrigger_case, '<uuid>'`), how to restart a single service, or escalation contacts. Fix: create `docs/runbook.md` with failure mode → diagnosis → remediation for each CRITICAL alert.
+
+---
+
+### 3. Observability
+
+**SRE-08 [HIGH] — Trace IDs not verified in anyio thread path (email/Resend)**
+
+`outbound_headers()` propagates `X-Trace-ID` to Signal, Mattermost, Slack, and EMF phone adapters. `EmailAdapter` never calls `outbound_headers()`. More importantly, `anyio.to_thread.run_sync()` creates a new OS thread; Python `contextvars.ContextVar` values are copied by default only if `anyio` passes the context explicitly. Verify that trace IDs appear in Resend failure logs.
+
+**SRE-09 [MEDIUM] — No end-to-end submit→notify latency metric**
+
+The system has `emf_cases_submitted_total` (form) and `emf_notification_state_total` (router) but nothing correlating the two with a timestamp delta. Total dispatch latency (form POST → pg_notify → listener wakeup → channel send) is invisible. Fix: expose `emf_case_notification_lag_seconds` histogram from the router using the case's `created_at` field (already on `CaseAlert`).
+
+**SRE-10 [MEDIUM] — Monitoring profile is opt-in; zero observability on default stack**
+
+If `--profile monitoring` is not used, Prometheus and Grafana do not run. Alert rules are never evaluated. `prod-update` does not include the monitoring profile. Recommend either making Prometheus part of the core stack, or explicitly documenting that `--profile monitoring` is required in production.
+
+**SRE-11 [LOW] — node_exporter absent; DiskUsageHigh never fires**
+
+`alert_rules.yml:49` notes "requires node_exporter — skip silently if absent". node_exporter is not in `docker-compose.yml`. Disk can fill silently. Fix: add node_exporter to the monitoring profile.
+
+---
+
+### 4. Alert Quality
+
+| Alert | Issue |
+|---|---|
+| `ListenerSilent` | Expression uses non-existent metric; `absent()` false-fires on cold start — **broken** |
+| `SlowNotificationDispatch` | Histogram never observed; always no-data — **broken** |
+| `ServiceDown` | `up == 0` for 1 min — correct |
+| `NotificationFailed` | `for: 0m`, instant on any failed delivery — correct |
+| `FormHighErrorRate` | Division-by-zero → NaN → false; acceptable |
+| `DiskUsageHigh` | node_exporter absent — **never fires** |
+| Missing | No alert on Redis down |
+| Missing | No alert on case submitted with no SENT notification after 2 min — most important operational signal |
+
+---
+
+### 5. Backup and Restore
+
+**SRE-12 [HIGH] — No restore script or tested restore procedure**
+
+`scripts/backup.py` is solid (pg_dump custom format, zstd, age encryption, optional rsync). Gaps:
+- No `scripts/restore.py` exists
+- `--rsync` optional; if not configured, backups stay on the same host (single point of failure)
+- Systemd unit calls `sys.executable` — may be system Python, not venv Python
+- No backup verification (row count check, test restore to scratch DB)
+
+**SRE-13 [MEDIUM] — Backup timer not installed by `install.py`**
+
+The systemd timer must be installed manually via `python backup.py --systemd`. If the operator forgets, there are no automated backups during the event.
+
+---
+
+### 6. Secret Rotation
+
+**SRE-14 [HIGH] — Rotating `SECRET_KEY` invalidates all outstanding email ACK links**
+
+`SECRET_KEY` signs email ACK tokens (JWT). Rotating it immediately invalidates all tokens in in-flight emails. During an active event, this breaks acknowledge links in any email already sent. Fix: support a `SECRET_KEY_PREV` fallback in `decode_ack_token` so the old key is accepted during a rotation window.
+
+**SRE-15 [MEDIUM] — Secret rotation requires full service restart**
+
+`SECRET_KEY`, `REDIS_PASSWORD`, `RESEND_API_KEY`, `OIDC_CLIENT_SECRET`, and SMTP credentials are read at startup only. Rotating any of them mid-festival requires `docker compose up -d` with the associated downtime.
+
+---
+
+### 7. Deployment Process
+
+**SRE-16 [HIGH] — Single-worker uvicorn in production**
+
+All services run uvicorn with no `--workers` flag (defaults to 1). Form and panel handle all traffic in a single asyncio event loop. Under load, a slow DB query stalls all requests. Fix: `--workers 2` for form and panel (stateless). Router must stay at 1 worker (pg_notify listener is per-process).
+
+**SRE-17 [MEDIUM] — `prod-update` loses prod compose config if `git pull` fails**
+
+`prod-update` does `git checkout HEAD -- infra/docker-compose.yml` then `git pull` then `git restore --source=prod`. If the pull fails, the prod compose override is lost until manually restored. Fix: copy the prod file to a temp location before the pull.
+
+---
+
+### 8. Capacity Limits
+
+**SRE-18 [MEDIUM] — No resource limits on any container**
+
+No `mem_limit`, `cpus`, or `deploy.resources` constraints. A TTS synthesis burst or ClamAV scan can OOM-kill postgres. Fix: set limits on tts (512m), signal-api (256m), clamav (1g).
+
+**SRE-19 [MEDIUM] — Rate limiter is in-memory; bypassed under multi-worker**
+
+`slowapi` in the form service uses in-memory counters per worker process. With `--workers N`, an attacker gets N× the effective rate limit. Fix: use Redis backend: `Limiter(key_func=get_remote_address, storage_uri=settings.redis_url)`.
+
+**SRE-20 [LOW] — DB connection pool may saturate under multi-worker load**
+
+`pool_size=5, max_overflow=10` (15 total) per process. With 2 workers per service and 3 app services, peak DB connections = 90. Postgres 17 default `max_connections=100`. Fix: set postgres `max_connections=200` or tune pool sizes down.
+
+---
+
+### 9. Dependency Failure Modes
+
+| Dependency | Impact | Handled? |
+|---|---|---|
+| PostgreSQL down | All services 500; reports lost | `restart: unless-stopped` + healthcheck |
+| Redis down | Panel sessions break | Graceful degradation claimed fixed; verify in panel routes |
+| OIDC provider down | No new panel logins; existing sessions survive | Acceptable |
+| Resend API down | Email fails; 4 retries over 30 min; FAILED | Signal/Mattermost fallback; `NotificationFailed` alert fires |
+| signal-api down | Signal channel fails | `restart: unless-stopped`; no profile — always in stack |
+| Host disk full | Postgres WAL fills; DB writes fail | DiskUsageHigh alert broken (SRE-11) |
+| Host OOM | Docker kills containers; restart recovers | No memory limits; recovery order not guaranteed |
+
+**SRE-21 [CRITICAL] — No fallback if all notification channels fail simultaneously**
+
+If email, Signal, and Mattermost all fail (network partition, misconfiguration), cases are written to DB but no one is alerted. The only recovery path is a conduct team member proactively checking the panel. There is no dead-man's-switch or fallback SMS gateway. This is the highest-impact single gap for a festival environment.
+
+---
+
+### 10. On-Call Ergonomics
+
+**SRE-22 [HIGH] — No persistent log aggregation; logs lost on `docker compose down -v`**
+
+Services emit JSON-structured logs to stdout captured by Docker's json-file driver. `docker compose down -v` wipes logs. No Loki, no syslog forwarding. At 3am there is no single pane to correlate form → router → email failure by trace ID. Fix: add Loki + promtail to the monitoring profile, or configure Docker daemon `log-opts` with `max-size`/`max-file`.
+
+**SRE-23 [MEDIUM] — Health endpoint returns `status: ok` when notification channels are degraded**
+
+`router/main.py:509` returns `{"status": "ok"}` when `db_ok=True` even if `email_ok=False`. The Docker healthcheck passes even when notifications cannot be sent. Fix: return `{"status": "degraded"}` and HTTP 207 when any required channel is down.
+
+**SRE-24 [LOW] — No pre-event prod smoke test**
+
+No script validates the full pipeline against the live stack before the festival starts. `scripts/run_e2e.sh` runs against an isolated stack only. Fix: add `scripts/smoke-test-prod.sh` that submits a canary case, verifies notification receipt, and cleans up.
+
+---
+
+### SRE Summary Risk Register
+
+| ID | Area | Severity | Finding |
+|---|---|---|---|
+| SRE-01 | Alerting | CRITICAL | No Alertmanager — all alerts silent |
+| SRE-02 | Observability | CRITICAL | `dispatch_seconds` histogram never observed |
+| SRE-03 | Alerting | CRITICAL | `ListenerSilent` expression broken; false-fires on cold start |
+| SRE-21 | Reliability | CRITICAL | No fallback if all notification channels fail simultaneously |
+| SRE-04 | Backup | HIGH | No restore procedure or script |
+| SRE-05 | Reliability | HIGH | PENDING notifications not recovered after router restart |
+| SRE-06 | Deployment | HIGH | Full downtime on every deploy |
+| SRE-07 | On-call | HIGH | No runbook |
+| SRE-08 | Observability | HIGH | Trace IDs not verified in anyio thread (email) path |
+| SRE-12 | Backup | HIGH | Backup not tested; no rsync configured by default |
+| SRE-14 | Secrets | HIGH | SECRET_KEY rotation invalidates outstanding ACK links |
+| SRE-16 | Capacity | HIGH | Single-worker uvicorn in production |
+| SRE-22 | On-call | HIGH | No persistent log aggregation |
+| SRE-09 | Observability | MEDIUM | No end-to-end submit→notify latency metric |
+| SRE-10 | Observability | MEDIUM | Monitoring profile opt-in; zero observability on default stack |
+| SRE-13 | Backup | MEDIUM | Backup timer not installed by `install.py` |
+| SRE-15 | Secrets | MEDIUM | Secret rotation requires full service restart |
+| SRE-17 | Deployment | MEDIUM | `prod-update` loses prod compose config if pull fails |
+| SRE-18 | Capacity | MEDIUM | No resource limits on any container |
+| SRE-19 | Capacity | MEDIUM | Rate limiter in-memory; bypassed under multi-worker |
+| SRE-23 | On-call | MEDIUM | Health endpoint 200 when channels degraded |
+| SRE-11 | Alerting | LOW | node_exporter absent; DiskUsageHigh never fires |
+| SRE-20 | Capacity | LOW | DB pool may saturate under multi-worker |
+| SRE-24 | On-call | LOW | No pre-event prod smoke test |

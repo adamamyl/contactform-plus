@@ -69,6 +69,21 @@ CREATE TABLE IF NOT EXISTS forms.notifications (
 CREATE INDEX IF NOT EXISTS notifications_case_idx  ON forms.notifications (case_id);
 CREATE INDEX IF NOT EXISTS notifications_state_idx ON forms.notifications (state);
 
+-- cases table: filtered/ordered in panel API on every page load
+CREATE INDEX IF NOT EXISTS idx_cases_event_name  ON forms.cases (event_name);
+CREATE INDEX IF NOT EXISTS idx_cases_assignee     ON forms.cases (assignee);
+CREATE INDEX IF NOT EXISTS idx_cases_created_at   ON forms.cases (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cases_status       ON forms.cases (status);
+
+-- notifications: hot path in Signal poll (every 10s) and router mark_acked
+CREATE INDEX IF NOT EXISTS idx_notifications_message_id ON forms.notifications (message_id);
+
+-- notifications: most panel queries filter case_id + state together
+CREATE INDEX IF NOT EXISTS idx_notifications_case_state ON forms.notifications (case_id, state);
+
+-- cases tags: GIN index for JSONB containment queries and tag listing
+CREATE INDEX IF NOT EXISTS idx_cases_tags_gin ON forms.cases USING gin (tags);
+
 CREATE TABLE IF NOT EXISTS forms.idempotency_tokens (
     token      VARCHAR(64) PRIMARY KEY,
     case_id    UUID        NOT NULL REFERENCES forms.cases(id),

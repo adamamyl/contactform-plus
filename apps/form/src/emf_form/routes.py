@@ -7,10 +7,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
+import anyio
 import emf_shared
 import httpx
 from emf_shared.db import get_session
-from emf_shared.friendly_id import generate_unique
+from emf_shared.friendly_id import generate
 from emf_shared.phase import Phase, current_phase, events_for_form, is_active_routing_window
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -19,6 +20,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Case, IdempotencyToken
@@ -207,37 +209,45 @@ async def submit_form(
                 ),
             )
 
-    existing_ids_result = await session.execute(select(Case.friendly_id))
-    existing_ids: set[str] = set(existing_ids_result.scalars().all())
-
     case_id = uuid.uuid4()
-    friendly_id = generate_unique(existing_ids, str(case_id))
-
     form_data: dict[str, object] = submission.model_dump(
         mode="json", exclude={"website", "urgency", "event_name"}
     )
 
-    case = Case(
-        id=case_id,
-        friendly_id=friendly_id,
-        event_name=submission.event_name,
-        urgency=submission.urgency,
-        phase=str(phase),
-        form_data=form_data,
-        location_hint=submission.location.text if submission.location else None,
-        status="new",
-        tags=[],
-    )
-    session.add(case)
-
-    if x_idempotency_key:
-        token = IdempotencyToken(
-            token=x_idempotency_key,
-            case_id=case_id,
+    friendly_id: str | None = None
+    for _ in range(5):
+        candidate = generate()
+        case = Case(
+            id=case_id,
+            friendly_id=candidate,
+            event_name=submission.event_name,
+            urgency=submission.urgency,
+            phase=str(phase),
+            form_data=form_data,
+            location_hint=submission.location.text if submission.location else None,
+            status="new",
+            tags=[],
         )
-        session.add(token)
+        session.add(case)
+        if x_idempotency_key:
+            token = IdempotencyToken(
+                token=x_idempotency_key,
+                case_id=case_id,
+            )
+            session.add(token)
+        try:
+            await session.flush()
+            friendly_id = candidate
+            break
+        except IntegrityError:
+            await session.rollback()
 
-    await session.flush()
+    if friendly_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not generate unique case ID",
+        )
+
     await session.execute(
         text("SELECT pg_notify('new_case', :payload)"),
         {"payload": str(case_id)},
@@ -328,12 +338,14 @@ async def upload_attachment(
         )
 
     case_dir = settings.attachment_dir / str(case_id)
-    case_dir.mkdir(parents=True, exist_ok=True)
-    existing = (
-        list(case_dir.glob("*.jpg"))
-        + list(case_dir.glob("*.png"))
-        + list(case_dir.glob("*.gif"))
-        + list(case_dir.glob("*.webp"))
+    await anyio.to_thread.run_sync(lambda: case_dir.mkdir(parents=True, exist_ok=True))
+    existing = await anyio.to_thread.run_sync(
+        lambda: (
+            list(case_dir.glob("*.jpg"))
+            + list(case_dir.glob("*.png"))
+            + list(case_dir.glob("*.gif"))
+            + list(case_dir.glob("*.webp"))
+        )
     )
     if len(existing) >= cfg.attachment_max_per_case:
         raise HTTPException(
@@ -342,7 +354,8 @@ async def upload_attachment(
         )
     filename = f"{uuid.uuid4().hex}.{ext}"
     dest = case_dir / filename
-    dest.write_bytes(header + rest)
+    data = header + rest
+    await anyio.to_thread.run_sync(lambda: dest.write_bytes(data))
     return {"id": filename, "case_id": str(case_id)}
 
 

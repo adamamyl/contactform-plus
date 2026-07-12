@@ -220,6 +220,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         counter=notification_state_total,
         session_factory=get_session_factory(),
         local_dev=settings.local_dev,
+        dispatch_histogram=notification_dispatch_seconds,
     )
 
     task = asyncio.create_task(
