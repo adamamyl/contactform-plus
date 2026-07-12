@@ -108,6 +108,6 @@ class Settings(BaseSettings):
                 "_app_config_cache",
                 AppConfig.model_validate(json.loads(self.config_path.read_text())),
             )
-        return self._app_config_cache  # type: ignore[attr-defined]
+        return self._app_config_cache  # type: ignore[attr-defined,no-any-return]
 
     model_config = {"env_file": ".env"}

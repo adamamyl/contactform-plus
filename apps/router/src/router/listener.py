@@ -35,7 +35,9 @@ async def listen_for_cases(dsn: str, router: AlertRouter) -> None:
             ) -> None:
                 log.info("NOTIFY %s: %s", channel, payload)
                 force = channel == "retrigger_case"
-                task = asyncio.create_task(_handle_new_case(payload, router, force=force))
+                task = asyncio.create_task(
+                    _handle_new_case(payload, router, force=force)
+                )
                 _background_tasks.add(task)
                 task.add_done_callback(_background_tasks.discard)
 

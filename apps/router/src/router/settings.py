@@ -16,6 +16,8 @@ class Settings(SharedSettings):
     resend_api_key: str = ""
     emf_phone_api_url: str = ""
     emf_phone_api_key: str = ""
-    signal_use_webhook: bool = True  # if True, disable polling loop; rely on /webhook/signal
+    signal_use_webhook: bool = (
+        True  # if True, disable polling loop; rely on /webhook/signal
+    )
 
     model_config = {"env_file": ".env"}
