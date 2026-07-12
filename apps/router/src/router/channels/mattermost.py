@@ -5,24 +5,11 @@ import logging
 import httpx
 
 from emf_shared.tracing import outbound_headers
+from emf_shared.urgency import URGENCY_COLOUR, URGENCY_EMOJI
 from router.channels.base import ChannelAdapter
 from router.models import CaseAlert
 
 log = logging.getLogger(__name__)
-
-URGENCY_EMOJI: dict[str, str] = {
-    "low": "📋",
-    "medium": "🔔",
-    "high": "⚠️",
-    "urgent": "🚨",
-}
-
-URGENCY_COLOUR: dict[str, str] = {
-    "urgent": "#c62828",
-    "high": "#e65100",
-    "medium": "#1565c0",
-    "low": "#558b2f",
-}
 
 
 class MattermostAdapter(ChannelAdapter):

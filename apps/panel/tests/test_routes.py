@@ -6,8 +6,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import AsyncClient
 
-from emf_panel.dispatcher import _revoked, revoke_token
-
 
 @pytest.mark.asyncio
 async def test_unauthenticated_redirects_to_login(client: AsyncClient) -> None:
@@ -309,7 +307,6 @@ async def test_revoke_dispatcher_session(authed_client: AsyncClient, valid_token
 
     resp = await authed_client.delete(f"/api/v1/dispatcher/sessions/{jti}")
     assert resp.status_code == 204
-    _revoked.discard(jti)
 
 
 @pytest.mark.asyncio
@@ -320,17 +317,16 @@ async def test_expired_dispatcher_token_rejected(client: AsyncClient, expired_to
 
 @pytest.mark.asyncio
 async def test_revoked_dispatcher_token_rejected(
-    client: AsyncClient, valid_token: str, settings: object
+    authed_client: AsyncClient, client: AsyncClient, valid_token: str, settings: object
 ) -> None:
     import jwt as pyjwt
 
     s = settings  # type: ignore[assignment]
     payload = pyjwt.decode(valid_token, s.secret_key, algorithms=["HS256"])  # type: ignore[attr-defined]
     jti = str(payload["jti"])
-    revoke_token(jti)
+    await authed_client.delete(f"/api/v1/dispatcher/sessions/{jti}")
     resp = await client.get(f"/dispatcher?token={valid_token}", follow_redirects=False)
     assert resp.status_code == 401
-    _revoked.discard(jti)
 
 
 # ---------------------------------------------------------------------------

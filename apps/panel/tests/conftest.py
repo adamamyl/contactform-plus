@@ -12,6 +12,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-panel-tests-0000")
 
 import pathlib
 
+import fakeredis.aioredis
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -102,16 +103,26 @@ def regular_user() -> dict[str, object]:
 
 
 @pytest.fixture
+async def mock_redis() -> AsyncGenerator[fakeredis.aioredis.FakeRedis, None]:
+    r = fakeredis.aioredis.FakeRedis()
+    yield r
+    await r.aclose()
+
+
+@pytest.fixture
 async def client(
     mock_session: AsyncMock,
     settings: Settings,
+    mock_redis: fakeredis.aioredis.FakeRedis,
 ) -> AsyncGenerator[AsyncClient, None]:
     from emf_shared.db import get_session
 
+    from emf_panel.routes import get_redis
     from emf_panel.settings import get_settings
 
     app.dependency_overrides[get_session] = lambda: mock_session
     app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_redis] = lambda: mock_redis
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as ac:
         yield ac
@@ -124,15 +135,18 @@ async def authed_client(
     mock_session: AsyncMock,
     settings: Settings,
     conduct_user: dict[str, object],
+    mock_redis: fakeredis.aioredis.FakeRedis,
 ) -> AsyncGenerator[AsyncClient, None]:
     from emf_shared.db import get_session
 
     from emf_panel.auth import require_conduct_team
+    from emf_panel.routes import get_redis
     from emf_panel.settings import get_settings
 
     app.dependency_overrides[get_session] = lambda: mock_session
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[require_conduct_team] = lambda: conduct_user
+    app.dependency_overrides[get_redis] = lambda: mock_redis
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as ac:
         yield ac

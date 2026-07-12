@@ -720,8 +720,9 @@ async def create_dispatcher_session(
 async def revoke_dispatcher_session(
     jti: str,
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> None:
-    revoke_token(jti)
+    await revoke_token(jti, redis)
 
 
 # ---------------------------------------------------------------------------
@@ -764,12 +765,13 @@ async def dispatcher_view(
     device_id: Annotated[str | None, Cookie()] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
     session: Annotated[AsyncSession, Depends(get_session)] = None,  # type: ignore[assignment]
+    redis: Annotated[aioredis.Redis, Depends(get_redis)] = None,  # type: ignore[assignment]
 ) -> HTMLResponse:
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
     _, max_devices = _dispatcher_config(settings)
-    validate_dispatcher_token(token, dev_id, settings.secret_key, max_devices)
+    await validate_dispatcher_token(token, dev_id, settings.secret_key, redis, max_devices)
     cfg = settings.app_config
     known_event_names = {e.name for e in cfg.events}
     active_event: str | None
@@ -830,12 +832,13 @@ async def dispatcher_cases(
     device_id: Annotated[str | None, Cookie()] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
     session: Annotated[AsyncSession, Depends(get_session)] = None,  # type: ignore[assignment]
+    redis: Annotated[aioredis.Redis, Depends(get_redis)] = None,  # type: ignore[assignment]
 ) -> list[dict[str, object]]:
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
     _, max_devices = _dispatcher_config(settings)
-    validate_dispatcher_token(token, dev_id, settings.secret_key, max_devices)
+    await validate_dispatcher_token(token, dev_id, settings.secret_key, redis, max_devices)
     stmt = select(Case).order_by(Case.urgency.desc(), Case.created_at.desc())
     if not show_all:
         stmt = stmt.where(Case.assignee.is_(None))
@@ -868,12 +871,13 @@ async def dispatcher_ack(
     device_id: Annotated[str | None, Cookie()] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
     session: Annotated[AsyncSession, Depends(get_session)] = None,  # type: ignore[assignment]
+    redis: Annotated[aioredis.Redis, Depends(get_redis)] = None,  # type: ignore[assignment]
 ) -> dict[str, bool]:
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
     _, max_devices = _dispatcher_config(settings)
-    validate_dispatcher_token(token, dev_id, settings.secret_key, max_devices)
+    await validate_dispatcher_token(token, dev_id, settings.secret_key, redis, max_devices)
     now = datetime.now(tz=UTC)
     await session.execute(
         update(Notification)
@@ -892,12 +896,13 @@ async def dispatcher_trigger(
     device_id: Annotated[str | None, Cookie()] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
     session: Annotated[AsyncSession, Depends(get_session)] = None,  # type: ignore[assignment]
+    redis: Annotated[aioredis.Redis, Depends(get_redis)] = None,  # type: ignore[assignment]
 ) -> dict[str, bool]:
     if settings is None:
         settings = get_settings()
     dev_id = device_id or str(uuid.uuid4())
     _, max_devices = _dispatcher_config(settings)
-    validate_dispatcher_token(token, dev_id, settings.secret_key, max_devices)
+    await validate_dispatcher_token(token, dev_id, settings.secret_key, redis, max_devices)
     await session.execute(
         text("SELECT pg_notify('retrigger_case', :payload)"),
         {"payload": str(case_id)},
