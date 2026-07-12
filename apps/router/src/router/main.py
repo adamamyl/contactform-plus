@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html as _html
 import logging
 import uuid
 from collections.abc import AsyncGenerator
@@ -135,6 +136,11 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     ev = cfg.events[0] if cfg.events else None
     router_base_url = settings.ack_base_url or cfg.panel_base_url
 
+    if not settings.mattermost_webhook_secret:
+        log.warning(
+            "MATTERMOST_WEBHOOK_SECRET is not set — Mattermost webhook is unauthenticated"
+        )
+
     signal_adapter: SignalAdapter | None = None
     if settings.signal_api_url and ev and ev.signal_group_id:
         if cfg.site_map:
@@ -259,6 +265,7 @@ async def signal_webhook(
     body: SignalWebhookBody,
     session: Annotated[AsyncSession, Depends(get_session)],
     alert_router: Annotated[AlertRouter, Depends(get_alert_router)],
+    _auth: Annotated[None, Depends(_check_signal_token)],
 ) -> dict[str, bool]:
     data = body.envelope.dataMessage
     reaction = data.get("reaction", {})
@@ -324,9 +331,10 @@ async def email_ack(
         alert, "email_link", other_notifications, session
     )
 
+    escaped_id = _html.escape(str(alert.friendly_id))
     html = (
         f"<h1>✅ Acknowledged</h1>"
-        f"<p>Case <strong>{alert.friendly_id}</strong> has been marked as acknowledged.</p>"
+        f"<p>Case <strong>{escaped_id}</strong> has been marked as acknowledged.</p>"
     )
     return HTMLResponse(content=html)
 
@@ -412,6 +420,17 @@ def _check_internal_secret(
     if (
         settings.router_internal_secret
         and x_internal_secret != settings.router_internal_secret
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+
+def _check_signal_token(
+    x_signal_token: Annotated[str, Header()] = "",
+    settings: Settings = Depends(get_settings),
+) -> None:
+    if (
+        settings.router_internal_secret
+        and x_signal_token != settings.router_internal_secret
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 

@@ -14,14 +14,17 @@ from router.models import Notification
 
 log = logging.getLogger(__name__)
 
+_background_tasks: set[asyncio.Task[None]] = set()
+
 
 async def listen_for_cases(dsn: str, router: AlertRouter) -> None:
     """Long-lived asyncpg connection that LISTENs for new_case notifications."""
     # asyncpg requires plain postgresql:// scheme; strip SQLAlchemy driver prefix
     dsn = dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
     while True:
+        conn: asyncpg.Connection[asyncpg.Record] | None = None
         try:
-            conn: asyncpg.Connection[asyncpg.Record] = await asyncpg.connect(dsn)
+            conn = await asyncpg.connect(dsn)
             log.info("Listener connected; registering LISTEN new_case + retrigger_case")
 
             async def _on_notify(
@@ -32,7 +35,9 @@ async def listen_for_cases(dsn: str, router: AlertRouter) -> None:
             ) -> None:
                 log.info("NOTIFY %s: %s", channel, payload)
                 force = channel == "retrigger_case"
-                asyncio.create_task(_handle_new_case(payload, router, force=force))
+                task = asyncio.create_task(_handle_new_case(payload, router, force=force))
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
 
             await conn.add_listener("new_case", _on_notify)
             await conn.add_listener("retrigger_case", _on_notify)
@@ -41,6 +46,9 @@ async def listen_for_cases(dsn: str, router: AlertRouter) -> None:
                 await asyncio.sleep(5)
         except Exception:
             log.exception("Listener error; reconnecting in 5 s")
+        finally:
+            if conn is not None and not conn.is_closed():
+                await conn.close()
             await asyncio.sleep(5)
 
 

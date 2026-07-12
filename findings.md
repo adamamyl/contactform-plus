@@ -3289,4 +3289,3 @@ EMF 2024 had approximately 3,000 attendees. "Large-scale" is not defined in UK G
 | G-12 | DPO assessment | MEDIUM | UNASSESSED | Large-scale special category processing may require DPO appointment |
 | G-13 | Pronouns data | LOW | BORDERLINE | Optional collection at submission; defensible but borderline |
 | G-14 | Redis TLS | LOW | MISSING | Internal but no TLS; session/cache data unencrypted in transit |
-
