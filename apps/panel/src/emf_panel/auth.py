@@ -81,6 +81,12 @@ async def require_conduct_team(request: Request) -> dict[str, object]:
 
     user: dict[str, object] | None = request.session.get("user")
     if not user:
+        if "application/json" in request.headers.get("accept", ""):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         raise HTTPException(
             status_code=status.HTTP_303_SEE_OTHER,
             headers={"Location": "/login"},

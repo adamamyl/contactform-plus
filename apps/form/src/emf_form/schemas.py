@@ -9,6 +9,11 @@ _URGENCY_VALUES = {"low", "medium", "high", "urgent"}
 _PHONE_RE = re.compile(r"^[\d\s+\-.()\sA-Z]+$")
 
 
+def _clean_str(v: str) -> str:
+    """Strip whitespace and null bytes (Postgres rejects \\x00 in TEXT)."""
+    return v.replace("\x00", "").strip()
+
+
 class Location(BaseModel):
     text: str | None = None
     lat: float | None = None
@@ -38,7 +43,7 @@ class Location(BaseModel):
     @classmethod
     def strip_text(cls, v: str | None) -> str | None:
         if v is not None:
-            v = v.strip()
+            v = _clean_str(v)
             if len(v) > 500:
                 raise ValueError("text must be at most 500 characters")
             return v if v else None
@@ -56,14 +61,14 @@ class ReporterDetails(BaseModel):
     @classmethod
     def strip_str(cls, v: object) -> object:
         if isinstance(v, str):
-            return v.strip() or None
+            return _clean_str(v) or None
         return v
 
     @field_validator("phone", mode="before")
     @classmethod
     def normalise_phone(cls, v: object) -> object:
         if isinstance(v, str):
-            v = v.strip().upper()
+            v = _clean_str(v).upper()
             if not v:
                 return None
             if not _PHONE_RE.match(v):
@@ -106,14 +111,14 @@ class CaseSubmission(BaseModel):
     @classmethod
     def strip_text_fields(cls, v: object) -> object:
         if isinstance(v, str):
-            return v.strip() or None
+            return _clean_str(v) or None
         return v
 
     @field_validator("what_happened", mode="before")
     @classmethod
     def strip_what_happened(cls, v: object) -> object:
         if isinstance(v, str):
-            return v.strip()
+            return _clean_str(v)
         return v
 
     @field_validator("what_happened")

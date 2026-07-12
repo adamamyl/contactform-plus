@@ -5,6 +5,7 @@ from email.message import EmailMessage
 from email.utils import make_msgid
 
 import aiosmtplib
+import anyio
 import resend
 
 from router.channels.base import ChannelAdapter
@@ -92,7 +93,7 @@ class EmailAdapter(ChannelAdapter):
             "headers": headers,
         }
         try:
-            email = resend.Emails.send(params)
+            email = await anyio.to_thread.run_sync(lambda: resend.Emails.send(params))
             return mid if email.get("id") else None
         except Exception:
             log.exception("Resend send failed")
@@ -189,7 +190,7 @@ class EmailAdapter(ChannelAdapter):
                 "headers": {"Message-ID": mid},
             }
             try:
-                email = resend.Emails.send(params)
+                email = await anyio.to_thread.run_sync(lambda: resend.Emails.send(params))
                 return mid if email.get("id") else None
             except Exception:
                 log.exception("Resend send failed for case %s", alert.case_id)
@@ -237,7 +238,7 @@ class EmailAdapter(ChannelAdapter):
                 "html": html,
             }
             try:
-                resend.Emails.send(params)
+                await anyio.to_thread.run_sync(lambda: resend.Emails.send(params))
             except Exception:
                 log.exception(
                     "Resend ACK confirmation failed for case %s", alert.case_id

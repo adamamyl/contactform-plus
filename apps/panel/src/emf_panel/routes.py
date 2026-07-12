@@ -54,8 +54,8 @@ templates.env.loader = ChoiceLoader([_original_loader, FileSystemLoader(_shared_
 _ASSIGNEES_KEY = "panel:assignees"
 
 
-async def get_redis(settings: Annotated[Settings, Depends(get_settings)]) -> aioredis.Redis:
-    return aioredis.from_url(settings.redis_url, decode_responses=True)
+def get_redis(request: Request) -> aioredis.Redis:
+    return request.app.state.redis  # type: ignore[no-any-return]
 
 
 def _current_active_event(events: list[EventConfig], today: date | None = None) -> str | None:
