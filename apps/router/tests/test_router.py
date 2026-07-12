@@ -1683,3 +1683,57 @@ async def test_also_sent_via_each_channel_sees_others(
     assert set(sent_alerts["email"].also_sent_via) == {"signal", "mattermost"}
     assert set(sent_alerts["signal"].also_sent_via) == {"email", "mattermost"}
     assert set(sent_alerts["mattermost"].also_sent_via) == {"email", "signal"}
+
+
+# ---------------------------------------------------------------------------
+# _handle_new_case deduplication guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_handle_new_case_skips_if_already_notified(sample_alert: CaseAlert) -> None:
+    """_handle_new_case skips routing when notifications already exist for the case."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from router.listener import _handle_new_case
+
+    mock_router = MagicMock()
+    mock_router.load_alert_from_db = AsyncMock(return_value=sample_alert)
+    mock_router.route = AsyncMock()
+
+    # Mock session returning count=1 (notification exists)
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one.return_value = 1
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    async def mock_get_session():
+        yield mock_session
+
+    with patch("router.listener.get_session", return_value=mock_get_session()):
+        await _handle_new_case(sample_alert.case_id, mock_router, force=False)
+
+    mock_router.route.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_new_case_force_bypasses_dedup(sample_alert: CaseAlert) -> None:
+    """_handle_new_case routes even when notifications exist when force=True."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from router.listener import _handle_new_case
+
+    mock_router = MagicMock()
+    mock_router.load_alert_from_db = AsyncMock(return_value=sample_alert)
+    mock_router.route = AsyncMock()
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one.return_value = 1  # existing notifications
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    async def mock_get_session():
+        yield mock_session
+
+    with patch("router.listener.get_session", return_value=mock_get_session()):
+        await _handle_new_case(sample_alert.case_id, mock_router, force=True)
+
+    mock_router.route.assert_called_once()

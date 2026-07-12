@@ -329,6 +329,13 @@ async def test_revoked_dispatcher_token_rejected(
     assert resp.status_code == 401
 
 
+@pytest.mark.asyncio
+async def test_dispatcher_view_valid_token(client: AsyncClient, valid_token: str) -> None:
+    """Valid dispatcher token renders the dispatcher page."""
+    resp = await client.get(f"/dispatcher?token={valid_token}", follow_redirects=False)
+    assert resp.status_code == 200
+
+
 # ---------------------------------------------------------------------------
 # API v1 — dispatcher case actions
 # ---------------------------------------------------------------------------

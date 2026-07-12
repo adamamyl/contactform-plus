@@ -1,0 +1,69 @@
+groups:
+  - name: emf_conduct_alerts
+    interval: 30s
+    rules:
+      # Listener silence — no pg_notify processed in 60s (notification pipeline dead)
+      - alert: ListenerSilent
+        expr: |
+          (time() - max(emf_notification_state_total_created) by (job)) > 3600
+          or absent(emf_notification_state_total)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Router notification listener has been silent for >1h"
+          description: "No notification state transitions observed. pg_notify pipeline may be down."
+
+      # Notification failures — any FAILED notifications
+      - alert: NotificationFailed
+        expr: increase(emf_notification_state_total{state="failed"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Notification delivery failed on channel {{ $labels.channel }}"
+          description: "{{ $value }} notification(s) failed to deliver via {{ $labels.channel }} in the last 5 minutes."
+
+      # Service down — health endpoint not reachable
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Prometheus cannot scrape {{ $labels.job }} — service may be crashed or unreachable."
+
+      # High error rate on form submissions
+      - alert: FormHighErrorRate
+        expr: |
+          rate(http_requests_total{job="emf-form",status=~"5.."}[5m])
+          / rate(http_requests_total{job="emf-form"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Form service >10% error rate"
+          description: "{{ $value | humanizePercentage }} of form requests returning 5xx."
+
+      # Disk usage (requires node_exporter — skip silently if absent)
+      - alert: DiskUsageHigh
+        expr: |
+          (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"})
+          / node_filesystem_size_bytes{mountpoint="/"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host disk usage above 80%"
+          description: "Root filesystem is {{ $value | humanizePercentage }} full."
+
+      # Slow notification dispatch
+      - alert: SlowNotificationDispatch
+        expr: histogram_quantile(0.95, rate(emf_notification_dispatch_seconds_bucket[5m])) > 30
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "95th-percentile notification dispatch >30s on {{ $labels.channel }}"
+          description: "Notifications via {{ $labels.channel }} taking >30s at p95."
