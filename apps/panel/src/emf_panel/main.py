@@ -22,7 +22,7 @@ configure_logging("panel")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-    import aioredis
+    import redis.asyncio as aioredis
 
     settings = get_settings()
     init_db(settings.database_url)

@@ -5,17 +5,11 @@ import logging
 import httpx
 
 from emf_shared.tracing import outbound_headers
+from emf_shared.urgency import URGENCY_EMOJI
 from router.channels.base import ChannelAdapter
 from router.models import CaseAlert
 
 log = logging.getLogger(__name__)
-
-URGENCY_EMOJI: dict[str, str] = {
-    "low": "📋",
-    "medium": "🔔",
-    "high": "⚠️",
-    "urgent": "🚨",
-}
 
 
 class SignalAdapter(ChannelAdapter):
