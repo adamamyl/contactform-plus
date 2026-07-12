@@ -49,7 +49,9 @@ async def validate_dispatcher_token(
         raise HTTPException(status_code=403, detail="Insufficient scope")
 
     if not is_known:
-        count = await redis.scard(devices_key)
+        # redis-py <8 async command stubs return Awaitable[T] | T (sync/async
+        # overload ambiguity mypy can't narrow for redis.asyncio.Redis)
+        count = await redis.scard(devices_key)  # type: ignore[misc]
         if count >= max_devices:
             raise HTTPException(status_code=403, detail="Maximum devices for this session reached")
         # Pipeline round-trip 2: register device + set TTL together
@@ -71,5 +73,5 @@ async def revoke_token(jti: str, redis: aioredis.Redis) -> None:
 
 
 async def get_active_device_count(jti: str, redis: aioredis.Redis) -> int:
-    count = await redis.scard(f"dispatcher:devices:{jti}")
+    count = await redis.scard(f"dispatcher:devices:{jti}")  # type: ignore[misc]
     return int(count)

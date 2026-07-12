@@ -565,7 +565,9 @@ async def update_assignee(
     await session.commit()
     if body.assignee:
         try:
-            await redis.sadd(_ASSIGNEES_KEY, body.assignee)
+            # redis-py <8 async command stubs return Awaitable[T] | T (sync/async
+            # overload ambiguity mypy can't narrow for redis.asyncio.Redis)
+            await redis.sadd(_ASSIGNEES_KEY, body.assignee)  # type: ignore[misc]
             await redis.expire(_ASSIGNEES_KEY, _ASSIGNEES_TTL)
         except Exception:
             log.warning("Redis unavailable; assignee not added to suggestions", exc_info=True)
@@ -655,7 +657,9 @@ async def list_assignees(
     _user: Annotated[dict[str, object], Depends(require_conduct_team)],
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> list[str]:
-    members = cast(set[str], await redis.smembers(_ASSIGNEES_KEY))
+    # redis-py <8 async command stubs return Awaitable[T] | T (sync/async
+    # overload ambiguity mypy can't narrow for redis.asyncio.Redis)
+    members = cast(set[str], await redis.smembers(_ASSIGNEES_KEY))  # type: ignore[misc]
     return sorted(members)
 
 
@@ -721,7 +725,9 @@ async def admin_ack(
     )
     await session.commit()
     try:
-        await redis.sadd(_ASSIGNEES_KEY, username)
+        # redis-py <8 async command stubs return Awaitable[T] | T (sync/async
+        # overload ambiguity mypy can't narrow for redis.asyncio.Redis)
+        await redis.sadd(_ASSIGNEES_KEY, username)  # type: ignore[misc]
         await redis.expire(_ASSIGNEES_KEY, _ASSIGNEES_TTL)
     except Exception:
         log.warning("Redis unavailable; ack user not added to assignee suggestions", exc_info=True)
