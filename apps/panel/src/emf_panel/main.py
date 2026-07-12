@@ -14,7 +14,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import configure_oauth
-from .routes import router
+from .routes import _http_client, router
 from .settings import get_settings
 
 configure_logging("panel")
@@ -30,6 +30,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     _app.state.redis = aioredis.from_url(settings.redis_url, decode_responses=True)
     yield
     await _app.state.redis.aclose()
+    await _http_client.aclose()
 
 
 app = FastAPI(title="EMF Conduct Panel", lifespan=lifespan)

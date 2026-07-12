@@ -117,4 +117,14 @@
     {% endfor %}
   </tbody>
 </table>
+<div class="pagination">
+  <span class="pagination__info">{{ total_count }} case{{ 's' if total_count != 1 else '' }}</span>
+  {% if page > 1 %}
+  <a class="btn btn--secondary" href="{{ request.url.include_query_params(page=page-1) }}">&#x2190; Prev</a>
+  {% endif %}
+  <span class="pagination__page">Page {{ page }}</span>
+  {% if has_next %}
+  <a class="btn btn--secondary" href="{{ request.url.include_query_params(page=page+1) }}">Next &#x2192;</a>
+  {% endif %}
+</div>
 {% endblock %}

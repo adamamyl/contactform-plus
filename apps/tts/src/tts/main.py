@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import importlib.metadata
 import os
 import re
 import secrets
@@ -14,13 +15,18 @@ import anyio
 from emf_shared.logging import configure_logging
 from emf_shared.middleware import TraceIDMiddleware
 from fastapi import FastAPI, HTTPException, status
-from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 from tts.builder import build_tts_message
 
 configure_logging("tts")
+
+try:
+    _VERSION = importlib.metadata.version("tts")
+except importlib.metadata.PackageNotFoundError:
+    _VERSION = os.environ.get("BUILD_VERSION", "dev")
 
 MAX_TEXT_LEN = 500
 AUDIO_TTL_SECONDS = 300
@@ -194,5 +200,5 @@ async def health() -> dict[str, object]:
             "piper_model": "ok" if model_ok else "missing",
             "piper_bin": "ok" if piper_ok else "missing",
         },
-        "version": "0.1.0",
+        "version": _VERSION,
     }

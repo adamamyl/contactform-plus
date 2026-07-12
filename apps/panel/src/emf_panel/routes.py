@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 import logging
+import os
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -34,6 +36,13 @@ from .models import Case, CaseHistory, Notification
 from .settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
+
+try:
+    _VERSION = importlib.metadata.version("emf-panel")
+except importlib.metadata.PackageNotFoundError:
+    _VERSION = os.environ.get("BUILD_VERSION", "dev")
+
+_http_client = httpx.AsyncClient(timeout=5.0)
 
 
 def _map_base_url(settings: Settings) -> str:
@@ -229,6 +238,8 @@ async def case_list(
     tag: str | None = None,
     sort: str = "submitted",
     order: str = "desc",
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
 ) -> HTMLResponse:
     if assignee == "me":
         assignee = _username(user)
@@ -250,6 +261,11 @@ async def case_list(
         stmt = stmt.where(Case.assignee == assignee)
     if tag:
         stmt = stmt.where(Case.tags.contains([tag]))
+
+    count_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
+    total_count = count_result.scalar_one()
+
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
 
     def make_sort_url(col: str) -> str:
         new_order = "desc" if sort == col and order == "asc" else "asc"
@@ -301,6 +317,10 @@ async def case_list(
             "order": order,
             "make_sort_url": make_sort_url,
             "status_emoji": STATUS_EMOJI,
+            "page": page,
+            "page_size": page_size,
+            "total_count": total_count,
+            "has_next": (page * page_size) < total_count,
         },
     )
 
@@ -662,12 +682,11 @@ async def _notify_router_ack(case_id: uuid.UUID, acked_by: str, settings: Settin
     if settings.router_internal_secret:
         headers["X-Internal-Secret"] = settings.router_internal_secret
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            await client.post(
-                f"{settings.router_internal_url}/internal/ack/{case_id}",
-                json={"acked_by": acked_by},
-                headers=headers,
-            )
+        await _http_client.post(
+            f"{settings.router_internal_url}/internal/ack/{case_id}",
+            json={"acked_by": acked_by},
+            headers=headers,
+        )
     except Exception:
         log.warning("Failed to notify router of ACK for case %s", case_id)
 
@@ -988,5 +1007,5 @@ async def health(session: Annotated[AsyncSession, Depends(get_session)]) -> dict
     return {
         "status": "ok" if db_status == "ok" else "degraded",
         "checks": {"database": db_status},
-        "version": "0.1.0",
+        "version": _VERSION,
     }

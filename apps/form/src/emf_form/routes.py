@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 import logging
+import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,6 +32,12 @@ from .settings import Settings, get_settings
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 log = logging.getLogger(__name__)
+
+try:
+    _VERSION = importlib.metadata.version("emf-form")
+except importlib.metadata.PackageNotFoundError:
+    _VERSION = os.environ.get("BUILD_VERSION", "dev")
+
 _shared_templates_dir = str(Path(emf_shared.__file__).parent / "templates")
 templates = Jinja2Templates(directory="templates")
 _original_loader = templates.env.loader
@@ -380,5 +388,5 @@ async def health(
             "clamav": clamd_status,
             "safe_browsing": sb_status,
         },
-        "version": "0.1.0",
+        "version": _VERSION,
     }

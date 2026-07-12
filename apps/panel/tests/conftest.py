@@ -76,6 +76,7 @@ def mock_session() -> AsyncMock:
     session = AsyncMock(spec=AsyncSession)
     result = MagicMock()
     result.scalars.return_value.all.return_value = [_mock_case()]
+    result.scalar_one.return_value = 1
     result.fetchall.return_value = []
     session.execute.return_value = result
     session.get.return_value = _mock_case()
