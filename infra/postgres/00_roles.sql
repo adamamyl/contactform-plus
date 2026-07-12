@@ -114,7 +114,8 @@ CREATE TABLE IF NOT EXISTS forms.idempotency_tokens (
 -- SELECT (id, friendly_id) — id needed for idempotency WHERE clause; friendly_id for collision check
 GRANT INSERT ON forms.cases TO form_user;
 GRANT SELECT (id, friendly_id) ON forms.cases TO form_user;
-GRANT INSERT, SELECT ON forms.idempotency_tokens TO form_user;
+GRANT INSERT, SELECT, DELETE ON forms.idempotency_tokens TO form_user;
+-- Existing installs: GRANT DELETE ON forms.idempotency_tokens TO form_user;
 
 -- router_user: non-PII case view + notification management
 CREATE VIEW forms.cases_router WITH (security_barrier = true) AS
