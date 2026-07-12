@@ -30,8 +30,19 @@ from .schemas import CaseSubmission
 from .settings import Settings, get_settings
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 log = logging.getLogger(__name__)
+
+# In-memory limiter for decorator metadata; replaced with Redis-backed instance
+# at startup when REDIS_URL is set (see main.py lifespan).
+limiter = Limiter(key_func=get_remote_address)
+
+
+def build_limiter(redis_url: str) -> Limiter:
+    """Return a Redis-backed limiter; falls back to in-memory when url is empty."""
+    if redis_url:
+        return Limiter(key_func=get_remote_address, storage_uri=redis_url)
+    return Limiter(key_func=get_remote_address)
+
 
 try:
     _VERSION = importlib.metadata.version("emf-form")

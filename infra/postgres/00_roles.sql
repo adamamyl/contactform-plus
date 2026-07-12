@@ -71,13 +71,15 @@ CREATE TABLE IF NOT EXISTS forms.notifications (
     acked_by        VARCHAR(128),
     acked_at        TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT notifications_state_check   CHECK (state   IN ('pending', 'sent', 'acked', 'failed')),
-    CONSTRAINT notifications_channel_check CHECK (channel IN ('email', 'signal', 'mattermost', 'slack', 'telephony'))
+    CONSTRAINT notifications_state_check        CHECK (state   IN ('pending', 'sent', 'acked', 'failed')),
+    CONSTRAINT notifications_channel_check      CHECK (channel IN ('email', 'signal', 'mattermost', 'slack', 'telephony')),
+    CONSTRAINT notifications_case_channel_uq    UNIQUE (case_id, channel)
 );
 -- Existing installs:
 --   ALTER TABLE forms.notifications DROP CONSTRAINT notifications_case_id_fkey, ADD CONSTRAINT notifications_case_id_fkey FOREIGN KEY (case_id) REFERENCES forms.cases(id) ON DELETE CASCADE;
 --   ALTER TABLE forms.notifications ADD CONSTRAINT notifications_state_check   CHECK (state   IN ('pending','sent','acked','failed'));
 --   ALTER TABLE forms.notifications ADD CONSTRAINT notifications_channel_check CHECK (channel IN ('email','signal','mattermost','slack','telephony'));
+--   ALTER TABLE forms.notifications ADD CONSTRAINT notifications_case_channel_uq UNIQUE (case_id, channel);
 
 CREATE INDEX IF NOT EXISTS notifications_case_idx  ON forms.notifications (case_id);
 CREATE INDEX IF NOT EXISTS notifications_state_idx ON forms.notifications (state);

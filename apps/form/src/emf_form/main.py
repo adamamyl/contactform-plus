@@ -20,7 +20,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
-from .routes import limiter, router
+from .routes import build_limiter, limiter, router
 from .settings import get_settings
 
 configure_logging("form")
@@ -40,6 +40,10 @@ form_attempts_total = Counter(
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
+    # Upgrade limiter to Redis-backed when REDIS_URL is configured so the
+    # in-process rate counter is shared across --workers processes.
+    if settings.redis_url:
+        app.state.limiter = build_limiter(settings.redis_url)
     init_db(settings.database_url)
     async for session in get_session():
         await session.execute(

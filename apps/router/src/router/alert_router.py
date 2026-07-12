@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from prometheus_client import Counter, Histogram
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from emf_shared.config import AppConfig, EventConfig
@@ -169,15 +170,7 @@ class AlertRouter:
             if delay_minutes > 0:
                 await asyncio.sleep(delay_minutes * 60)
 
-            async with self._session_factory() as session:
-                row = await session.get(Notification, notif_id)
-                if row is None:
-                    log.error("Notification %s disappeared from DB", notif_id)
-                    return
-                row.attempt_count = attempt_idx + 1
-                row.last_attempt_at = datetime.now(tz=UTC)
-                await session.commit()
-
+            # Send first — no session held open during network I/O
             if channel_name == "email" and ack_token:
                 from router.channels.email import EmailAdapter
 
@@ -188,13 +181,20 @@ class AlertRouter:
             else:
                 message_id = await adapter.send(alert)
 
+            # Single session: record attempt count + outcome together
+            async with self._session_factory() as session:
+                row = await session.get(Notification, notif_id)
+                if row is None:
+                    log.error("Notification %s disappeared from DB", notif_id)
+                    return
+                row.attempt_count = attempt_idx + 1
+                row.last_attempt_at = datetime.now(tz=UTC)
+                if message_id is not None:
+                    row.state = NotifState.SENT
+                    row.message_id = message_id
+                await session.commit()
+
             if message_id is not None:
-                async with self._session_factory() as session:
-                    row = await session.get(Notification, notif_id)
-                    if row is not None:
-                        row.state = NotifState.SENT
-                        row.message_id = message_id
-                        await session.commit()
                 if self._dispatch_histogram is not None:
                     self._dispatch_histogram.labels(channel=channel_name).observe(
                         time.monotonic() - _start
@@ -237,15 +237,21 @@ class AlertRouter:
         session: AsyncSession,
     ) -> tuple[CaseAlert | None, list[Notification]]:
         notif = await session.get(Notification, notification_id)
-        if notif is None or notif.state == NotifState.ACKED:
+        if notif is None:
             return None, []
 
         now = datetime.now(tz=UTC)
-        await session.execute(
+        cursor: CursorResult[tuple[()]] = await session.execute(  # type: ignore[assignment]
             update(Notification)
-            .where(Notification.id == notification_id)
+            .where(
+                Notification.id == notification_id,
+                Notification.state != NotifState.ACKED,
+            )
             .values(state=NotifState.ACKED, acked_at=now, acked_by=acked_by)
         )
+        # Concurrent call already acked — nothing to do
+        if cursor.rowcount == 0:
+            return None, []
         self._inc_counter(str(notif.channel), "acked")
 
         case_id = notif.case_id

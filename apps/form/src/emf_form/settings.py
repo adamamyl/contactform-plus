@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     local_dev: bool = False
     attachment_dir: Path = Path("/app/attachments")
     google_safe_browsing_key: str = ""
+    redis_url: str = ""
 
 
 @lru_cache
