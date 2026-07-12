@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, date, datetime, timedelta
@@ -121,16 +122,35 @@ def _case_links(case_id: uuid.UUID) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
+_OIDC_TIMEOUT = 10  # seconds; bounds hung OIDC provider metadata fetch
+
+
 @router.get("/login")
 async def login(request: Request) -> RedirectResponse:
     redirect_uri = str(request.url_for("auth_callback"))
-    return cast(RedirectResponse, await oauth.emf.authorize_redirect(request, redirect_uri))
+    try:
+        return cast(
+            RedirectResponse,
+            await asyncio.wait_for(
+                oauth.emf.authorize_redirect(request, redirect_uri),
+                timeout=_OIDC_TIMEOUT,
+            ),
+        )
+    except TimeoutError as exc:
+        log.error("OIDC provider timed out during authorize_redirect")
+        raise HTTPException(status_code=503, detail="Authentication provider unavailable") from exc
 
 
 @router.get("/auth/callback", name="auth_callback")
 async def auth_callback(request: Request) -> RedirectResponse:
     try:
-        token = await oauth.emf.authorize_access_token(request)
+        token = await asyncio.wait_for(
+            oauth.emf.authorize_access_token(request),
+            timeout=_OIDC_TIMEOUT,
+        )
+    except TimeoutError:
+        log.error("OIDC provider timed out during authorize_access_token")
+        return RedirectResponse(url="/login", status_code=302)
     except MismatchingStateError:
         if request.session.get("user"):
             return RedirectResponse(url="/", status_code=302)

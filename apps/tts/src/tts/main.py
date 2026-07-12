@@ -26,6 +26,8 @@ AUDIO_TTL_SECONDS = 300
 PIPER_MODEL = os.environ.get("PIPER_MODEL", "/app/models/en_GB-alan-medium.onnx")
 PIPER_BIN = os.environ.get("PIPER_BIN", "/app/piper/piper")
 AUDIO_DIR = Path(os.environ.get("AUDIO_DIR", "/app/audio"))
+MAX_CONCURRENT = int(os.environ.get("TTS_MAX_CONCURRENT", "4"))
+_sem = asyncio.Semaphore(MAX_CONCURRENT)
 
 # token → (file_path, created_at, persistent)
 # persistent=True means the file should not be deleted on expiry
@@ -102,13 +104,30 @@ async def _run_piper(text: str, output_path: str | None = None) -> bytes:
     if output_path:
         cmd = [PIPER_BIN, "--model", PIPER_MODEL, "--output_file", output_path]
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, _ = await proc.communicate(input=text.encode())
+    try:
+        await asyncio.wait_for(_sem.acquire(), timeout=0)
+    except TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="TTS synthesiser busy",
+        )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(input=text.encode()), timeout=30)
+        except TimeoutError:
+            proc.kill()
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="TTS synthesis timed out",
+            )
+    finally:
+        _sem.release()
     return stdout
 
 
