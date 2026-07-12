@@ -664,6 +664,16 @@ async def admin_ack(
     await session.execute(
         update(Case).where(Case.id == case_id).values(assignee=username, updated_at=now)
     )
+    session.add(
+        CaseHistory(
+            case_id=case_id,
+            changed_by=username,
+            changed_at=now,
+            field="assignee",
+            old_value=None,
+            new_value=username,
+        )
+    )
     await session.commit()
     await redis.sadd(_ASSIGNEES_KEY, username)
     await _notify_router_ack(case_id, username, settings)

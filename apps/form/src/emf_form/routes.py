@@ -300,6 +300,7 @@ async def upload_attachment(
     case_id: uuid.UUID,
     file: Annotated[UploadFile, File()],
     settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, str]:
     header = await file.read(12)
     ext = _detect_image_ext(header)
@@ -308,6 +309,9 @@ async def upload_attachment(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Only JPEG, PNG, GIF, and WebP images are accepted",
         )
+    case_result = await session.execute(select(Case).where(Case.id == case_id))
+    if case_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
     rest = await file.read()
     total = len(header) + len(rest)
     cfg = settings.app_config

@@ -190,7 +190,9 @@ class EmailAdapter(ChannelAdapter):
                 "headers": {"Message-ID": mid},
             }
             try:
-                email = await anyio.to_thread.run_sync(lambda: resend.Emails.send(params))
+                email = await anyio.to_thread.run_sync(
+                    lambda: resend.Emails.send(params)
+                )
                 return mid if email.get("id") else None
             except Exception:
                 log.exception("Resend send failed for case %s", alert.case_id)

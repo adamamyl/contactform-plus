@@ -44,7 +44,9 @@ def _jwks_client(jwks_uri: str) -> PyJWKClient:
     return PyJWKClient(jwks_uri, cache_keys=True)
 
 
-def _verify_bearer(token: str, jwks_uri: str, issuer: str) -> dict[str, object] | None:
+def _verify_bearer(
+    token: str, jwks_uri: str, issuer: str, audience: str | None = None
+) -> dict[str, object] | None:
     try:
         client = _jwks_client(jwks_uri)
         signing_key = client.get_signing_key_from_jwt(token)
@@ -53,7 +55,8 @@ def _verify_bearer(token: str, jwks_uri: str, issuer: str) -> dict[str, object] 
             signing_key.key,
             algorithms=["RS256", "ES256"],
             issuer=issuer,
-            options={"verify_aud": False},
+            audience=audience,
+            options={"verify_aud": audience is not None},
         )
         return claims
     except (InvalidTokenError, Exception):
@@ -68,7 +71,9 @@ async def require_conduct_team(request: Request) -> dict[str, object]:
 
         settings = get_settings()
         jwks_uri = settings.jwks_uri or f"{settings.oidc_issuer}/jwks"
-        claims = _verify_bearer(auth_header[7:], jwks_uri, settings.oidc_issuer)
+        claims = _verify_bearer(
+            auth_header[7:], jwks_uri, settings.oidc_issuer, audience=settings.oidc_client_id
+        )
         if claims is not None:
             groups: list[str] = claims.get("groups", [])  # type: ignore[assignment]
             if "team_conduct" in groups:
