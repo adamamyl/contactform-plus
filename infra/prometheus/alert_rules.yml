@@ -2,17 +2,16 @@ groups:
   - name: emf_conduct_alerts
     interval: 30s
     rules:
-      # Listener silence — no pg_notify processed in 60s (notification pipeline dead)
+      # Listener silence — no new notification state transitions in >1h
+      # Uses increase() over a 1h window; fires when the counter hasn't moved.
       - alert: ListenerSilent
-        expr: |
-          (time() - max(emf_notification_state_total_created) by (job)) > 3600
-          or absent(emf_notification_state_total)
-        for: 2m
+        expr: increase(emf_notification_state_total[1h]) == 0
+        for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "Router notification listener has been silent for >1h"
-          description: "No notification state transitions observed. pg_notify pipeline may be down."
+          summary: "Router: no notification state transitions in >1h"
+          description: "emf_notification_state_total has not incremented in 1h. pg_notify pipeline may be down or no cases submitted (check form service)."
 
       # Notification failures — any FAILED notifications
       - alert: NotificationFailed
@@ -58,7 +57,8 @@ groups:
           summary: "Host disk usage above 80%"
           description: "Root filesystem is {{ $value | humanizePercentage }} full."
 
-      # Slow notification dispatch
+      # Slow notification dispatch — requires emf_notification_dispatch_seconds
+      # histogram to be observed in alert_router._send_with_retry.
       - alert: SlowNotificationDispatch
         expr: histogram_quantile(0.95, rate(emf_notification_dispatch_seconds_bucket[5m])) > 30
         for: 2m

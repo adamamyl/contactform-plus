@@ -46,7 +46,7 @@ class CaseHistory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     case_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    changed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    changed_by: Mapped[str] = mapped_column(String(128), nullable=False)
     field: Mapped[str] = mapped_column(String(128), nullable=False)
     old_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -61,7 +61,7 @@ class IdempotencyToken(Base):
     __tablename__ = "idempotency_tokens"
     __table_args__ = {"schema": "forms"}
 
-    token: Mapped[str] = mapped_column(String(256), primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), primary_key=True)
     case_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -31,7 +31,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD:-localdev}@postgres/emf_forms
       CONFIG_PATH: /app/config.json
-      LOCAL_DEV: ${LOCAL_DEV:-true}
+      LOCAL_DEV: ${LOCAL_DEV:-false}
     volumes:
       - ../config.json:/app/config.json:ro
       - attachments:/app/attachments
@@ -82,6 +82,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
     volumes:
       - ../config.json:/app/config.json:ro
+      - attachments:/app/attachments:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
       interval: 30s
@@ -111,7 +112,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD:-localdev}@postgres/emf_forms
       CONFIG_PATH: /app/config.json
-      LOCAL_DEV: ${LOCAL_DEV:-true}
+      LOCAL_DEV: ${LOCAL_DEV:-false}
     volumes:
       - ../config.json:/app/config.json:ro
     healthcheck:

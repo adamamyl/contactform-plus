@@ -5,10 +5,14 @@
 
 report.emfcamp.org {
 	import snippets/headers.caddy
+	# Block internal metrics endpoint from public access
+	respond /metrics 404
 	reverse_proxy {$PROJECT_NAME}-form:8000
 }
 
 panel.emfcamp.org {
 	import snippets/headers.caddy
+	# Block internal metrics endpoint from public access
+	respond /metrics 404
 	reverse_proxy {$PROJECT_NAME}-panel:8000
 }

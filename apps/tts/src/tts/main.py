@@ -10,6 +10,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anyio
 from emf_shared.logging import configure_logging
 from emf_shared.middleware import TraceIDMiddleware
 from fastapi import FastAPI, HTTPException, status
@@ -41,7 +42,7 @@ def _sanitise(text: str) -> str:
     return text[:MAX_TEXT_LEN]
 
 
-def _purge_expired() -> None:
+async def _purge_expired() -> None:
     now = time.monotonic()
     expired = [
         t
@@ -51,7 +52,10 @@ def _purge_expired() -> None:
     for t in expired:
         path, _, _ = _audio_files.pop(t)
         try:
-            os.unlink(path)
+            def _unlink(p: str = path) -> None:
+                os.unlink(p)
+
+            await anyio.to_thread.run_sync(_unlink)
         except OSError:
             pass
 
@@ -119,7 +123,9 @@ async def _run_piper(text: str, output_path: str | None = None) -> bytes:
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(input=text.encode()), timeout=30)
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(input=text.encode()), timeout=30
+            )
         except TimeoutError:
             proc.kill()
             raise HTTPException(
@@ -148,7 +154,7 @@ async def synthesise_stream(req: TTSRequest) -> StreamingResponse:
 
 @app.post("/synthesise/file")
 async def synthesise_file(req: TTSRequest) -> JSONResponse:
-    _purge_expired()
+    await _purge_expired()
     text = _resolve_text(req)
 
     cache_key = hashlib.sha256(text.encode()).hexdigest()
@@ -166,7 +172,7 @@ async def synthesise_file(req: TTSRequest) -> JSONResponse:
 
 @app.get("/audio/{token}")
 async def serve_audio(token: str) -> FileResponse:
-    _purge_expired()
+    await _purge_expired()
     entry = _audio_files.get(token)
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, cast
 
+import anyio
 import emf_shared
 import httpx
 import redis.asyncio as aioredis
@@ -53,6 +54,7 @@ if _original_loader is None:
 templates.env.loader = ChoiceLoader([_original_loader, FileSystemLoader(_shared_templates_dir)])
 
 _ASSIGNEES_KEY = "panel:assignees"
+_ASSIGNEES_TTL = 7 * 24 * 3600  # 7 days; refreshed on each write
 
 
 def get_redis(request: Request) -> aioredis.Redis:
@@ -323,11 +325,11 @@ async def case_detail(
     valid_next = VALID_TRANSITIONS.get(case.status, set())
     attach_dir = Path(settings.attachment_dir) / str(case_id)
     attachments: list[str] = []
-    if attach_dir.is_dir():
+    is_dir = await anyio.to_thread.run_sync(attach_dir.is_dir)
+    if is_dir:
+        files = await anyio.to_thread.run_sync(lambda: list(attach_dir.iterdir()))
         attachments = [
-            f.name
-            for f in sorted(attach_dir.iterdir())
-            if f.suffix.lower() in {".jpg", ".png", ".gif", ".webp"}
+            f.name for f in sorted(files) if f.suffix.lower() in {".jpg", ".png", ".gif", ".webp"}
         ]
     acked_result = await session.execute(
         select(func.count()).where(Notification.case_id == case_id, Notification.state == "acked")
@@ -542,7 +544,11 @@ async def update_assignee(
         )
     await session.commit()
     if body.assignee:
-        await redis.sadd(_ASSIGNEES_KEY, body.assignee)
+        try:
+            await redis.sadd(_ASSIGNEES_KEY, body.assignee)
+            await redis.expire(_ASSIGNEES_KEY, _ASSIGNEES_TTL)
+        except Exception:
+            log.warning("Redis unavailable; assignee not added to suggestions", exc_info=True)
     return {"assignee": body.assignee}
 
 
@@ -695,7 +701,11 @@ async def admin_ack(
         )
     )
     await session.commit()
-    await redis.sadd(_ASSIGNEES_KEY, username)
+    try:
+        await redis.sadd(_ASSIGNEES_KEY, username)
+        await redis.expire(_ASSIGNEES_KEY, _ASSIGNEES_TTL)
+    except Exception:
+        log.warning("Redis unavailable; ack user not added to assignee suggestions", exc_info=True)
     await _notify_router_ack(case_id, username, settings)
     return {"ok": True}
 
@@ -957,7 +967,8 @@ async def serve_attachment(
     if media_type is None:
         raise HTTPException(status_code=400, detail="Unknown file type")
     path = Path(settings.attachment_dir) / str(case_id) / filename
-    if not path.exists():
+    exists = await anyio.to_thread.run_sync(path.exists)
+    if not exists:
         raise HTTPException(status_code=404)
     return FileResponse(path, media_type=media_type)
 

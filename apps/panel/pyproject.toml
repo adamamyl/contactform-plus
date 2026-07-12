@@ -21,6 +21,7 @@ dependencies = [
     "prometheus-fastapi-instrumentator>=8.0.2",
     "redis>=8.0.1",
     "pyjwt>=2.9.0",
+    "anyio>=4.14.1",
 ]
 
 [build-system]

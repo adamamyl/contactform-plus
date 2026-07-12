@@ -343,6 +343,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosmtplib" },
+    { name = "anyio" },
     { name = "asyncpg" },
     { name = "authlib" },
     { name = "emf-shared" },
@@ -377,6 +378,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosmtplib", specifier = ">=5.1.0" },
+    { name = "anyio", specifier = ">=4.14.1" },
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "authlib", specifier = "==1.7.1" },
     { name = "emf-shared", editable = "../../shared" },

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from prometheus_client import Counter
+from prometheus_client import Counter, Histogram
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -23,6 +24,8 @@ log = logging.getLogger(__name__)
 
 RETRY_DELAYS_MINUTES: list[int] = [0, 5, 10, 15]
 
+_router_tasks: set[asyncio.Task[None]] = set()
+
 
 class AlertRouter:
     def __init__(
@@ -37,6 +40,7 @@ class AlertRouter:
         counter: Counter | None = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
         local_dev: bool = False,
+        dispatch_histogram: Histogram | None = None,
     ) -> None:
         self._config = config
         self._email = email_adapter
@@ -48,6 +52,7 @@ class AlertRouter:
         self._counter = counter
         self._session_factory = session_factory
         self._local_dev = local_dev
+        self._dispatch_histogram = dispatch_histogram
 
     def _event_config(self, event_name: str) -> EventConfig | None:
         for ev in self._config.events:
@@ -114,12 +119,16 @@ class AlertRouter:
         for channel_name, adapter in channels:
             others = [n for n in channel_names if n != channel_name]
             per_channel_alert = replace(alert, also_sent_via=others)
-            asyncio.create_task(
+            _t = asyncio.create_task(
                 self._send_with_retry(per_channel_alert, channel_name, adapter)
             )
+            _router_tasks.add(_t)
+            _t.add_done_callback(_router_tasks.discard)
 
     async def _route_off_event(self, alert: CaseAlert, session: AsyncSession) -> None:
-        asyncio.create_task(self._send_with_retry(alert, "email", self._email))
+        _t = asyncio.create_task(self._send_with_retry(alert, "email", self._email))
+        _router_tasks.add(_t)
+        _t.add_done_callback(_router_tasks.discard)
 
     def _inc_counter(self, channel: str, state: str) -> None:
         if self._counter is not None:
@@ -155,6 +164,7 @@ class AlertRouter:
             session.add(notif)
             await session.commit()
 
+        _start = time.monotonic()
         for attempt_idx, delay_minutes in enumerate(RETRY_DELAYS_MINUTES):
             if delay_minutes > 0:
                 await asyncio.sleep(delay_minutes * 60)
@@ -185,6 +195,10 @@ class AlertRouter:
                         row.state = NotifState.SENT
                         row.message_id = message_id
                         await session.commit()
+                if self._dispatch_histogram is not None:
+                    self._dispatch_histogram.labels(channel=channel_name).observe(
+                        time.monotonic() - _start
+                    )
                 self._inc_counter(channel_name, "sent")
                 log.info(
                     "Sent case %s via %s (attempt %d)",
@@ -288,9 +302,11 @@ class AlertRouter:
             adapter = adapters.get(str(notif.channel))
             if adapter is None:
                 continue
-            asyncio.create_task(
+            _t = asyncio.create_task(
                 adapter.send_ack_confirmation(alert, acked_by, str(notif.message_id))
             )
+            _router_tasks.add(_t)
+            _t.add_done_callback(_router_tasks.discard)
 
     async def load_alert_from_db(
         self, case_id: str, session: AsyncSession
