@@ -27,11 +27,17 @@ services:
       context: ..
       dockerfile: apps/form/Dockerfile
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://form_user:${FORM_DB_PASSWORD:-localdev}@postgres/emf_forms
       CONFIG_PATH: /app/config.json
       LOCAL_DEV: ${LOCAL_DEV:-false}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
     volumes:
       - ../config.json:/app/config.json:ro
       - attachments:/app/attachments
@@ -60,6 +66,11 @@ services:
       context: ..
       dockerfile: apps/panel/Dockerfile
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://team_member:${TEAM_MEMBER_DB_PASSWORD:-localdev}@postgres/emf_forms
@@ -108,6 +119,11 @@ services:
       context: ..
       dockerfile: apps/router/Dockerfile
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://router_user:${ROUTER_DB_PASSWORD:-localdev}@postgres/emf_forms
@@ -132,6 +148,11 @@ services:
       context: ..
       dockerfile: apps/tts/Dockerfile
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8003/health || exit 1"]
       interval: 30s
@@ -287,6 +308,30 @@ services:
     networks:
       - contactform
 
+  loki:
+    image: grafana/loki:3.4.2
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    profiles:
+      - monitoring
+    networks:
+      - contactform
+
+  promtail:
+    image: grafana/promtail:3.4.2
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./loki/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+    profiles:
+      - monitoring
+    depends_on:
+      - loki
+    networks:
+      - contactform
+
   grafana:
     image: grafana/grafana:12.4.1
     environment:
@@ -313,6 +358,7 @@ volumes:
   clamav_data:
   prometheus_data:
   grafana_data:
+  loki_data:
   mattermost_data:
 
 networks:

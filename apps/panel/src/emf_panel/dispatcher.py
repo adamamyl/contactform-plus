@@ -35,23 +35,32 @@ async def validate_dispatcher_token(
         raise HTTPException(status_code=401, detail="Invalid or expired session token") from err
 
     jti = str(payload.get("jti", ""))
-    if await redis.exists(f"dispatcher:revoked:{jti}"):
+    devices_key = f"dispatcher:devices:{jti}"
+
+    # Pipeline round-trip 1: revocation check + device membership together
+    pipe = redis.pipeline()
+    pipe.exists(f"dispatcher:revoked:{jti}")
+    pipe.sismember(devices_key, device_id)
+    is_revoked, is_known = await pipe.execute()
+
+    if is_revoked:
         raise HTTPException(status_code=401, detail="Session revoked")
     if payload.get("scope") != "dispatcher":
         raise HTTPException(status_code=403, detail="Insufficient scope")
 
-    devices_key = f"dispatcher:devices:{jti}"
-    is_known = await redis.sismember(devices_key, device_id)
     if not is_known:
         count = await redis.scard(devices_key)
         if count >= max_devices:
             raise HTTPException(status_code=403, detail="Maximum devices for this session reached")
-        await redis.sadd(devices_key, device_id)
+        # Pipeline round-trip 2: register device + set TTL together
         exp = payload.get("exp")
+        pipe2 = redis.pipeline()
+        pipe2.sadd(devices_key, device_id)
         if isinstance(exp, (int, float)):
             ttl = int(exp) - int(datetime.now(tz=UTC).timestamp())
             if ttl > 0:
-                await redis.expire(devices_key, ttl)
+                pipe2.expire(devices_key, ttl)
+        await pipe2.execute()
 
     return payload
 
