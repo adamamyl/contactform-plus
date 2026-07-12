@@ -22,20 +22,36 @@ configure_logging("panel")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    import aioredis
+
     settings = get_settings()
     init_db(settings.database_url)
     configure_oauth(settings)
+    _app.state.redis = aioredis.from_url(settings.redis_url, decode_responses=True)
     yield
+    await _app.state.redis.aclose()
 
 
 app = FastAPI(title="EMF Conduct Panel", lifespan=lifespan)
 
-_session_secret = os.environ.get("SECRET_KEY", "dev-session-key-replace-in-prod")
+_DEV_KEY = "dev-session-key-replace-in-prod"  # noqa: S105
+_session_secret = os.environ.get("SECRET_KEY", _DEV_KEY)
+_is_local_dev = os.environ.get("LOCAL_DEV", "").lower() in ("1", "true", "yes")
+if not _is_local_dev and _session_secret == _DEV_KEY:
+    raise RuntimeError(
+        "SECRET_KEY is not set or is the default development value. "
+        "Set a strong SECRET_KEY in .env before starting in production."
+    )
+if not _is_local_dev and len(_session_secret) < 32:
+    raise RuntimeError(
+        f"SECRET_KEY is too short ({len(_session_secret)} chars). "
+        "Use at least 32 characters for production."
+    )
 app.add_middleware(TraceIDMiddleware, service_name="panel")
 app.add_middleware(
     SessionMiddleware,
     secret_key=_session_secret,
-    https_only=False,
+    https_only=not _is_local_dev,
     same_site="lax",
 )
 

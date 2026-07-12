@@ -18,6 +18,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - contactform
 
@@ -33,6 +34,7 @@ services:
       LOCAL_DEV: ${LOCAL_DEV:-true}
     volumes:
       - ../config.json:/app/config.json:ro
+      - attachments:/app/attachments
     depends_on:
       postgres:
         condition: service_healthy
@@ -280,6 +282,7 @@ services:
 
 volumes:
   pg_data:
+  attachments:
   signal_data:
   tts_audio:
   clamav_data:

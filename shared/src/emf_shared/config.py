@@ -102,6 +102,12 @@ class Settings(BaseSettings):
 
     @property
     def app_config(self) -> AppConfig:
-        return AppConfig.model_validate(json.loads(self.config_path.read_text()))
+        if not hasattr(self, "_app_config_cache"):
+            object.__setattr__(
+                self,
+                "_app_config_cache",
+                AppConfig.model_validate(json.loads(self.config_path.read_text())),
+            )
+        return self._app_config_cache  # type: ignore[attr-defined]
 
     model_config = {"env_file": ".env"}
