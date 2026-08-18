@@ -68,7 +68,7 @@ async def _purge_expired() -> None:
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     yield
     for path, _, persistent in _audio_files.values():
@@ -149,7 +149,7 @@ async def synthesise_stream(req: TTSRequest) -> StreamingResponse:
     text = _resolve_text(req)
     audio = await _run_piper(text)
 
-    async def _gen() -> AsyncGenerator[bytes, None]:
+    async def _gen() -> AsyncGenerator[bytes]:
         yield audio
 
     return StreamingResponse(
