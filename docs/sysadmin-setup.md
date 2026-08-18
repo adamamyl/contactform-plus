@@ -496,3 +496,17 @@ age -d -i <private-key-file> backup-20260712.age | \
 ```
 
 Schedule regular backups via cron or a systemd timer.
+
+**Unencrypted variant**: `scripts/backup_plain.py` runs the same `pg_dump` + `zstd` pipeline but skips the `age` step — no `--recipient` needed. Use it only when encryption is already handled elsewhere (e.g. an encrypted rsync destination or filesystem-level encryption at rest); otherwise prefer `backup.py`.
+
+```bash
+uv run scripts/backup_plain.py --rsync user@host:/backups/
+uv run scripts/backup_plain.py --systemd  # installs emf-backup-plain.service/.timer
+```
+
+Restore is the same `pg_dump --format=custom` output minus the `age -d` step:
+
+```bash
+zstd -d < emf_forms-20260712T040000Z.dump.zst | \
+  docker exec -i emf-conduct-postgres-1 pg_restore -U emf_forms_admin -d emf_forms
+```
