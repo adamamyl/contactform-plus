@@ -274,6 +274,12 @@ uv run scripts/backup.py --recipient <age-pubkey> --rsync user@host:/backups/
 uv run scripts/backup.py --recipient <age-pubkey> --systemd
 ```
 
+Unencrypted variant (`scripts/backup_plain.py`, same flags minus `--recipient`) for cases where encryption is handled downstream (e.g. an already-encrypted rsync destination):
+
+```bash
+uv run scripts/backup_plain.py --rsync user@host:/backups/
+```
+
 ---
 
 ## CI
