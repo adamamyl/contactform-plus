@@ -11,11 +11,15 @@ GRANT USAGE ON SCHEMA forms TO
     form_user, router_user, service_user, panel_viewer, team_member;
 
 -- backup_user: read-only dump access across the schema
+-- BYPASSRLS required: forms.cases uses FORCE ROW LEVEL SECURITY (see team_isolation
+-- policy below), and pg_dump refuses to COPY a FORCE RLS table for a role that isn't
+-- exempt — it would otherwise silently produce a backup missing every other team's rows.
 GRANT CONNECT ON DATABASE emf_forms TO backup_user;
 GRANT USAGE ON SCHEMA forms TO backup_user;
 GRANT SELECT ON ALL TABLES IN SCHEMA forms TO backup_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA forms
     GRANT SELECT ON TABLES TO backup_user;
+ALTER ROLE backup_user BYPASSRLS;
 
 -- ---------------------------------------------------------------------------
 -- Tables
