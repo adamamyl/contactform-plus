@@ -1,4 +1,4 @@
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 RUN pip install uv==0.7.13 --no-cache-dir
 WORKDIR /workspace
 COPY apps/router/pyproject.toml apps/router/uv.lock apps/router/
@@ -6,7 +6,7 @@ COPY shared/ shared/
 WORKDIR /workspace/apps/router
 RUN UV_PROJECT_ENVIRONMENT=/app/.venv uv sync --frozen --no-dev --no-install-project
 
-FROM python:3.14-slim
+FROM python:3.15-slim
 RUN useradd -m -u 1001 appuser
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
